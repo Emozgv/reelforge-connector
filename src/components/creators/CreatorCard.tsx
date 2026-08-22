@@ -1,0 +1,56 @@
+import type { Creator } from "../../types";
+import type { CreatorStats } from "./creatorStats";
+
+export function CreatorCard({
+  creator,
+  stats,
+  onOpen,
+}: {
+  creator: Creator;
+  stats: CreatorStats;
+  onOpen: () => void;
+}) {
+  const initials = creator.name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <button
+      onClick={onOpen}
+      className="text-left rounded-xl border border-white/[0.07] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.025] transition-colors duration-150 p-4"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium text-[#0a0a0c] shrink-0 ring-1 ring-white/15"
+          style={{ background: creator.avatarColor }}
+        >
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-[14px] font-medium text-neutral-100 truncate">{creator.name}</h3>
+          <p className="text-[11.5px] text-neutral-500 truncate">{creator.handle}</p>
+        </div>
+      </div>
+
+      <div className="mt-3.5 grid grid-cols-2 gap-y-1.5 text-[11.5px] text-neutral-400">
+        <span>{stats.collectionsCount} collection{stats.collectionsCount === 1 ? "" : "s"}</span>
+        <span>{stats.totalConcepts} concepts</span>
+        <span>{stats.used} used</span>
+        <span>{stats.unused} unused</span>
+      </div>
+
+      {stats.activeSubmissions > 0 && (
+        <div className="mt-3 text-[11px] text-[#ddb87e]">
+          {stats.activeSubmissions} active submission{stats.activeSubmissions === 1 ? "" : "s"}
+        </div>
+      )}
+
+      {creator.traits.length > 0 && (
+        <p className="mt-3 text-[11px] text-neutral-600 truncate">{creator.traits.slice(0, 4).join(" · ")}</p>
+      )}
+    </button>
+  );
+}

@@ -13,16 +13,17 @@ const STATUS_OPTIONS: ConceptStatus[] = ["Unused", "Used", "Rejected"];
 
 export function ConceptCard({
   concept,
+  submitted,
   onStatusChange,
   onRemove,
 }: {
   concept: CollectionConcept;
+  submitted: boolean;
   onStatusChange: (status: ConceptStatus) => void;
   onRemove: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { video } = concept;
-  const submitted = concept.submissionIds.length > 0;
 
   return (
     <div className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] transition-all duration-200 ease-out hover:border-white/[0.16] hover:shadow-[0_10px_24px_-10px_rgba(0,0,0,0.55)]">

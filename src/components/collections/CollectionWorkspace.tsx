@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox } from "lucide-react";
-import type { Collection, CollectionStatus, ConceptStatus, SubmissionStatus } from "../../types";
-import { creatorByName } from "../../data/mockData";
+import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
+import { formatRelativeTime } from "../../lib/relativeTime";
 import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
@@ -21,6 +21,8 @@ type ConceptFilter = "all" | "Used" | "Unused";
 
 export function CollectionWorkspace({
   collection,
+  creators,
+  saveError,
   onBack,
   onUpdateNotes,
   onUpdateStatus,
@@ -29,6 +31,8 @@ export function CollectionWorkspace({
   onSendSubmission,
 }: {
   collection: Collection;
+  creators: Creator[];
+  saveError?: string | null;
   onBack: () => void;
   onUpdateNotes: (notes: string) => void;
   onUpdateStatus: (status: CollectionStatus) => void;
@@ -41,14 +45,37 @@ export function CollectionWorkspace({
   const [sendOpen, setSendOpen] = useState(false);
   const [conceptFilter, setConceptFilter] = useState<ConceptFilter>("all");
   const [inboxNoteId, setInboxNoteId] = useState<string | null>(null);
-  const creator = creatorByName(collection.creator);
+  const notesSaveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const creator = creators.find((c) => c.id === collection.creatorId);
+
+  useEffect(() => {
+    return () => clearTimeout(notesSaveTimeout.current);
+  }, []);
+
+  function handleNotesChange(value: string) {
+    setNotes(value);
+    clearTimeout(notesSaveTimeout.current);
+    notesSaveTimeout.current = setTimeout(() => onUpdateNotes(value), 500);
+  }
 
   const total = collection.concepts.length;
   const used = collection.concepts.filter((c) => c.status === "Used").length;
   const unused = total - used;
 
+  // Submission membership lives only in client_os.submission_concepts — derive
+  // it here from the fetched Submissions rather than a per-Concept array.
+  const submittedConceptIds = new Set(collection.submissions.flatMap((s) => s.conceptIds));
   const sendableConcepts = collection.concepts.filter((c) => c.status !== "Rejected");
-  const overlapCount = sendableConcepts.filter((c) => c.submissionIds.length > 0).length;
+  const overlapCount = sendableConcepts.filter((c) => submittedConceptIds.has(c.video.id)).length;
+  // Which prior Submission(s) a resend would overlap with — shown in the warning
+  // so the user knows what was already sent, not just how many concepts.
+  const overlapSubmissionIndexes = [
+    ...new Set(
+      collection.submissions
+        .filter((s) => s.conceptIds.some((id) => sendableConcepts.some((c) => c.video.id === id)))
+        .map((s) => s.index)
+    ),
+  ];
 
   const latestSubmission =
     collection.submissions.length > 0 ? collection.submissions[collection.submissions.length - 1] : null;
@@ -66,6 +93,12 @@ export function CollectionWorkspace({
           <ArrowLeft size={13} />
           All collections
         </button>
+
+        {saveError && (
+          <p className="mb-4 text-[12px] text-rose-300/85 rounded-lg surface-field px-3 py-2 max-w-lg">
+            {saveError}
+          </p>
+        )}
 
         <div className="flex items-center justify-between gap-6 flex-wrap pb-3 border-b border-white/[0.06]">
           <div>
@@ -112,9 +145,9 @@ export function CollectionWorkspace({
 
             <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-neutral-500">
               {creator && <div className="w-4 h-4 rounded-full" style={{ background: creator.avatarColor }} />}
-              <span>{collection.creator}</span>
+              <span>{creator?.name ?? "Unknown creator"}</span>
               <span className="text-neutral-700">·</span>
-              <span>Updated {collection.lastUpdated}</span>
+              <span>Updated {formatRelativeTime(collection.updatedAt)}</span>
             </div>
           </div>
         </div>
@@ -146,6 +179,7 @@ export function CollectionWorkspace({
         <div className="grid grid-cols-[1fr_284px] gap-6 items-start">
           <ConceptGrid
             concepts={visibleConcepts}
+            submittedConceptIds={submittedConceptIds}
             onStatusChange={onSetConceptStatus}
             onRemove={onRemoveVideo}
           />
@@ -157,10 +191,7 @@ export function CollectionWorkspace({
               </span>
               <textarea
                 value={notes}
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  onUpdateNotes(e.target.value);
-                }}
+                onChange={(e) => handleNotesChange(e.target.value)}
                 rows={5}
                 className="mt-2 w-full resize-none rounded-md surface-field p-2.5 text-[12.5px] leading-relaxed text-neutral-300 placeholder:text-neutral-600 outline-none focus:border-[#c99a5f]/35 transition-colors duration-150"
                 placeholder="Add direction, references, or constraints for the production team..."
@@ -260,6 +291,9 @@ export function CollectionWorkspace({
                 History
               </span>
               <div className="mt-2.5 space-y-2.5">
+                {collection.history.length === 0 && (
+                  <p className="text-[11.5px] text-neutral-600">No activity yet.</p>
+                )}
                 {collection.history.map((entry, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <div className="mt-[5px] w-1 h-1 rounded-full bg-[#c99a5f]/60 shrink-0" />
@@ -277,10 +311,11 @@ export function CollectionWorkspace({
 
       <SendToReelForgePanel
         open={sendOpen}
-        creatorName={collection.creator}
+        creatorName={creator?.name ?? ""}
         collectionName={collection.name}
         totalCount={sendableConcepts.length}
         overlapCount={overlapCount}
+        overlapSubmissionIndexes={overlapSubmissionIndexes}
         onClose={() => setSendOpen(false)}
         onConfirm={(note) => onSendSubmission(note)}
       />

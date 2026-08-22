@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Shuffle, Bookmark, SlidersHorizontal } from "lucide-react";
-import { creators, generateMockVideos } from "../../data/mockData";
-import type { ReelVideo } from "../../types";
+import { generateMockVideos } from "../../data/mockData";
+import type { Creator, ReelVideo } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { CreatorSelector } from "./CreatorSelector";
 import { FilterDrawer } from "./FilterDrawer";
@@ -20,8 +20,16 @@ const NICHE_CHIPS = [
   "Golden hour",
 ];
 
-export function CreativityHubPage({ collectionsStore }: { collectionsStore: CollectionsStore }) {
-  const [selectedCreator, setSelectedCreator] = useState(creators[0]);
+export function CreativityHubPage({
+  creators,
+  creatorsError,
+  collectionsStore,
+}: {
+  creators: Creator[];
+  creatorsError?: string | null;
+  collectionsStore: CollectionsStore;
+}) {
+  const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [seed, setSeed] = useState(1);
@@ -31,9 +39,15 @@ export function CreativityHubPage({ collectionsStore }: { collectionsStore: Coll
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
 
-  const creatorCollections = collectionsStore.collections.filter(
-    (c) => c.creator === selectedCreator.name
-  );
+  useEffect(() => {
+    if (!creators.some((c) => c.id === selectedCreator?.id)) {
+      setSelectedCreator(creators[0] ?? null);
+    }
+  }, [creators, selectedCreator]);
+
+  const creatorCollections = selectedCreator
+    ? collectionsStore.collections.filter((c) => c.creatorId === selectedCreator.id)
+    : [];
 
   const savedCount = videos.filter((v) => v.saved).length;
   const activeFilterCount = countActiveFilters(filters);
@@ -94,6 +108,26 @@ export function CreativityHubPage({ collectionsStore }: { collectionsStore: Coll
     } else {
       setSavePanelVideo(video);
     }
+  }
+
+  if (!selectedCreator) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center max-w-sm">
+          {creatorsError ? (
+            <>
+              <p className="text-[14px] text-neutral-300">Couldn't load Creators.</p>
+              <p className="mt-1.5 text-[12px] text-neutral-500">{creatorsError}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[14px] text-neutral-300">Add a Creator to start discovering concepts.</p>
+              <p className="mt-1.5 text-[12px] text-neutral-500">Go to Creators → New Creator.</p>
+            </>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -254,7 +288,7 @@ export function CreativityHubPage({ collectionsStore }: { collectionsStore: Coll
         onCreateCollection={(name, note) => {
           if (!savePanelVideo) return;
           markSaved(savePanelVideo.id);
-          collectionsStore.createCollection(name, selectedCreator.name, note, savePanelVideo);
+          void collectionsStore.createCollection(name, selectedCreator.id, note, savePanelVideo);
         }}
       />
     </div>

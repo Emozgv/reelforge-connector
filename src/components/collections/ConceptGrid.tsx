@@ -3,10 +3,12 @@ import { ConceptCard } from "./ConceptCard";
 
 export function ConceptGrid({
   concepts,
+  submittedConceptIds,
   onStatusChange,
   onRemove,
 }: {
   concepts: CollectionConcept[];
+  submittedConceptIds: Set<string>;
   onStatusChange: (videoId: string, status: ConceptStatus) => void;
   onRemove: (videoId: string) => void;
 }) {
@@ -31,6 +33,7 @@ export function ConceptGrid({
         >
           <ConceptCard
             concept={concept}
+            submitted={submittedConceptIds.has(concept.video.id)}
             onStatusChange={(status) => onStatusChange(concept.video.id, status)}
             onRemove={() => onRemove(concept.video.id)}
           />

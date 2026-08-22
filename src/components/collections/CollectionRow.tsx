@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { MoreHorizontal, ArrowUpRight } from "lucide-react";
-import type { Collection } from "../../types";
-import { creatorByName } from "../../data/mockData";
+import type { Collection, Creator } from "../../types";
+import { formatRelativeTime } from "../../lib/relativeTime";
 
 export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
   Draft: "text-neutral-400 bg-white/[0.04]",
@@ -12,12 +12,14 @@ export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
 
 export function CollectionRow({
   collection,
+  creators,
   onOpen,
   onRename,
   onDuplicate,
   onDelete,
 }: {
   collection: Collection;
+  creators: Creator[];
   onOpen: () => void;
   onRename: (name: string) => void;
   onDuplicate: () => void;
@@ -26,7 +28,7 @@ export function CollectionRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(collection.name);
-  const creator = creatorByName(collection.creator);
+  const creator = creators.find((c) => c.id === collection.creatorId);
   const preview = collection.concepts.slice(0, 4);
   const total = collection.concepts.length;
   const used = collection.concepts.filter((c) => c.status === "Used").length;
@@ -83,7 +85,7 @@ export function CollectionRow({
 
       {creator && (
         <div
-          title={collection.creator}
+          title={creator.name}
           className="w-3 h-3 rounded-full shrink-0 ring-1 ring-white/15"
           style={{ background: creator.avatarColor }}
         />
@@ -99,7 +101,7 @@ export function CollectionRow({
       </span>
 
       <span className="shrink-0 text-[10.5px] text-neutral-600 w-[92px] text-right">
-        {collection.lastUpdated}
+        {formatRelativeTime(collection.updatedAt)}
       </span>
 
       <ArrowUpRight

@@ -9,6 +9,7 @@ export function SendToReelForgePanel({
   collectionName,
   totalCount,
   overlapCount,
+  overlapSubmissionIndexes = [],
   onClose,
   onConfirm,
 }: {
@@ -17,6 +18,7 @@ export function SendToReelForgePanel({
   collectionName: string;
   totalCount: number;
   overlapCount: number;
+  overlapSubmissionIndexes?: number[];
   onClose: () => void;
   onConfirm: (note: string) => void;
 }) {
@@ -79,8 +81,15 @@ export function SendToReelForgePanel({
                     <span className="text-neutral-100 font-medium">
                       {overlapCount} concept{overlapCount === 1 ? "" : "s"}
                     </span>{" "}
-                    in this submission {overlapCount === 1 ? "was" : "were"} already sent to ReelForge. Send{" "}
-                    {overlapCount === 1 ? "it" : "them"} again?
+                    in this submission {overlapCount === 1 ? "was" : "were"} already sent to ReelForge
+                    {overlapSubmissionIndexes.length > 0 && (
+                      <>
+                        {" "}
+                        (Submission{overlapSubmissionIndexes.length === 1 ? "" : "s"} #
+                        {overlapSubmissionIndexes.join(", #")})
+                      </>
+                    )}
+                    . Send {overlapCount === 1 ? "it" : "them"} again?
                   </p>
                 </div>
 

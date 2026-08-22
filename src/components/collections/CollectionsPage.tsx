@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { creators } from "../../data/mockData";
+import type { Creator } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { CreatorFilterBar } from "./CreatorFilterBar";
 import { CollectionRow } from "./CollectionRow";
 import { CollectionWorkspace } from "./CollectionWorkspace";
 import { NewCollectionPanel } from "./NewCollectionPanel";
 
-export function CollectionsPage({ collectionsStore }: { collectionsStore: CollectionsStore }) {
+export function CollectionsPage({
+  creators,
+  collectionsStore,
+}: {
+  creators: Creator[];
+  collectionsStore: CollectionsStore;
+}) {
   const { collections, renameCollection, duplicateCollection, deleteCollection } = collectionsStore;
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
@@ -19,7 +25,7 @@ export function CollectionsPage({ collectionsStore }: { collectionsStore: Collec
     return relevantCreators
       .map((creator) => ({
         creator,
-        items: collections.filter((c) => c.creator === creator.name),
+        items: collections.filter((c) => c.creatorId === creator.id),
       }))
       .filter((g) => g.items.length > 0);
   }, [collections, activeCreatorId]);
@@ -30,6 +36,8 @@ export function CollectionsPage({ collectionsStore }: { collectionsStore: Collec
     return (
       <CollectionWorkspace
         collection={activeCollection}
+        creators={creators}
+        saveError={collectionsStore.saveError}
         onBack={() => setActiveCollectionId(null)}
         onUpdateNotes={(notes) => collectionsStore.updateNotes(activeCollection.id, notes)}
         onUpdateStatus={(status) => collectionsStore.updateStatus(activeCollection.id, status)}
@@ -67,6 +75,17 @@ export function CollectionsPage({ collectionsStore }: { collectionsStore: Collec
           </button>
         </div>
 
+        {collectionsStore.error && (
+          <p className="mt-4 text-[12px] text-rose-300/85 rounded-lg surface-field px-3 py-2 max-w-lg">
+            Couldn't load Collections — {collectionsStore.error}
+          </p>
+        )}
+        {collectionsStore.saveError && (
+          <p className="mt-4 text-[12px] text-rose-300/85 rounded-lg surface-field px-3 py-2 max-w-lg">
+            {collectionsStore.saveError}
+          </p>
+        )}
+
         <div className="mt-5">
           <CreatorFilterBar creators={creators} activeId={activeCreatorId} onSelect={setActiveCreatorId} />
         </div>
@@ -80,13 +99,16 @@ export function CollectionsPage({ collectionsStore }: { collectionsStore: Collec
                   style={{ background: creator.avatarColor }}
                 />
                 <h2 className="text-[13.5px] font-medium text-neutral-200">{creator.name}</h2>
-                <span className="text-[11px] text-neutral-600">{items.length} collections</span>
+                <span className="text-[11px] text-neutral-600">
+                  {items.length} collection{items.length === 1 ? "" : "s"}
+                </span>
               </div>
               <div className="rounded-xl surface-panel divide-y divide-white/[0.05] overflow-hidden">
                 {items.map((c) => (
                   <CollectionRow
                     key={c.id}
                     collection={c}
+                    creators={creators}
                     onOpen={() => setActiveCollectionId(c.id)}
                     onRename={(name) => renameCollection(c.id, name)}
                     onDuplicate={() => duplicateCollection(c.id)}
@@ -113,10 +135,9 @@ export function CollectionsPage({ collectionsStore }: { collectionsStore: Collec
         creators={creators}
         defaultCreatorId={activeCreatorId !== "all" ? activeCreatorId : undefined}
         onClose={() => setCreateOpen(false)}
-        onCreate={(name, creatorName, note) => {
-          collectionsStore.createCollection(name, creatorName, note);
-          const matched = creators.find((c) => c.name === creatorName);
-          if (matched) setActiveCreatorId(matched.id);
+        onCreate={(name, creatorId, note) => {
+          void collectionsStore.createCollection(name, creatorId, note);
+          setActiveCreatorId(creatorId);
         }}
       />
     </div>

@@ -13,7 +13,7 @@ export function NewCollectionPanel({
   creators: Creator[];
   defaultCreatorId?: string;
   onClose: () => void;
-  onCreate: (name: string, creatorName: string, note: string) => void;
+  onCreate: (name: string, creatorId: string, note: string) => void;
 }) {
   const [name, setName] = useState("");
   const [creatorId, setCreatorId] = useState(defaultCreatorId ?? creators[0]?.id ?? "");
@@ -33,7 +33,7 @@ export function NewCollectionPanel({
 
   function handleCreate() {
     if (!name.trim() || !creator) return;
-    onCreate(name.trim(), creator.name, note);
+    onCreate(name.trim(), creator.id, note);
     onClose();
   }
 

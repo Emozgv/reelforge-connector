@@ -1,22 +1,39 @@
 export type Platform = "instagram" | "tiktok";
 
-export interface Creator {
-  id: string;
-  name: string;
-  handle: string;
-  avatarColor: string;
-}
-
 export type Difficulty = "Easy" | "Medium" | "Hard";
 export type Setting = "Indoor" | "Outdoor";
 // Content Style is an evolving product concept — this list is intentionally a small,
 // easy-to-extend mock set (see CONTENT_STYLES in data/mockData.ts).
 export type ContentStyle = "POV" | "Talking" | "Lifestyle" | "Selfie" | "Mirror" | "Storytime" | "Fitness" | "Golf";
 
+// "Tell ReelForge what fits this Creator" — plain-language creative preferences.
+// This is what will later feed AI Score / Creator Fit / semantic search ranking,
+// but for now it's just structured mock data the client fills in by hand.
+export interface Creator {
+  id: string;
+  name: string;
+  handle: string;
+  avatarColor: string;
+  profileImage?: string; // placeholder for now — falls back to an initials avatar
+  // Free-form keyword tags (from a comma-separated input) describing this Creator's
+  // vibe — the same vocabulary Concepts are tagged with, so a future matching engine
+  // can compare Creator traits against Concept tags/contentStyle directly.
+  traits: string[];
+  // A few natural-language sentences describing what works / doesn't for this Creator.
+  creativeDirection: string;
+  preferredStyles: ContentStyle[];
+  avoidedStyles: string[];
+  preferredTalking: "Talking" | "Non-Talking" | "Any";
+  preferredSetting: Setting | "Any";
+}
+
 export interface ReelVideo {
   id: string;
   platform: Platform;
   username: string;
+  // Mock source link for prototype/testing — real Instagram/TikTok ingestion
+  // is a later phase. Used as the dedup key when saving into a Collection.
+  sourceUrl: string;
   views: string;
   viewsRaw: number;
   tags: string[];
@@ -51,23 +68,26 @@ export interface CollectionHistoryEntry {
 }
 
 // One Reel inside a Collection, carrying its own production lifecycle on top of
-// the underlying ReelVideo. This is the shape that will eventually map to a
-// "Concept" entity in ReelForge Internal.
+// the underlying ReelVideo. This is the shape that maps to a real row in
+// client_os.concepts. Submission membership is NOT tracked here — it lives
+// only in client_os.submission_concepts (see Submission.conceptIds below).
 export interface CollectionConcept {
   video: ReelVideo;
   status: ConceptStatus;
   producedDate?: string;
-  submissionIds: string[];
 }
 
-// Mock production progress for one Submission. "Check Inbox" simulates ReelForge
-// needing feedback/info from the client — no real inbox exists yet.
+// Production progress for one real Submission (client_os.submissions). "Check
+// Inbox" simulates ReelForge needing feedback/info from the client.
 export type SubmissionStatus = "Sent" | "In Progress" | "Check Inbox" | "Finished";
 
 // A specific batch sent to ReelForge. A Collection can have many Submissions over
 // its lifetime — sending again later creates a new one rather than overwriting.
-// Production status (and eventually deliveryUrl) belongs here, per-batch, and is
-// system-controlled: ReelForge Internal will own writes to both once connected.
+// Production status and deliveryUrl are system-controlled: only a future
+// ReelForge Internal connection (via service_role, never the browser) can
+// write them — the client can create a Submission and read its status, never
+// update it. conceptIds is a read projection of client_os.submission_concepts,
+// not a duplicated/writable array.
 export interface Submission {
   id: string;
   index: number;
@@ -83,11 +103,15 @@ export interface Submission {
 export interface Collection {
   id: string;
   name: string;
-  creator: string;
+  // Real relationship — a foreign key into client_os.creators.id. Never key
+  // this on the creator's display name (that was Phase C's temporary bridge).
+  creatorId: string;
   notes: string;
   concepts: CollectionConcept[];
   submissions: Submission[];
   status: CollectionStatus;
-  lastUpdated: string;
+  // Real Supabase timestamp — format for display with formatRelativeTime()
+  // rather than storing a precomputed string like "2 hours ago".
+  updatedAt: string;
   history: CollectionHistoryEntry[];
 }

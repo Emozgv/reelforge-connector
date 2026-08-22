@@ -2,11 +2,42 @@ import { useState } from "react";
 import { Sidebar, type Page } from "./components/layout/Sidebar";
 import { CreativityHubPage } from "./components/hub/CreativityHubPage";
 import { CollectionsPage } from "./components/collections/CollectionsPage";
+import { CreatorsPage } from "./components/creators/CreatorsPage";
+import { LoginPage } from "./components/auth/LoginPage";
+import { FullScreenLoader } from "./components/auth/FullScreenLoader";
+import { NoWorkspaceAccess } from "./components/auth/NoWorkspaceAccess";
 import { useCollectionsStore } from "./state/useCollectionsStore";
+import { useCreatorsStore } from "./state/useCreatorsStore";
+import { useAuthSession } from "./state/useAuthSession";
+import { useWorkspace } from "./state/useWorkspace";
 
 function App() {
   const [page, setPage] = useState<Page>("hub");
-  const collectionsStore = useCollectionsStore();
+
+  const { user, loading: authLoading, signIn, signOut } = useAuthSession();
+  const { workspace, loading: workspaceLoading } = useWorkspace(user?.id);
+  const creatorsStore = useCreatorsStore(workspace?.id);
+  const collectionsStore = useCollectionsStore(workspace?.id);
+
+  if (authLoading) {
+    return <FullScreenLoader />;
+  }
+
+  if (!user) {
+    return <LoginPage onSignIn={(email, password) => signIn(email, password).then((e) => e?.message ?? null)} />;
+  }
+
+  if (workspaceLoading) {
+    return <FullScreenLoader />;
+  }
+
+  if (!workspace) {
+    return <NoWorkspaceAccess email={user.email} onSignOut={signOut} />;
+  }
+
+  if (creatorsStore.loading || collectionsStore.loading) {
+    return <FullScreenLoader />;
+  }
 
   return (
     <div className="relative flex h-screen w-screen bg-[#0b0b0d] text-neutral-200 font-sans overflow-hidden">
@@ -19,10 +50,27 @@ function App() {
       />
       <div className="grain-overlay" />
 
-      <Sidebar page={page} onNavigate={setPage} />
+      <Sidebar
+        page={page}
+        onNavigate={setPage}
+        userEmail={user.email}
+        workspaceName={workspace.name}
+        onSignOut={signOut}
+      />
       <div className="relative z-10 flex-1 min-w-0 h-full">
-        {page === "hub" && <CreativityHubPage collectionsStore={collectionsStore} />}
-        {page === "collections" && <CollectionsPage collectionsStore={collectionsStore} />}
+        {page === "hub" && (
+          <CreativityHubPage
+            creators={creatorsStore.creators}
+            creatorsError={creatorsStore.error}
+            collectionsStore={collectionsStore}
+          />
+        )}
+        {page === "collections" && (
+          <CollectionsPage creators={creatorsStore.creators} collectionsStore={collectionsStore} />
+        )}
+        {page === "creators" && (
+          <CreatorsPage creatorsStore={creatorsStore} collectionsStore={collectionsStore} />
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Sparkles, FolderHeart, Users, Clapperboard, Library, Settings } from "lucide-react";
+import { Sparkles, FolderHeart, Users, Clapperboard, Library, Settings, LogOut } from "lucide-react";
 
 export type Page = "hub" | "collections" | "creators" | "production" | "library" | "settings";
 
@@ -11,7 +11,20 @@ const NAV_ITEMS: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: "settings", label: "Settings", icon: <Settings size={15} strokeWidth={1.75} /> },
 ];
 
-export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page) => void }) {
+export function Sidebar({
+  page,
+  onNavigate,
+  userEmail,
+  workspaceName,
+  onSignOut,
+}: {
+  page: Page;
+  onNavigate: (p: Page) => void;
+  userEmail?: string;
+  workspaceName?: string;
+  onSignOut?: () => void;
+}) {
+  const initials = userEmail ? userEmail.slice(0, 2).toUpperCase() : "EM";
   return (
     <aside className="relative z-10 w-[212px] xl:w-[236px] 2xl:w-[260px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
       <div className="h-14 xl:h-16 flex items-center px-4 xl:px-5 border-b border-white/[0.06]">
@@ -28,7 +41,7 @@ export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page
       <nav className="flex-1 px-2.5 xl:px-3.5 py-3 xl:py-4 space-y-px xl:space-y-0.5">
         {NAV_ITEMS.map((item) => {
           const active = item.id === page;
-          const disabled = item.id !== "hub" && item.id !== "collections";
+          const disabled = item.id !== "hub" && item.id !== "collections" && item.id !== "creators";
           return (
             <button
               key={item.id}
@@ -59,14 +72,27 @@ export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page
       </nav>
 
       <div className="p-2.5 xl:p-3.5 border-t border-white/[0.06]">
-        <div className="flex items-center gap-2.5 xl:gap-3 px-2 xl:px-2.5 py-2 xl:py-2.5 rounded-md hover:bg-white/[0.035] transition-colors duration-150 cursor-pointer">
-          <div className="w-6 h-6 xl:w-7 xl:h-7 rounded-full bg-[#c99a5f] flex items-center justify-center text-[10.5px] xl:text-[11px] font-medium text-[#0a0a0c]">
-            EM
+        <div className="group flex items-center gap-2.5 xl:gap-3 px-2 xl:px-2.5 py-2 xl:py-2.5 rounded-md hover:bg-white/[0.035] transition-colors duration-150">
+          <div className="w-6 h-6 xl:w-7 xl:h-7 rounded-full bg-[#c99a5f] flex items-center justify-center text-[10.5px] xl:text-[11px] font-medium text-[#0a0a0c] shrink-0">
+            {initials}
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[12px] xl:text-[12.5px] text-neutral-200">Emre</span>
-            <span className="text-[10.5px] xl:text-[11px] text-neutral-500">Client workspace</span>
+          <div className="flex flex-col leading-tight min-w-0">
+            <span className="text-[12px] xl:text-[12.5px] text-neutral-200 truncate">
+              {workspaceName ?? "Client workspace"}
+            </span>
+            <span className="text-[10.5px] xl:text-[11px] text-neutral-500 truncate">
+              {userEmail ?? "Emre"}
+            </span>
           </div>
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              title="Sign out"
+              className="ml-auto shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-200 hover:bg-white/[0.06] transition-all duration-150"
+            >
+              <LogOut size={13} />
+            </button>
+          )}
         </div>
       </div>
     </aside>
