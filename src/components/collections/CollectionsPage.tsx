@@ -24,7 +24,10 @@ export function CollectionsPage({
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
   const [createOpen, setCreateOpen] = useState(false);
   const activeCollectionId = openCollectionId;
-  const setActiveCollectionId = onOpenCollectionIdChange;
+  const setActiveCollectionId = (id: string | null) => {
+    collectionsStore.clearSaveError();
+    onOpenCollectionIdChange(id);
+  };
 
   const groups = useMemo(() => {
     const relevantCreators =

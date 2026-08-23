@@ -54,6 +54,7 @@ export function CreativityHubPage({
   const savedCount = collectionsStore.collections
     .filter((c) => c.creatorId === selectedCreator?.id)
     .reduce((sum, c) => sum + c.concepts.length, 0);
+  const savedCountLabel = savedCount > 99 ? "99+" : String(savedCount);
   const activeFilterCount = countActiveFilters(filters);
 
   const filtered = useMemo(() => {
@@ -236,7 +237,7 @@ export function CreativityHubPage({
               className="flex items-center gap-1.5 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300"
             >
               <Bookmark size={13} className="text-[#d7a463]" />
-              <span className="tabular-nums text-neutral-100">{savedCount}</span> saved
+              <span className="tabular-nums text-neutral-100">{savedCountLabel}</span> saved
             </button>
 
             <button

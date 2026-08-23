@@ -463,11 +463,16 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     }
   }
 
+  function clearSaveError() {
+    setSaveError(null);
+  }
+
   return {
     collections,
     loading,
     error,
     saveError,
+    clearSaveError,
     addVideoToCollection,
     createCollection,
     removeVideoFromCollection,
