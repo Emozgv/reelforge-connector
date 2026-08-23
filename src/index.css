@@ -50,6 +50,12 @@ body {
   background: #333338;
 }
 
+/* Creativity Hub's hero headline keeps the earlier Fraunces treatment on
+   purpose — every other serif headline in the app uses --font-serif. */
+.font-hub-hero {
+  font-family: "Fraunces", ui-serif, Georgia, serif;
+}
+
 /* faint film grain — tactile, not decorative */
 .grain-overlay {
   position: fixed;

@@ -155,7 +155,7 @@ export function CreativityHubPage({
             </span>
             <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#d7a463]/60" />
           </div>
-          <h1 className="text-[42px] leading-[1.08] font-serif font-medium text-neutral-50">
+          <h1 className="text-[42px] leading-[1.08] font-hub-hero font-medium text-neutral-50">
             Discover your next{" "}
             <span className="text-gradient-warm">winning concept</span>
           </h1>
