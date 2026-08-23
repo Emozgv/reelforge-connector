@@ -140,7 +140,7 @@ export function DashboardPage({
     <div className="h-full overflow-y-auto">
       {/* hero — a real night-sky photograph, not a CSS approximation, so the mood matches exactly */}
       <div
-        className="relative overflow-hidden px-8 xl:px-12 pt-10 pb-9 h-[280px] xl:h-[300px] bg-[#020508]"
+        className="relative overflow-hidden px-8 xl:px-12 pt-24 xl:pt-28 pb-9 h-[340px] xl:h-[360px] bg-[#020508]"
         style={{
           backgroundImage: "url(/images/dashboard-hero-sky.jpg)",
           backgroundSize: "cover",
