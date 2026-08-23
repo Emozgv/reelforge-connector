@@ -55,8 +55,8 @@ export function SendToReelForgePanel({
         <div className="pointer-events-auto w-full max-w-[400px] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl animate-rise-in overflow-hidden">
           {step === "done" ? (
             <div className="flex flex-col items-center justify-center gap-3 py-14 px-6">
-              <div className="w-10 h-10 rounded-full bg-[#d7a463] flex items-center justify-center">
-                <Check size={18} className="text-[#0a0a0c]" strokeWidth={2.5} />
+              <div className="w-10 h-10 rounded-full bg-[#D39448] flex items-center justify-center">
+                <Check size={18} className="text-[#020508]" strokeWidth={2.5} />
               </div>
               <p className="text-[13.5px] text-neutral-200 text-center">
                 {totalCount} concept{totalCount === 1 ? "" : "s"} sent to ReelForge
@@ -76,7 +76,7 @@ export function SendToReelForgePanel({
 
               <div className="px-5 pt-4 pb-5">
                 <div className="rounded-lg surface-field p-3.5 flex gap-2.5">
-                  <AlertTriangle size={15} className="text-[#ddb87e] mt-0.5 shrink-0" />
+                  <AlertTriangle size={15} className="text-[#D39448] mt-0.5 shrink-0" />
                   <p className="text-[12.5px] text-neutral-300 leading-relaxed">
                     <span className="text-neutral-100 font-medium">
                       {overlapCount} concept{overlapCount === 1 ? "" : "s"}
@@ -102,7 +102,7 @@ export function SendToReelForgePanel({
                   </button>
                   <button
                     onClick={send}
-                    className="flex-1 h-9 rounded-md flex items-center justify-center gap-1.5 bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors press-feedback"
+                    className="flex-1 h-9 rounded-md flex items-center justify-center gap-1.5 bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] press-feedback"
                   >
                     <Send size={12} />
                     Send Anyway
@@ -127,7 +127,7 @@ export function SendToReelForgePanel({
                   <p className="text-[12.5px] text-neutral-300 leading-relaxed">
                     Submitting <span className="text-neutral-100 font-medium">{totalCount}</span> concept
                     {totalCount === 1 ? "" : "s"} from <span className="text-neutral-100 font-medium">{collectionName}</span> for{" "}
-                    <span className="text-[#e8c896] font-medium">{creatorName}</span>.
+                    <span className="text-[#D39448] font-medium">{creatorName}</span>.
                   </p>
                 </div>
               </div>
@@ -149,7 +149,7 @@ export function SendToReelForgePanel({
                 <button
                   disabled={totalCount === 0}
                   onClick={handlePrimaryClick}
-                  className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
+                  className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
                 >
                   <Send size={13} />
                   Confirm &amp; Send

@@ -40,7 +40,7 @@ function Chip({
       className={[
         "text-[12px] px-2.5 py-1.5 rounded-lg border transition-colors duration-150",
         active
-          ? "border-[#c99a5f]/40 bg-[#c99a5f]/12 text-[#e8c896]"
+          ? "border-[#D39448]/40 bg-[#D39448]/12 text-[#D39448]"
           : "border-white/[0.07] text-neutral-400 hover:text-neutral-200",
       ].join(" ")}
     >
@@ -167,7 +167,7 @@ export function CreatorProfilePage({
           <button
             onClick={() => fileInputRef.current?.click()}
             title="Change profile photo"
-            className="group relative w-14 h-14 rounded-full flex items-center justify-center text-[16px] font-medium text-[#0a0a0c] shrink-0 ring-1 ring-white/15 overflow-hidden"
+            className="group relative w-14 h-14 rounded-full flex items-center justify-center text-[16px] font-medium text-[#020508] shrink-0 ring-1 ring-white/15 overflow-hidden"
             style={creator.profileImage ? undefined : { background: creator.avatarColor }}
           >
             {creator.profileImage ? (
@@ -203,14 +203,14 @@ export function CreatorProfilePage({
           <span>{stats.used} used</span>
           <span>{stats.unused} unused</span>
           {stats.activeSubmissions > 0 && (
-            <span className="text-[#ddb87e]">{stats.activeSubmissions} active submissions</span>
+            <span className="text-[#D39448]">{stats.activeSubmissions} active submissions</span>
           )}
         </div>
 
         <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
           <div className="space-y-6">
             {setupStatus !== "ready" && (
-              <div className="rounded-xl border border-[#c99a5f]/25 bg-[#c99a5f]/[0.06] p-4">
+              <div className="rounded-xl border border-[#D39448]/25 bg-[#D39448]/[0.06] p-4">
                 <h2 className="text-[13px] font-medium text-neutral-100 mb-2.5">Setup checklist</h2>
                 <div className="space-y-1.5">
                   <ChecklistRow done={!!creator.profileImage} label="Profile photo" />
@@ -232,7 +232,7 @@ export function CreatorProfilePage({
                 <h2 className="text-[13px] font-medium text-neutral-200">Collections</h2>
                 <button
                   onClick={() => setCreateOpen(true)}
-                  className="flex items-center gap-1 text-[11.5px] text-neutral-400 hover:text-[#e8c896] transition-colors duration-150"
+                  className="flex items-center gap-1 text-[11.5px] text-neutral-400 hover:text-[#D39448] transition-colors duration-150"
                 >
                   <Plus size={12} />
                   New Collection
@@ -267,7 +267,7 @@ export function CreatorProfilePage({
 
             <div>
               <h2 className="text-[13px] font-medium text-neutral-200 mb-2 flex items-center gap-1.5">
-                <PackageCheck size={13} className="text-[#ddb87e]" />
+                <PackageCheck size={13} className="text-[#D39448]" />
                 Submissions
               </h2>
               <div className="rounded-xl surface-panel divide-y divide-white/[0.05] overflow-hidden">
@@ -290,7 +290,7 @@ export function CreatorProfilePage({
                           href={s.deliveryUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-[#e8c896] transition-colors"
+                          className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-[#D39448] transition-colors"
                         >
                           <DriveGlyph size={11} />
                           Drive
@@ -444,7 +444,7 @@ export function CreatorProfilePage({
           <div className="space-y-3">
             <div className="rounded-lg surface-panel p-3.5">
               <div className="flex items-center gap-1.5">
-                <Sparkles size={13} className="text-[#c99a5f]" />
+                <Sparkles size={13} className="text-[#D39448]" />
                 <h2 className="text-[13px] font-medium text-neutral-100">Creative Profile</h2>
               </div>
               <p className="mt-1 text-[11px] text-neutral-500 leading-relaxed">
@@ -568,7 +568,7 @@ export function CreatorProfilePage({
                   onClick={() => creatorsStore.updateField(creator.id, "aiBrainEnabled", !creator.aiBrainEnabled)}
                   className={[
                     "shrink-0 w-9 h-5 rounded-full flex items-center px-0.5 transition-colors duration-150",
-                    creator.aiBrainEnabled ? "bg-[#c99a5f] justify-end" : "bg-white/10 justify-start",
+                    creator.aiBrainEnabled ? "bg-[#D39448] justify-end" : "bg-white/10 justify-start",
                   ].join(" ")}
                 >
                   <span className="w-4 h-4 rounded-full bg-white block" />

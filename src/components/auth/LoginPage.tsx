@@ -27,7 +27,7 @@ export function LoginPage({
   }
 
   return (
-    <div className="relative flex h-screen w-screen items-center justify-center bg-[#08080a] overflow-hidden">
+    <div className="relative flex h-screen w-screen items-center justify-center bg-[#020508] overflow-hidden">
       <StarfieldBackground starCount={55} />
       <div
         className="pointer-events-none fixed inset-0"
@@ -51,7 +51,7 @@ export function LoginPage({
               maskRepeat: "no-repeat",
               WebkitMaskPosition: "center",
               maskPosition: "center",
-              background: "linear-gradient(135deg, #e8c896, #c99a5f)",
+              background: "linear-gradient(135deg, #D39448, #A97942)",
             }}
           />
           <span className="font-brand text-[17px] text-neutral-100">ReelForge</span>
@@ -99,7 +99,7 @@ export function LoginPage({
             <button
               type="submit"
               disabled={submitting || !email.trim() || !password}
-              className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#c99a5f] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#ddb87e] transition-colors press-feedback"
+              className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium disabled:opacity-40 hover:brightness-110 transition-[filter] press-feedback"
             >
               {submitting && <Loader2 size={14} className="animate-spin" />}
               {submitting ? "Signing in..." : "Sign in"}

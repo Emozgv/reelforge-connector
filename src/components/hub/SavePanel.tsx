@@ -67,8 +67,8 @@ export function SavePanel({
         <div className="pointer-events-auto w-full max-w-[380px] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl animate-rise-in overflow-hidden">
           {confirmedLabel ? (
             <div className="flex flex-col items-center justify-center gap-3 py-14 px-6">
-              <div className="w-10 h-10 rounded-full bg-[#d7a463] flex items-center justify-center">
-                <Check size={18} className="text-[#0a0a0c]" strokeWidth={2.5} />
+              <div className="w-10 h-10 rounded-full bg-[#D39448] flex items-center justify-center">
+                <Check size={18} className="text-[#020508]" strokeWidth={2.5} />
               </div>
               <p className="text-[13.5px] text-neutral-200 text-center">{confirmedLabel}</p>
             </div>
@@ -81,12 +81,12 @@ export function SavePanel({
                       onClick={() => setAssigneeMenuOpen((v) => !v)}
                       className="flex items-center gap-1.5 text-[15px] font-serif font-medium text-neutral-50 hover:text-neutral-200 transition-colors"
                     >
-                      Save for <span className="text-[#e8c896]">{creatorName}</span>
+                      Save for <span className="text-[#D39448]">{creatorName}</span>
                       <ChevronDown size={13} className="text-neutral-500" />
                     </button>
                   ) : (
                     <h2 className="text-[15px] font-serif font-medium text-neutral-50">
-                      Save for <span className="text-[#e8c896]">{creatorName}</span>
+                      Save for <span className="text-[#D39448]">{creatorName}</span>
                     </h2>
                   )}
 
@@ -109,7 +109,7 @@ export function SavePanel({
                         >
                           <div className="w-4 h-4 rounded-full shrink-0" style={{ background: c.avatarColor }} />
                           <span className="text-[12.5px] text-neutral-200 truncate">{c.name}</span>
-                          {c.id === assigneeId && <Check size={13} className="ml-auto text-[#d7a463] shrink-0" />}
+                          {c.id === assigneeId && <Check size={13} className="ml-auto text-[#D39448] shrink-0" />}
                         </button>
                       ))}
                     </div>
@@ -124,7 +124,7 @@ export function SavePanel({
               </div>
 
               {overrideId && (
-                <div className="mx-5 mt-3 rounded-md bg-[#c99a5f]/[0.08] px-2.5 py-1.5 text-[11px] text-[#e8c896]">
+                <div className="mx-5 mt-3 rounded-md bg-[#D39448]/[0.08] px-2.5 py-1.5 text-[11px] text-[#D39448]">
                   Assigning to a different creator than the current research session.
                 </div>
               )}
@@ -146,7 +146,7 @@ export function SavePanel({
                     onQuickSave(note, overrideId);
                     finish("Saved to Quick Saves");
                   }}
-                  className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
+                  className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
                 >
                   <Zap size={14} fill="currentColor" />
                   Quick Save
@@ -206,7 +206,7 @@ export function SavePanel({
                         onCreateCollection(newName.trim(), note, overrideId);
                         finish(`Created "${newName.trim()}" and saved`);
                       }}
-                      className="h-9 px-3 rounded-lg bg-[#d7a463] text-[#0a0a0c] text-[12px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
+                      className="h-9 px-3 rounded-lg bg-[#D39448] text-[#020508] text-[12px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
                     >
                       Create
                     </button>

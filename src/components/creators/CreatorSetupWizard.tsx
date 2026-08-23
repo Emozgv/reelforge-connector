@@ -111,7 +111,7 @@ export function CreatorSetupWizard({
                 <span
                   className={[
                     "text-[10.5px] tracking-wide uppercase",
-                    i === step ? "text-[#e8c896]" : i < step ? "text-neutral-400" : "text-neutral-600",
+                    i === step ? "text-[#D39448]" : i < step ? "text-neutral-400" : "text-neutral-600",
                   ].join(" ")}
                 >
                   {label}
@@ -123,7 +123,7 @@ export function CreatorSetupWizard({
             {STEPS.map((label, i) => (
               <div
                 key={label}
-                className={["h-[2px] flex-1 rounded-full transition-colors duration-200", i <= step ? "bg-[#c99a5f]" : "bg-white/[0.08]"].join(" ")}
+                className={["h-[2px] flex-1 rounded-full transition-colors duration-200", i <= step ? "bg-[#D39448]" : "bg-white/[0.08]"].join(" ")}
               />
             ))}
           </div>
@@ -201,7 +201,7 @@ export function CreatorSetupWizard({
                       className={[
                         "text-[12px] px-2.5 py-1.5 rounded-lg border transition-colors duration-150",
                         language === opt
-                          ? "border-[#c99a5f]/40 bg-[#c99a5f]/12 text-[#e8c896]"
+                          ? "border-[#D39448]/40 bg-[#D39448]/12 text-[#D39448]"
                           : "border-white/[0.07] text-neutral-400 hover:text-neutral-200",
                       ].join(" ")}
                     >
@@ -247,7 +247,7 @@ export function CreatorSetupWizard({
               <button
                 disabled={!name.trim() || submitting}
                 onClick={handleBasicsNext}
-                className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
+                className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
               >
                 {submitting && <Loader2 size={14} className="animate-spin" />}
                 {submitting ? "Creating..." : "Continue"}
@@ -256,7 +256,7 @@ export function CreatorSetupWizard({
             {step === 1 && (
               <button
                 onClick={() => setStep(2)}
-                className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
+                className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
               >
                 Continue
               </button>
@@ -264,7 +264,7 @@ export function CreatorSetupWizard({
             {step === 2 && (
               <button
                 onClick={handleFinish}
-                className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
+                className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
               >
                 <Check size={14} />
                 Done

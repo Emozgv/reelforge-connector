@@ -81,7 +81,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="relative z-20 w-[240px] xl:w-[264px] 2xl:w-[288px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
+    <aside className="relative z-20 w-[240px] xl:w-[264px] 2xl:w-[288px] shrink-0 h-full border-r border-white/[0.06] bg-[#020508]/80 backdrop-blur-xl flex flex-col">
       <div className="h-16 xl:h-[72px] flex items-center justify-between px-5 xl:px-6 border-b border-white/[0.06]">
         <div className="flex items-center gap-2.5 xl:gap-3">
           <div
@@ -95,7 +95,7 @@ export function Sidebar({
               maskRepeat: "no-repeat",
               WebkitMaskPosition: "center",
               maskPosition: "center",
-              background: "linear-gradient(135deg, #e8c896, #c99a5f)",
+              background: "linear-gradient(135deg, #D39448, #A97942)",
             }}
           />
           <span className="font-brand text-[16.5px] xl:text-[18px] text-neutral-100">ReelForge</span>
@@ -107,7 +107,7 @@ export function Sidebar({
             className="relative w-8 h-8 rounded-md flex items-center justify-center text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05] transition-colors duration-150"
           >
             <Bell size={16} strokeWidth={1.75} />
-            {unread && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#d7a463]" />}
+            {unread && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#D39448]" />}
           </button>
           {notifOpen && (
             <div
@@ -119,7 +119,7 @@ export function Sidebar({
                 {unread && (
                   <button
                     onClick={markAllRead}
-                    className="text-[10.5px] text-neutral-500 hover:text-[#e8c896] transition-colors duration-150"
+                    className="text-[10.5px] text-neutral-500 hover:text-[#D39448] transition-colors duration-150"
                   >
                     Mark all read
                   </button>
@@ -168,11 +168,11 @@ export function Sidebar({
                     className={[
                       "relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] xl:text-[14.5px] transition-colors duration-150 border",
                       active
-                        ? "text-neutral-100 bg-[#c99a5f]/[0.1] border-[#c99a5f]/30"
+                        ? "text-neutral-100 bg-[#D39448]/[0.1] border-[#D39448]/30"
                         : "text-neutral-400 border-transparent hover:text-neutral-100 hover:bg-white/[0.035]",
                     ].join(" ")}
                   >
-                    <span className={active ? "text-[#ddb87e]" : ""}>{item.icon}</span>
+                    <span className={active ? "text-[#D39448]" : ""}>{item.icon}</span>
                     {item.label}
                   </button>
                 );
@@ -184,7 +184,7 @@ export function Sidebar({
 
       <div className="p-3.5 xl:p-4 border-t border-white/[0.06]">
         <div className="group flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-lg hover:bg-white/[0.035] transition-colors duration-150">
-          <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-full bg-gradient-to-br from-[#e8c896] to-[#c99a5f] flex items-center justify-center text-[11.5px] xl:text-[12px] font-medium text-[#0a0a0c] shrink-0">
+          <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-full bg-gradient-to-br from-[#D39448] to-[#A97942] flex items-center justify-center text-[11.5px] xl:text-[12px] font-medium text-[#020508] shrink-0">
             {initials}
           </div>
           <div className="flex flex-col leading-tight min-w-0">

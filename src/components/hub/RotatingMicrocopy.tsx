@@ -80,7 +80,7 @@ export function RotatingMicrocopy({ pool = MICROCOPY_POOL }: { pool?: string[] }
 
   return (
     <div className="mt-3 h-4 flex items-center justify-center gap-1.5 text-[11px] text-neutral-500">
-      <Sparkle size={10} className="text-[#c99a5f]/70 shrink-0" />
+      <Sparkle size={10} className="text-[#D39448]/70 shrink-0" />
       <span key={current} className="animate-fade-in">
         {current}
       </span>

@@ -65,7 +65,7 @@ export function CollectionVersionMenu({
                   >
                     {f.status}
                   </span>
-                  {f.id === currentId && <Check size={11} className="text-[#e8c896]" />}
+                  {f.id === currentId && <Check size={11} className="text-[#D39448]" />}
                 </span>
               </button>
             ))}
@@ -77,7 +77,7 @@ export function CollectionVersionMenu({
                 setOpen(false);
                 onCreateNext();
               }}
-              className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-md text-[12px] text-[#e8c896] hover:bg-white/[0.06] transition-colors"
+              className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-md text-[12px] text-[#D39448] hover:bg-white/[0.06] transition-colors"
             >
               <Plus size={11} />
               New version — "{nextName}"

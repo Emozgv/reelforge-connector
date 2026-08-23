@@ -19,7 +19,7 @@ const MIN_SEND_COUNT = 10;
 const SUBMISSION_STATUS_STYLES: Record<SubmissionStatus, string> = {
   Sent: "text-neutral-400 bg-white/[0.05]",
   "In Progress": "text-amber-300/80 bg-amber-400/10",
-  "Check Inbox": "text-[#f0c987] bg-[#c99a5f]/20",
+  "Check Inbox": "text-[#D39448] bg-[#D39448]/20",
   Finished: "text-emerald-300/80 bg-emerald-400/10",
 };
 
@@ -248,7 +248,7 @@ export function CollectionWorkspace({
               {latestSubmission && (
                 <div className="mt-3 rounded-md surface-field px-2.5 py-2">
                   <div className="flex items-center gap-1.5 text-[11px] text-neutral-300">
-                    <PackageCheck size={11} className="text-[#ddb87e]" />
+                    <PackageCheck size={11} className="text-[#D39448]" />
                     Sent to ReelForge
                   </div>
                   <p className="mt-0.5 text-[11px] text-neutral-500">
@@ -265,7 +265,7 @@ export function CollectionWorkspace({
                   "mt-3 w-full h-9 rounded-md flex items-center justify-center gap-2 text-[12.5px] font-medium transition-colors duration-150",
                   belowMinimum
                     ? "bg-white/[0.04] text-neutral-500 cursor-not-allowed"
-                    : "bg-[#c99a5f] text-[#0a0a0c] hover:bg-[#ddb87e]",
+                    : "bg-[#D39448] text-[#020508] hover:brightness-110 transition-[filter] duration-150",
                 ].join(" ")}
               >
                 <Send size={13} />
@@ -328,7 +328,7 @@ export function CollectionWorkspace({
                           href={s.deliveryUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-neutral-400 hover:text-[#e8c896] transition-colors duration-150"
+                          className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-neutral-400 hover:text-[#D39448] transition-colors duration-150"
                         >
                           <DriveGlyph size={12} />
                           Drive
@@ -351,7 +351,7 @@ export function CollectionWorkspace({
                 )}
                 {collection.history.map((entry, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <div className="mt-[5px] w-1 h-1 rounded-full bg-[#c99a5f]/60 shrink-0" />
+                    <div className="mt-[5px] w-1 h-1 rounded-full bg-[#D39448]/60 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[11.5px] text-neutral-300 leading-snug">{entry.label}</p>
                       <p className="text-[10.5px] text-neutral-600">{entry.date}</p>

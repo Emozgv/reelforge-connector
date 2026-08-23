@@ -44,7 +44,7 @@ export function CreatorsPage({
       <div className="max-w-[1080px] mx-auto px-8 pt-6 pb-8">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#c99a5f]/75 font-medium">
+            <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#D39448]/75 font-medium">
               Creators
             </span>
             <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">
@@ -57,7 +57,7 @@ export function CreatorsPage({
 
           <button
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 shrink-0 press-feedback"
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 shrink-0 press-feedback"
           >
             <Plus size={14} />
             New Creator

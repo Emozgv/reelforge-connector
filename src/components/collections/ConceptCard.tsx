@@ -53,7 +53,7 @@ export function ConceptCard({
           {submitted && (
             <div
               title="Included in a submission to ReelForge"
-              className="w-5 h-5 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center text-[#ddb87e]"
+              className="w-5 h-5 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center text-[#D39448]"
             >
               <Send size={10} />
             </div>

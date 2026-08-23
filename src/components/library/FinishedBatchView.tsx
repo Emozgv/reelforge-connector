@@ -29,7 +29,7 @@ function BatchItemCard({
   return (
     <button
       onClick={onSelect}
-      className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] hover:border-[#d7a463]/35 transition-colors duration-200"
+      className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] hover:border-[#D39448]/35 transition-colors duration-200"
       style={{ background: concept.video.thumbGradient }}
     >
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-black/20" />
@@ -41,7 +41,7 @@ function BatchItemCard({
         {pending && (
           <span
             title="Regeneration requested"
-            className="shrink-0 w-5 h-5 rounded-full bg-black/55 backdrop-blur-md flex items-center justify-center text-[#e8c896]"
+            className="shrink-0 w-5 h-5 rounded-full bg-black/55 backdrop-blur-md flex items-center justify-center text-[#D39448]"
           >
             <RotateCcw size={10} />
           </span>
@@ -132,7 +132,7 @@ function ItemDetail({
                   href={concept.finishedVideoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="relative aspect-[9/16] rounded-xl overflow-hidden flex items-center justify-center bg-black/40 border border-white/10 hover:border-[#d7a463]/40 transition-colors duration-150 block"
+                  className="relative aspect-[9/16] rounded-xl overflow-hidden flex items-center justify-center bg-black/40 border border-white/10 hover:border-[#D39448]/40 transition-colors duration-150 block"
                 >
                   <video src={concept.finishedVideoUrl} className="w-full h-full object-cover" muted />
                 </a>
@@ -178,18 +178,18 @@ function ItemDetail({
 
         <div className="rounded-lg surface-panel p-3.5">
           <h2 className="text-[13px] font-medium text-neutral-100 flex items-center gap-1.5">
-            <RotateCcw size={13} className="text-[#ddb87e]" />
+            <RotateCcw size={13} className="text-[#D39448]" />
             Regeneration
           </h2>
 
           {pending ? (
-            <p className="mt-3 text-[12px] text-[#e8c896] leading-relaxed">
+            <p className="mt-3 text-[12px] text-[#D39448] leading-relaxed">
               A regeneration request is already open for this reel.
             </p>
           ) : sent ? (
             <div className="mt-4 flex flex-col items-center gap-2 py-4">
-              <div className="w-8 h-8 rounded-full bg-[#d7a463] flex items-center justify-center">
-                <Check size={15} className="text-[#0a0a0c]" strokeWidth={2.5} />
+              <div className="w-8 h-8 rounded-full bg-[#D39448] flex items-center justify-center">
+                <Check size={15} className="text-[#020508]" strokeWidth={2.5} />
               </div>
               <p className="text-[12px] text-neutral-300">Requested</p>
             </div>
@@ -205,7 +205,7 @@ function ItemDetail({
                       className={[
                         "text-[11.5px] px-2 py-1 rounded-full border transition-all duration-200 ease-out",
                         reason === r
-                          ? "border-[#d7a463]/50 bg-[#d7a463]/[0.14] text-[#e8c896]"
+                          ? "border-[#D39448]/50 bg-[#D39448]/[0.14] text-[#D39448]"
                           : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-white/[0.16]",
                       ].join(" ")}
                     >
@@ -216,7 +216,7 @@ function ItemDetail({
                 <p
                   className={[
                     "mt-2 text-[11px] leading-relaxed",
-                    isFreeReason(reason) ? "text-emerald-300/80" : "text-[#e8c896]/80",
+                    isFreeReason(reason) ? "text-emerald-300/80" : "text-[#D39448]/80",
                   ].join(" ")}
                 >
                   {isFreeReason(reason) ? "Quality issue — free replacement." : "Creative change — may be billable."}
@@ -236,7 +236,7 @@ function ItemDetail({
 
               <button
                 onClick={submit}
-                className="mt-3 w-full h-9 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
+                className="mt-3 w-full h-9 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
               >
                 <RotateCcw size={13} />
                 Send request
@@ -354,7 +354,7 @@ export function FinishedBatchView({
                     href={submission.deliveryUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="h-9 px-3.5 rounded-lg flex items-center gap-1.5 text-[12.5px] font-medium bg-[#c99a5f] text-[#0a0a0c] hover:bg-[#ddb87e] transition-colors duration-150"
+                    className="h-9 px-3.5 rounded-lg flex items-center gap-1.5 text-[12.5px] font-medium bg-[#D39448] text-[#020508] hover:brightness-110 transition-[filter] duration-150"
                   >
                     <DriveGlyph size={13} />
                     Open in Drive

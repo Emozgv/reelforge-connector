@@ -77,7 +77,7 @@ export function NewCollectionPanel({
                     className={[
                       "flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-lg border text-[12px] transition-colors duration-150",
                       creatorId === c.id
-                        ? "border-[#d7a463]/40 bg-[#d7a463]/12 text-[#e8c896]"
+                        ? "border-[#D39448]/40 bg-[#D39448]/12 text-[#D39448]"
                         : "border-white/[0.07] text-neutral-400 hover:text-neutral-200",
                     ].join(" ")}
                   >
@@ -104,7 +104,7 @@ export function NewCollectionPanel({
             <button
               disabled={!name.trim()}
               onClick={handleCreate}
-              className="w-full h-10 rounded-lg bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
+              className="w-full h-10 rounded-lg bg-[#D39448] text-[#020508] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
             >
               Create Collection
             </button>

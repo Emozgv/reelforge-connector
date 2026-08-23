@@ -56,7 +56,7 @@ export function CreatorSelector({
                 <span className="text-[11px] text-neutral-500 truncate">{c.handle}</span>
               </div>
               {c.id === selected.id && (
-                <Check size={14} className="ml-auto text-[#d7a463] shrink-0" />
+                <Check size={14} className="ml-auto text-[#D39448] shrink-0" />
               )}
             </button>
           ))}

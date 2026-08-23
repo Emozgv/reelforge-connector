@@ -5,7 +5,7 @@ import { DriveGlyph } from "../collections/DriveGlyph";
 const SUBMISSION_STATUS_STYLES: Record<SubmissionStatus, string> = {
   Sent: "text-neutral-400 bg-white/[0.05]",
   "In Progress": "text-amber-300/80 bg-amber-400/10",
-  "Check Inbox": "text-[#f0c987] bg-[#c99a5f]/20",
+  "Check Inbox": "text-[#D39448] bg-[#D39448]/20",
   Finished: "text-emerald-300/80 bg-emerald-400/10",
 };
 
@@ -52,7 +52,7 @@ export function ProductionPage({
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-[1080px] mx-auto px-8 pt-6 pb-8">
-        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#c99a5f]/75 font-medium">
+        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#D39448]/75 font-medium">
           Production
         </span>
         <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">
@@ -86,7 +86,7 @@ export function ProductionPage({
         {finished.length > 0 && (
           <div className="mt-7">
             <h2 className="text-[13px] font-medium text-neutral-200 mb-2 flex items-center gap-1.5">
-              <PackageCheck size={13} className="text-[#ddb87e]" />
+              <PackageCheck size={13} className="text-[#D39448]" />
               Finished
             </h2>
             <div className="rounded-xl surface-panel divide-y divide-white/[0.05] [&>*:first-child]:rounded-t-xl [&>*:last-child]:rounded-b-xl">
@@ -138,7 +138,7 @@ function ProductionRowItem({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-[#e8c896] transition-colors duration-150 shrink-0"
+          className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-[#D39448] transition-colors duration-150 shrink-0"
         >
           <DriveGlyph size={12} />
           Drive

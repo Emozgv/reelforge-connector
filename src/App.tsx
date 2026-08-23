@@ -90,7 +90,7 @@ function App() {
   }
 
   return (
-    <div className="relative flex h-screen w-screen bg-[#0b0b0d] text-neutral-200 font-sans overflow-hidden">
+    <div className="relative flex h-screen w-screen bg-[#020508] text-neutral-200 font-sans overflow-hidden">
       <div
         className="pointer-events-none fixed inset-0 z-0"
         style={{

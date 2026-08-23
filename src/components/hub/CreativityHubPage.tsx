@@ -140,7 +140,7 @@ export function CreativityHubPage({
   return (
     <div className="h-full overflow-y-auto">
       {/* hero */}
-      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12 bg-[#08080a]">
+      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12 bg-[#020508]">
         <StarfieldBackground starCount={26} />
         <div
           className="pointer-events-none absolute inset-0"
@@ -153,11 +153,11 @@ export function CreativityHubPage({
 
         <div className="relative z-10 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto text-center">
           <div className="flex items-center justify-center gap-2.5 mb-3">
-            <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#d7a463]/60" />
-            <span className="text-[11px] tracking-[0.22em] uppercase text-[#d7a463]/85 font-medium">
+            <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
+            <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448]/85 font-medium">
               Creativity Hub
             </span>
-            <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#d7a463]/60" />
+            <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#D39448]/60" />
           </div>
           <h1 className="text-[42px] leading-[1.08] font-hub-hero font-medium text-neutral-50">
             Discover your next{" "}
@@ -165,7 +165,7 @@ export function CreativityHubPage({
           </h1>
           <p className="mt-3.5 text-[15px] text-neutral-400">
             Curated Reels and TikToks, organized for{" "}
-            <span className="text-[#e8c896] font-medium">{selectedCreator.name}</span>
+            <span className="text-[#D39448] font-medium">{selectedCreator.name}</span>
           </p>
 
           <div className="mt-8 relative max-w-xl mx-auto">
@@ -192,7 +192,7 @@ export function CreativityHubPage({
               <button
                 key={chip}
                 onClick={() => setQuery(chip.split(" ")[0])}
-                className="animate-chip-drift text-[12px] px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:text-[#e8c896] hover:border-[#d7a463]/30 hover:bg-[#d7a463]/[0.06] transition-colors"
+                className="animate-chip-drift text-[12px] px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:text-[#D39448] hover:border-[#D39448]/30 hover:bg-[#D39448]/[0.06] transition-colors"
                 style={{
                   animationDelay: `${i * 420}ms`,
                   animationDuration: `${4.6 + i * 0.35}s`,
@@ -223,7 +223,7 @@ export function CreativityHubPage({
                   className={[
                     "h-9 px-4 rounded-full text-[13px] capitalize transition-all duration-200",
                     filters.platform === p
-                      ? "bg-[#d7a463]/15 text-[#e8c896] shadow-[inset_0_0_0_1px_rgba(215,164,99,0.35)]"
+                      ? "bg-[#D39448]/15 text-[#D39448] shadow-[inset_0_0_0_1px_rgba(211,148,72,0.35)]"
                       : "text-neutral-500 hover:text-neutral-300",
                   ].join(" ")}
                 >
@@ -239,7 +239,7 @@ export function CreativityHubPage({
               title="See everything saved for this creator"
               className="flex items-center gap-1.5 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300"
             >
-              <Bookmark size={13} className="text-[#d7a463]" />
+              <Bookmark size={13} className="text-[#D39448]" />
               <span className="tabular-nums text-neutral-100">{savedCountLabel}</span> saved
             </button>
 
@@ -258,7 +258,7 @@ export function CreativityHubPage({
               <SlidersHorizontal size={14} />
               Filters
               {activeFilterCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-[#d7a463] text-[#0a0a0c] text-[10px] font-semibold flex items-center justify-center">
+                <span className="w-4 h-4 rounded-full bg-[#D39448] text-[#020508] text-[10px] font-semibold flex items-center justify-center">
                   {activeFilterCount}
                 </span>
               )}

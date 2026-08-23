@@ -4,8 +4,8 @@ import { Loader2 } from "lucide-react";
 // the Client OS UI (or the login screen) before we actually know the state.
 export function FullScreenLoader() {
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-[#0b0b0d]">
-      <Loader2 size={20} className="animate-spin text-[#c99a5f]/70" />
+    <div className="flex h-screen w-screen items-center justify-center bg-[#020508]">
+      <Loader2 size={20} className="animate-spin text-[#D39448]/70" />
     </div>
   );
 }

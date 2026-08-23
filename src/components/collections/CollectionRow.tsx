@@ -138,7 +138,7 @@ export function CollectionRow({
 
       <ArrowUpRight
         size={13}
-        className="shrink-0 text-neutral-700 group-hover:text-[#ddb87e] transition-colors duration-150"
+        className="shrink-0 text-neutral-700 group-hover:text-[#D39448] transition-colors duration-150"
       />
 
       <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>

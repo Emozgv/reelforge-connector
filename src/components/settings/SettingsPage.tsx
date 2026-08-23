@@ -49,12 +49,12 @@ export function SettingsPage({
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-[720px] mx-auto px-8 pt-6 pb-8">
-        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#c99a5f]/75 font-medium">Settings</span>
+        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#D39448]/75 font-medium">Settings</span>
         <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">Workspace</h1>
 
         <div className="mt-6 rounded-xl surface-panel p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#c99a5f] flex items-center justify-center text-[13px] font-medium text-[#0a0a0c] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#D39448] flex items-center justify-center text-[13px] font-medium text-[#020508] shrink-0">
               {(shownName ?? "EM").slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -81,7 +81,7 @@ export function SettingsPage({
               <button
                 onClick={handleSave}
                 disabled={!dirty || saving}
-                className="press-feedback h-9 px-3.5 rounded-lg text-[12.5px] font-medium bg-[#c99a5f] text-[#0a0a0c] disabled:opacity-35 disabled:cursor-default hover:bg-[#ddb87e] transition-colors duration-150 flex items-center gap-1.5 shrink-0"
+                className="press-feedback h-9 px-3.5 rounded-lg text-[12.5px] font-medium bg-[#D39448] text-[#020508] disabled:opacity-35 disabled:cursor-default hover:brightness-110 transition-[filter] duration-150 flex items-center gap-1.5 shrink-0"
               >
                 {saved ? <Check size={13} /> : null}
                 {saving ? "Saving…" : saved ? "Saved" : "Save"}
@@ -102,7 +102,7 @@ export function SettingsPage({
         {usage && workspacePackage && (
           <>
             <h2 className="mt-8 text-[13px] font-medium text-neutral-200 flex items-center gap-2">
-              <CreditCard size={14} className="text-[#ddb87e]" />
+              <CreditCard size={14} className="text-[#D39448]" />
               {workspacePackage.planName} plan
             </h2>
             <div className="mt-3 rounded-xl surface-panel p-4 grid grid-cols-3 gap-4">

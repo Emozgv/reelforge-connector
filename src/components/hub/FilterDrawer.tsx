@@ -38,7 +38,7 @@ function Chip({
       className={[
         "flex items-center gap-1 text-[12px] pl-2.5 pr-3 py-[7px] rounded-full border transition-all duration-200 ease-out",
         active
-          ? "border-[#d7a463]/50 bg-[#d7a463]/[0.14] text-[#e8c896] shadow-[0_0_0_1px_rgba(215,164,99,0.08)]"
+          ? "border-[#D39448]/50 bg-[#D39448]/[0.14] text-[#D39448] shadow-[0_0_0_1px_rgba(211,148,72,0.08)]"
           : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-white/[0.16] hover:bg-white/[0.04]",
       ].join(" ")}
     >
@@ -101,7 +101,7 @@ export function FilterDrawer({
           <div className="flex items-center gap-4">
             <button
               onClick={() => setDraft(DEFAULT_FILTERS)}
-              className="text-[12px] text-neutral-500 hover:text-[#e8c896] transition-colors duration-150"
+              className="text-[12px] text-neutral-500 hover:text-[#D39448] transition-colors duration-150"
             >
               Reset
             </button>
@@ -279,7 +279,7 @@ export function FilterDrawer({
           </button>
           <button
             onClick={apply}
-            className="h-9 px-5 rounded-full bg-[#d7a463] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors duration-150 press-feedback"
+            className="h-9 px-5 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors duration-150 press-feedback"
           >
             Apply Filters
           </button>

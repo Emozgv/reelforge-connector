@@ -37,7 +37,7 @@ export function CreatorCard({
     >
       <div className="flex items-center gap-3">
         <div
-          className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium text-[#0a0a0c] shrink-0 ring-1 ring-white/15 overflow-hidden"
+          className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium text-[#020508] shrink-0 ring-1 ring-white/15 overflow-hidden"
           style={creator.profileImage ? undefined : { background: creator.avatarColor }}
         >
           {creator.profileImage ? (
@@ -65,7 +65,7 @@ export function CreatorCard({
       </div>
 
       {stats.activeSubmissions > 0 && (
-        <div className="mt-3 text-[11px] text-[#ddb87e]">
+        <div className="mt-3 text-[11px] text-[#D39448]">
           {stats.activeSubmissions} active submission{stats.activeSubmissions === 1 ? "" : "s"}
         </div>
       )}

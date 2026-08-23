@@ -92,7 +92,7 @@ export function LibraryPage({
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-[1240px] mx-auto px-8 pt-6 pb-8">
-        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#c99a5f]/75 font-medium">Library</span>
+        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#D39448]/75 font-medium">Library</span>
         <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">Delivered content</h1>
         <p className="mt-1 text-[12.5px] text-neutral-500 max-w-lg">
           Every finished batch from ReelForge — locked copies, ready to review.
@@ -165,7 +165,7 @@ export function LibraryPage({
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1.5 text-[11.5px] text-neutral-300 hover:text-[#e8c896] transition-colors duration-150"
+                      className="inline-flex items-center gap-1.5 text-[11.5px] text-neutral-300 hover:text-[#D39448] transition-colors duration-150"
                     >
                       <DriveGlyph size={13} />
                       Open in Drive

@@ -29,8 +29,8 @@ function GrowthSparkline() {
       />
       <defs>
         <linearGradient id="spark-grad" x1="0" y1="0" x2="220" y2="0">
-          <stop offset="0%" stopColor="#c99a5f" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#f0c987" stopOpacity="0.95" />
+          <stop offset="0%" stopColor="#D39448" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#D39448" stopOpacity="0.95" />
         </linearGradient>
       </defs>
     </svg>
@@ -50,7 +50,7 @@ function StatChip({
 }) {
   return (
     <div className="flex-1 flex items-center gap-3.5 px-5 xl:px-6 py-5">
-      <div className="w-11 h-11 rounded-lg shrink-0 flex items-center justify-center border border-[#c99a5f]/25 bg-white/[0.015] text-[#ddb87e]">
+      <div className="w-11 h-11 rounded-lg shrink-0 flex items-center justify-center border border-[#D39448]/25 bg-white/[0.015] text-[#D39448]">
         {icon}
       </div>
       <div className="min-w-0">
@@ -69,7 +69,7 @@ function PanelHeader({ title, onViewAll, cta = "View all" }: { title: string; on
       {onViewAll && (
         <button
           onClick={onViewAll}
-          className="text-[11px] font-medium text-[#ddb87e] hover:text-[#e8c896] transition-colors duration-150"
+          className="text-[11px] font-medium text-[#D39448] hover:brightness-110 transition-[filter] duration-150"
         >
           {cta}
         </button>
@@ -81,7 +81,7 @@ function PanelHeader({ title, onViewAll, cta = "View all" }: { title: string; on
 const CONCEPT_STAGE_STYLES: Record<string, string> = {
   Saved: "text-neutral-400 bg-white/[0.05]",
   "In Review": "text-sky-300/85 bg-sky-400/10",
-  "In Production": "text-[#f0c987] bg-[#c99a5f]/15",
+  "In Production": "text-[#D39448] bg-[#D39448]/15",
   Delivered: "text-emerald-300/85 bg-emerald-400/10",
 };
 
@@ -140,7 +140,7 @@ export function DashboardPage({
     <div className="h-full overflow-y-auto">
       {/* hero — a real night-sky photograph, not a CSS approximation, so the mood matches exactly */}
       <div
-        className="relative overflow-hidden px-8 xl:px-12 pt-10 pb-9 h-[280px] xl:h-[300px] bg-[#050505]"
+        className="relative overflow-hidden px-8 xl:px-12 pt-10 pb-9 h-[280px] xl:h-[300px] bg-[#020508]"
         style={{
           backgroundImage: "url(/images/dashboard-hero-sky.jpg)",
           backgroundSize: "cover",
@@ -148,13 +148,13 @@ export function DashboardPage({
         }}
       >
         <div className="pointer-events-none absolute inset-0 bg-black/35" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#0c0c0e]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#020508]" />
         <StarfieldBackground starCount={55} />
         <div className="relative z-10 max-w-[1200px] mx-auto flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 mb-3.5">
-              <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#d7a463]/60" />
-              <span className="text-[11px] tracking-[0.22em] uppercase text-[#d7a463]/85 font-medium">
+              <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
+              <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448]/85 font-medium">
                 Dashboard
               </span>
             </div>
@@ -169,7 +169,7 @@ export function DashboardPage({
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={onOpenHub}
-                className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-[#c99a5f] text-[#0a0a0c] text-[13px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 press-feedback"
+                className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-[#D39448] text-[#020508] text-[13px] font-medium hover:brightness-110 transition-[filter] duration-150 press-feedback"
               >
                 <Sparkles size={14} />
                 Find your next concept
@@ -180,7 +180,7 @@ export function DashboardPage({
                   onClick={onOpenCollections}
                   className="flex items-center gap-2.5 h-11 pl-4 pr-5 rounded-full border border-white/[0.16] hover:bg-white/[0.05] transition-colors duration-150"
                 >
-                  <FolderHeart size={14} className="text-[#ddb87e]" />
+                  <FolderHeart size={14} className="text-[#D39448]" />
                   <span className="text-[12.5px] text-neutral-300">
                     <span className="text-neutral-100 font-medium">{activeCollectionsCount}</span> active collection
                     {activeCollectionsCount === 1 ? "" : "s"}
@@ -194,9 +194,9 @@ export function DashboardPage({
 
       <div className="max-w-[1200px] mx-auto px-8 pt-7 pb-8">
         {needsAttention.length > 0 && (
-          <div className="mb-5 rounded-xl border border-[#c99a5f]/25 bg-[#c99a5f]/[0.06] p-4">
+          <div className="mb-5 rounded-xl border border-[#D39448]/25 bg-[#D39448]/[0.06] p-4">
             <div className="flex items-center gap-1.5 mb-2.5">
-              <Inbox size={13} className="text-[#ddb87e]" />
+              <Inbox size={13} className="text-[#D39448]" />
               <h2 className="text-[13px] font-medium text-neutral-100">Needs your attention</h2>
             </div>
             <div className="space-y-1">
@@ -209,7 +209,7 @@ export function DashboardPage({
                   <span className="text-[12.5px] text-neutral-200 truncate">
                     {s.collection.name} <span className="text-neutral-600">· Submission #{s.index}</span>
                   </span>
-                  <span className="shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] text-[#f0c987] bg-[#c99a5f]/20 animate-pulse">
+                  <span className="shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] text-[#D39448] bg-[#D39448]/20 animate-pulse">
                     Check Inbox
                   </span>
                 </button>
@@ -277,7 +277,7 @@ export function DashboardPage({
                 </p>
                 <div className="relative mt-2.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#c99a5f] to-[#e8c896]"
+                    className="h-full rounded-full bg-gradient-to-r from-[#A97942] to-[#D39448]"
                     style={{ width: `${Math.min(100, (usage.reelsUsed / usage.reelsTotal) * 100)}%` }}
                   />
                 </div>
@@ -348,12 +348,12 @@ export function DashboardPage({
                   disabled={!item.collectionId}
                   className="w-full flex items-start gap-2 text-left disabled:cursor-default group"
                 >
-                  <div className="mt-[5px] w-1 h-1 rounded-full bg-[#c99a5f]/60 shrink-0" />
+                  <div className="mt-[5px] w-1 h-1 rounded-full bg-[#D39448]/60 shrink-0" />
                   <div className="min-w-0">
                     <p
                       className={[
                         "text-[11.5px] text-neutral-300 leading-snug",
-                        item.collectionId && "group-hover:text-[#e8c896] transition-colors duration-150",
+                        item.collectionId && "group-hover:text-[#D39448] transition-colors duration-150",
                       ].join(" ")}
                     >
                       {item.message}
