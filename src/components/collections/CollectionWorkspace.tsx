@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox } from "lucide-react";
 import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
-import { collectionFamily, nextCollectionName } from "../../lib/collectionNaming";
+import { collectionFamily, isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
 import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
@@ -129,23 +129,27 @@ export function CollectionWorkspace({
         <div className="flex items-center justify-between gap-6 flex-wrap pb-3 border-b border-white/[0.06]">
           <div>
             <div className="flex items-center gap-2">
-              <CollectionVersionMenu
-                family={family}
-                currentId={collection.id}
-                nextName={suggestedName}
-                onSwitch={onSwitchCollection}
-                onCreateNext={() => onStartNext(suggestedName)}
-                onClone={() => onClone(suggestedName)}
-              >
-                <h1 className="text-[19px] font-serif font-medium text-neutral-50 cursor-default">
-                  {collection.name}
-                  {family.length > 1 && (
-                    <span className="ml-2 text-[11px] font-sans font-normal text-neutral-600">
-                      {family.length} versions
-                    </span>
-                  )}
-                </h1>
-              </CollectionVersionMenu>
+              {isVersionableCollection(collection.name) ? (
+                <CollectionVersionMenu
+                  family={family}
+                  currentId={collection.id}
+                  nextName={suggestedName}
+                  onSwitch={onSwitchCollection}
+                  onCreateNext={() => onStartNext(suggestedName)}
+                  onClone={() => onClone(suggestedName)}
+                >
+                  <h1 className="text-[19px] font-serif font-medium text-neutral-50 cursor-default">
+                    {collection.name}
+                    {family.length > 1 && (
+                      <span className="ml-2 text-[11px] font-sans font-normal text-neutral-600">
+                        {family.length} versions
+                      </span>
+                    )}
+                  </h1>
+                </CollectionVersionMenu>
+              ) : (
+                <h1 className="text-[19px] font-serif font-medium text-neutral-50">{collection.name}</h1>
+              )}
 
               <div className="relative">
                 <button

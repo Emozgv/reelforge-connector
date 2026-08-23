@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MoreHorizontal, ArrowUpRight } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
-import { nextCollectionName } from "../../lib/collectionNaming";
+import { isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
 
 export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
@@ -91,7 +91,7 @@ export function CollectionRow({
             onBlur={commitRename}
             className="w-full h-6 rounded surface-field px-1.5 text-[13px] text-neutral-100 outline-none focus-glow"
           />
-        ) : (
+        ) : isVersionableCollection(current.name) ? (
           <CollectionVersionMenu
             family={family}
             currentId={current.id}
@@ -107,6 +107,8 @@ export function CollectionRow({
               )}
             </h3>
           </CollectionVersionMenu>
+        ) : (
+          <h3 className="text-[13px] font-medium text-neutral-100 truncate">{current.name}</h3>
         )}
         <p className="text-[11px] text-neutral-500 mt-0.5">
           {total} concepts · {used} used · {available} available

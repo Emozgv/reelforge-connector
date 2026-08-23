@@ -18,6 +18,13 @@ export function collectionBaseName(name: string): string {
   return name.replace(/\s+\d+$/, "").trim();
 }
 
+// "Quick Saves" is a system singleton per Creator (the Hub's catch-all
+// save-without-picking-a-collection target, created automatically) — it
+// never gets the version/clone treatment, always just the one.
+export function isVersionableCollection(name: string): boolean {
+  return collectionBaseName(name) !== "Quick Saves";
+}
+
 // Every collection in the same numbered sequence as `name` — "Aesthetic
 // Reels" and "Aesthetic Reels 2" belong to the same family. Sorted so the
 // unnumbered base comes first, then 2, 3, ... Used to render them as tabs.
