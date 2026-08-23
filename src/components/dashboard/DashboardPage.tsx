@@ -3,6 +3,7 @@ import type { Collection, Creator, WorkspacePackage } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import { computeUsageStats } from "../../lib/usageStats";
 import { formatRelativeTime } from "../../lib/relativeTime";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 // Local time of the person actually looking at the screen — already
 // naturally "session aware" without any extra plumbing.
@@ -139,14 +140,16 @@ export function DashboardPage({
     <div className="h-full overflow-y-auto">
       {/* hero — a real night-sky photograph, not a CSS approximation, so the mood matches exactly */}
       <div
-        className="relative overflow-hidden px-8 xl:px-12 pt-16 pb-12 h-[420px] xl:h-[460px] bg-[#050505]"
+        className="relative overflow-hidden px-8 xl:px-12 pt-10 pb-9 h-[300px] xl:h-[320px] bg-[#050505]"
         style={{
           backgroundImage: "url(/images/dashboard-hero-sky.jpg)",
           backgroundSize: "cover",
           backgroundPosition: "center bottom",
         }}
       >
-        <div className="shooting-star" style={{ top: "18%", ["--shoot-rotate" as string]: "16deg", ["--shoot-travel" as string]: "300px" }} />
+        <div className="pointer-events-none absolute inset-0 bg-black/40" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent to-[#0c0c0e]" />
+        <StarfieldBackground starCount={40} />
         <div className="relative z-10 max-w-[1200px] mx-auto flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 mb-3.5">
