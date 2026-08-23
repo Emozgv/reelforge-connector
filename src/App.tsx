@@ -161,10 +161,10 @@ function App() {
           <LibraryPage
             creators={creatorsStore.creators}
             collections={collectionsStore.collections}
-            onOpenCollection={navigateToCollection}
             onRequestRegeneration={collectionsStore.requestRegeneration}
             onToggleFavorite={collectionsStore.toggleFavoriteSubmission}
             onApprove={collectionsStore.approveSubmission}
+            onUploadFinishedVideo={collectionsStore.uploadFinishedVideo}
           />
         )}
         {page === "settings" && (

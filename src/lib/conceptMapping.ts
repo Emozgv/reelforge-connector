@@ -26,6 +26,7 @@ export interface ConceptRow {
   ai_metadata: Record<string, unknown>;
   notes: string;
   creator_id: string | null;
+  finished_video_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -85,6 +86,7 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
     producedDate: row.produced_at ? formatTimestampFromIso(row.produced_at) : undefined,
     notes: row.notes ?? "",
     creatorId: row.creator_id ?? undefined,
+    finishedVideoUrl: row.finished_video_url ?? undefined,
   };
 }
 

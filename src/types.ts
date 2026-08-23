@@ -107,6 +107,9 @@ export interface CollectionConcept {
   // collection's creator" (the default/primary case, matching the existing
   // research flow where the creator is picked up front).
   creatorId?: string;
+  // Client-uploaded delivered video for this exact reel — lets the read-only
+  // Finished view show a side-by-side against the original reference.
+  finishedVideoUrl?: string;
 }
 
 // Production progress for one real Submission (client_os.submissions). "Check

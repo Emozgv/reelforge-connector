@@ -402,6 +402,49 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     void logActivity(collectionId, "submission_created", `Submission #${row.index} sent to ReelForge`, row.id);
   }
 
+  // Client-side upload of the actual delivered video for one reel, so the
+  // read-only Finished view can show it next to the original reference.
+  async function uploadFinishedVideo(
+    collectionId: string,
+    conceptId: string,
+    file: File
+  ): Promise<{ error: string | null }> {
+    if (!workspaceId) return { error: "No active workspace." };
+
+    const ext = file.name.split(".").pop() || "mp4";
+    const path = `${workspaceId}/${conceptId}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("client-os-finished-videos")
+      .upload(path, file, { upsert: true, cacheControl: "3600" });
+
+    if (uploadError) return { error: uploadError.message };
+
+    const { data: publicUrlData } = supabase.storage.from("client-os-finished-videos").getPublicUrl(path);
+    const url = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+
+    const previous = collectionsRef.current;
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === collectionId
+          ? { ...c, concepts: c.concepts.map((k) => (k.video.id === conceptId ? { ...k, finishedVideoUrl: url } : k)) }
+          : c
+      )
+    );
+
+    const { error: updateError } = await supabase
+      .schema("client_os")
+      .from("concepts")
+      .update({ finished_video_url: url })
+      .eq("id", conceptId);
+
+    if (updateError) {
+      setCollections(previous);
+      return { error: updateError.message };
+    }
+    return { error: null };
+  }
+
   // Writes a real row to client_os.regeneration_requests (free/paid decided
   // here, at request time, from the reason) plus the usual activity entry.
   // status starts "Requested" and only a future Internal connection can move
@@ -603,6 +646,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     requestRegeneration,
     toggleFavoriteSubmission,
     approveSubmission,
+    uploadFinishedVideo,
     sendSubmission,
     updateNotes,
     updateStatus,
