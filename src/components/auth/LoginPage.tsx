@@ -37,13 +37,22 @@ export function LoginPage({
       <div className="grain-overlay" />
 
       <div className="relative z-10 w-full max-w-[380px] px-4">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-6 h-6 rounded-[6px] bg-[#c99a5f] flex items-center justify-center">
-            <div className="w-2 h-2.5 rounded-[1.5px] bg-[#0a0a0c]" />
-          </div>
-          <span className="text-[16px] font-serif font-medium text-neutral-100 tracking-tight">
-            ReelForge
-          </span>
+        <div className="flex items-center justify-center gap-2.5 mb-8">
+          <div
+            className="w-[27px] h-6 shrink-0"
+            style={{
+              WebkitMaskImage: "url(/rf-mark.png)",
+              maskImage: "url(/rf-mark.png)",
+              WebkitMaskSize: "contain",
+              maskSize: "contain",
+              WebkitMaskRepeat: "no-repeat",
+              maskRepeat: "no-repeat",
+              WebkitMaskPosition: "center",
+              maskPosition: "center",
+              background: "linear-gradient(135deg, #e8c896, #c99a5f)",
+            }}
+          />
+          <span className="font-brand text-[17px] text-neutral-100">ReelForge</span>
         </div>
 
         <div className="rounded-2xl surface-panel p-6">

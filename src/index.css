@@ -56,6 +56,15 @@ body {
   font-family: "Fraunces", ui-serif, Georgia, serif;
 }
 
+/* The "ReelForge" wordmark — deliberately its own typeface, distinct from
+   both the UI sans and the headline serif, so the brand name always reads
+   as a mark rather than as body copy. Pairs with the angular RF glyph. */
+.font-brand {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
 /* faint film grain — tactile, not decorative */
 .grain-overlay {
   position: fixed;

@@ -67,12 +67,21 @@ export function Sidebar({
     <aside className="relative z-10 w-[212px] xl:w-[236px] 2xl:w-[260px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
       <div className="h-14 xl:h-16 flex items-center justify-between px-4 xl:px-5 border-b border-white/[0.06]">
         <div className="flex items-center gap-2 xl:gap-2.5">
-          <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-[5px] bg-[#c99a5f] flex items-center justify-center">
-            <div className="w-1.5 h-2 xl:w-2 xl:h-2.5 rounded-[1px] bg-[#0a0a0c]" />
-          </div>
-          <span className="text-[13.5px] xl:text-[15px] font-serif font-medium text-neutral-100 tracking-tight">
-            ReelForge
-          </span>
+          <div
+            className="w-[22px] h-5 xl:w-[26px] xl:h-6 shrink-0"
+            style={{
+              WebkitMaskImage: "url(/rf-mark.png)",
+              maskImage: "url(/rf-mark.png)",
+              WebkitMaskSize: "contain",
+              maskSize: "contain",
+              WebkitMaskRepeat: "no-repeat",
+              maskRepeat: "no-repeat",
+              WebkitMaskPosition: "center",
+              maskPosition: "center",
+              background: "linear-gradient(135deg, #e8c896, #c99a5f)",
+            }}
+          />
+          <span className="font-brand text-[14.5px] xl:text-[16px] text-neutral-100">ReelForge</span>
         </div>
 
         <div className="relative">
