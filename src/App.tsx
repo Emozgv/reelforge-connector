@@ -121,6 +121,7 @@ function App() {
             onOpenHub={() => setPage("hub")}
             onOpenCreator={navigateToCreator}
             onOpenCollection={navigateToCollection}
+            onOpenCollections={() => setPage("collections")}
           />
         )}
         {page === "hub" && (

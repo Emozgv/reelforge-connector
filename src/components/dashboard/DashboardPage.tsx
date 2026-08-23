@@ -1,4 +1,4 @@
-import { Clock, Inbox, PackageCheck, Sparkles, Users } from "lucide-react";
+import { Clock, FolderHeart, Inbox, PackageCheck, Sparkles, Users } from "lucide-react";
 import type { Collection, Creator, WorkspacePackage } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import { computeUsageStats } from "../../lib/usageStats";
@@ -29,6 +29,7 @@ export function DashboardPage({
   onOpenHub,
   onOpenCreator,
   onOpenCollection,
+  onOpenCollections,
 }: {
   userName?: string;
   creators: Creator[];
@@ -38,12 +39,14 @@ export function DashboardPage({
   onOpenHub: () => void;
   onOpenCreator: (creatorId: string) => void;
   onOpenCollection: (collectionId: string) => void;
+  onOpenCollections: () => void;
 }) {
   const allSubmissions = collections.flatMap((c) => c.submissions.map((s) => ({ ...s, collection: c })));
   const activeSubmissions = allSubmissions.filter((s) => s.status !== "Finished");
   const needsAttention = allSubmissions.filter((s) => s.status === "Check Inbox");
   const finishedCount = allSubmissions.filter((s) => s.status === "Finished").length;
   const savedTotal = collections.reduce((sum, c) => sum + c.concepts.length, 0);
+  const activeCollectionsCount = collections.filter((c) => c.status !== "Completed").length;
 
   const usage = workspacePackage ? computeUsageStats(workspacePackage, collections, creators) : null;
 
@@ -113,26 +116,15 @@ export function DashboardPage({
                 Find your next concept
               </button>
 
-              {creators.length > 0 && (
+              {collections.length > 0 && (
                 <button
-                  onClick={() => onOpenCreator(creators[0].id)}
-                  className="flex items-center gap-2.5 h-10 pl-1.5 pr-3.5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors duration-150"
+                  onClick={onOpenCollections}
+                  className="flex items-center gap-2.5 h-10 pl-3.5 pr-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors duration-150"
                 >
-                  <div className="flex items-center -space-x-2.5">
-                    {creators.slice(0, 5).map((c) => (
-                      <div
-                        key={c.id}
-                        className="w-7 h-7 rounded-full ring-2 ring-[#0c0c0e] shrink-0 overflow-hidden"
-                        style={c.profileImage ? undefined : { background: c.avatarColor }}
-                      >
-                        {c.profileImage && (
-                          <img src={c.profileImage} alt={c.name} className="w-full h-full object-cover" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <FolderHeart size={14} className="text-[#ddb87e]" />
                   <span className="text-[12px] text-neutral-300">
-                    {creators.length} creator{creators.length === 1 ? "" : "s"}
+                    <span className="text-neutral-100 font-medium">{activeCollectionsCount}</span> active collection
+                    {activeCollectionsCount === 1 ? "" : "s"}
                   </span>
                 </button>
               )}
