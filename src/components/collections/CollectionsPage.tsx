@@ -59,13 +59,14 @@ export function CollectionsPage({
           collectionsStore.updateConceptNotes(activeCollection.id, videoId, notes)
         }
         onSendSubmission={(note) => collectionsStore.sendSubmission(activeCollection.id, note)}
-        siblingNames={collections
+        siblingCollections={collections
           .filter((c) => c.creatorId === activeCollection.creatorId && c.id !== activeCollection.id)
-          .map((c) => c.name)}
+          .map((c) => ({ id: c.id, name: c.name }))}
         onStartNext={async (name) => {
           const result = await collectionsStore.createCollection(name, activeCollection.creatorId, "");
           if (result.id) setActiveCollectionId(result.id);
         }}
+        onSwitchCollection={(id) => setActiveCollectionId(id)}
       />
     );
   }
@@ -129,7 +130,7 @@ export function CollectionsPage({
                     key={c.id}
                     collection={c}
                     creators={creators}
-                    siblingNames={items.filter((s) => s.id !== c.id).map((s) => s.name)}
+                    siblingCollections={items.filter((s) => s.id !== c.id).map((s) => ({ id: s.id, name: s.name }))}
                     onOpen={() => setActiveCollectionId(c.id)}
                     onRename={(name) => renameCollection(c.id, name)}
                     onDuplicate={() => duplicateCollection(c.id)}

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox, Plus } from "lucide-react";
 import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
-import { nextCollectionName } from "../../lib/collectionNaming";
+import { collectionFamily, nextCollectionName } from "../../lib/collectionNaming";
 import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
@@ -28,7 +28,7 @@ export function CollectionWorkspace({
   collection,
   creators,
   saveError,
-  siblingNames,
+  siblingCollections,
   onBack,
   onUpdateNotes,
   onUpdateStatus,
@@ -37,11 +37,12 @@ export function CollectionWorkspace({
   onSetConceptNotes,
   onSendSubmission,
   onStartNext,
+  onSwitchCollection,
 }: {
   collection: Collection;
   creators: Creator[];
   saveError?: string | null;
-  siblingNames: string[];
+  siblingCollections: { id: string; name: string }[];
   onBack: () => void;
   onUpdateNotes: (notes: string) => void;
   onUpdateStatus: (status: CollectionStatus) => void;
@@ -50,17 +51,18 @@ export function CollectionWorkspace({
   onSetConceptNotes: (videoId: string, notes: string) => void;
   onSendSubmission: (note: string) => void;
   onStartNext: (name: string) => void;
+  onSwitchCollection: (id: string) => void;
 }) {
   const [notes, setNotes] = useState(collection.notes);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
-  const [nextOpen, setNextOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [conceptFilter, setConceptFilter] = useState<ConceptFilter>("all");
   const [inboxNoteId, setInboxNoteId] = useState<string | null>(null);
   const notesSaveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const creator = creators.find((c) => c.id === collection.creatorId);
   const delivered = collection.submissions.some((s) => s.status === "Finished");
-  const suggestedName = nextCollectionName(collection.name, siblingNames);
+  const family = collectionFamily(collection.name, [{ id: collection.id, name: collection.name }, ...siblingCollections]);
+  const suggestedName = nextCollectionName(collection.name, siblingCollections.map((s) => s.name));
 
   useEffect(() => {
     return () => clearTimeout(notesSaveTimeout.current);
@@ -119,7 +121,7 @@ export function CollectionWorkspace({
 
         <div className="flex items-center justify-between gap-6 flex-wrap pb-3 border-b border-white/[0.06]">
           <div>
-            <div className="group flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <h1 className="text-[19px] font-serif font-medium text-neutral-50">{collection.name}</h1>
 
               <div className="relative">
@@ -159,44 +161,6 @@ export function CollectionWorkspace({
                 )}
               </div>
 
-              {delivered && (
-                <div
-                  className={[
-                    "relative transition-opacity duration-150",
-                    nextOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                  ].join(" ")}
-                >
-                  <button
-                    onClick={() => setNextOpen((v) => !v)}
-                    title={`Start "${suggestedName}"`}
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-neutral-600 hover:text-[#e8c896] hover:bg-white/[0.08] transition-colors duration-150"
-                  >
-                    <Plus size={13} />
-                  </button>
-                  {nextOpen && (
-                    <div
-                      onMouseLeave={() => setNextOpen(false)}
-                      className="absolute left-0 top-7 z-20 w-60 rounded-lg surface-panel-strong p-1 animate-fade-in"
-                    >
-                      <button
-                        onClick={() => {
-                          setNextOpen(false);
-                          onStartNext(suggestedName);
-                        }}
-                        className="w-full flex items-center gap-2 text-left px-2.5 py-2 rounded-md text-[12px] text-neutral-200 hover:bg-white/[0.06] transition-colors"
-                      >
-                        <Sparkles size={12} className="text-[#ddb87e] shrink-0" />
-                        <span>
-                          Start <span className="text-[#e8c896]">"{suggestedName}"</span>
-                        </span>
-                      </button>
-                      <p className="px-2.5 pb-1.5 pt-0.5 text-[10.5px] text-neutral-600 leading-relaxed">
-                        Delivered — keeps this one as-is, starts fresh for {creator?.name ?? "this creator"}.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-neutral-500">
@@ -205,6 +169,34 @@ export function CollectionWorkspace({
               <span className="text-neutral-700">·</span>
               <span>Updated {formatRelativeTime(collection.updatedAt)}</span>
             </div>
+
+            {(family.length > 1 || delivered) && (
+              <div className="mt-2.5 flex items-center gap-1">
+                {family.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => f.id !== collection.id && onSwitchCollection(f.id)}
+                    className={[
+                      "h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors duration-150",
+                      f.id === collection.id
+                        ? "bg-[#c99a5f]/15 text-[#e8c896]"
+                        : "text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05]",
+                    ].join(" ")}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+                {delivered && family[family.length - 1]?.id === collection.id && (
+                  <button
+                    onClick={() => onStartNext(suggestedName)}
+                    title={`Start "${suggestedName}"`}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-neutral-600 hover:text-[#e8c896] hover:bg-white/[0.05] transition-colors duration-150"
+                  >
+                    <Plus size={12} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -9,3 +9,20 @@ export function nextCollectionName(name: string, existingNames: string[]): strin
   while (taken.has(`${base} ${n}`)) n++;
   return `${base} ${n}`;
 }
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Every collection in the same numbered sequence as `name` — "Aesthetic
+// Reels" and "Aesthetic Reels 2" belong to the same family. Sorted so the
+// unnumbered base comes first, then 2, 3, ... Used to render them as tabs.
+export function collectionFamily<T extends { id: string; name: string }>(name: string, collections: T[]): T[] {
+  const base = name.replace(/\s+\d+$/, "").trim();
+  const pattern = new RegExp(`^${escapeRegExp(base)}(?: (\\d+))?$`);
+  return collections
+    .map((c) => ({ item: c, match: c.name.trim().match(pattern) }))
+    .filter((x): x is { item: T; match: RegExpMatchArray } => !!x.match)
+    .sort((a, b) => (a.match[1] ? Number(a.match[1]) : 1) - (b.match[1] ? Number(b.match[1]) : 1))
+    .map((x) => x.item);
+}
