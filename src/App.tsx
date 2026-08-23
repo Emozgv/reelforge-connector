@@ -3,6 +3,9 @@ import { Sidebar, type Page } from "./components/layout/Sidebar";
 import { CreativityHubPage } from "./components/hub/CreativityHubPage";
 import { CollectionsPage } from "./components/collections/CollectionsPage";
 import { CreatorsPage } from "./components/creators/CreatorsPage";
+import { ProductionPage } from "./components/production/ProductionPage";
+import { LibraryPage } from "./components/library/LibraryPage";
+import { SettingsPage } from "./components/settings/SettingsPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { FullScreenLoader } from "./components/auth/FullScreenLoader";
 import { NoWorkspaceAccess } from "./components/auth/NoWorkspaceAccess";
@@ -85,6 +88,28 @@ function App() {
             creatorsStore={creatorsStore}
             collectionsStore={collectionsStore}
             onOpenCollection={navigateToCollection}
+          />
+        )}
+        {page === "production" && (
+          <ProductionPage
+            creators={creatorsStore.creators}
+            collections={collectionsStore.collections}
+            onOpenCollection={navigateToCollection}
+          />
+        )}
+        {page === "library" && (
+          <LibraryPage
+            creators={creatorsStore.creators}
+            collections={collectionsStore.collections}
+            onOpenCollection={navigateToCollection}
+          />
+        )}
+        {page === "settings" && (
+          <SettingsPage
+            userEmail={user.email}
+            workspaceName={workspace.name}
+            role={workspace.role}
+            onSignOut={signOut}
           />
         )}
       </div>

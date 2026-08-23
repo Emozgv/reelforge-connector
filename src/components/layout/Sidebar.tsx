@@ -41,18 +41,14 @@ export function Sidebar({
       <nav className="flex-1 px-2.5 xl:px-3.5 py-3 xl:py-4 space-y-px xl:space-y-0.5">
         {NAV_ITEMS.map((item) => {
           const active = item.id === page;
-          const disabled = item.id !== "hub" && item.id !== "collections" && item.id !== "creators";
           return (
             <button
               key={item.id}
-              disabled={disabled}
               onClick={() => onNavigate(item.id)}
               className={[
                 "relative w-full flex items-center gap-2.5 xl:gap-3 px-2.5 xl:px-3 py-[7px] xl:py-2 rounded-md text-[12.5px] xl:text-[13.5px] transition-colors duration-150",
                 active
                   ? "text-neutral-100 bg-white/[0.05]"
-                  : disabled
-                  ? "text-neutral-600 cursor-not-allowed"
                   : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.035]",
               ].join(" ")}
             >
@@ -61,11 +57,6 @@ export function Sidebar({
               )}
               <span className={active ? "text-[#ddb87e]" : ""}>{item.icon}</span>
               {item.label}
-              {disabled && (
-                <span className="ml-auto text-[9px] tracking-wide uppercase text-neutral-600 border border-white/[0.08] rounded-[3px] px-1 py-[1px]">
-                  soon
-                </span>
-              )}
             </button>
           );
         })}
