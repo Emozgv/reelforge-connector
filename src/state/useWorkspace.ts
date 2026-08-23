@@ -5,15 +5,17 @@ export interface ActiveWorkspace {
   id: string;
   name: string;
   role: string;
+  membershipId: string;
+  displayName: string | null;
 }
 
 /**
  * Resolves which client_os workspace the given authenticated user belongs to.
  * V1 assumption: a user belongs to exactly one workspace, so we just take the
- * first membership found. The shape (id/name/role) is deliberately small so
- * multi-workspace switching can be layered on later without a redesign —
- * this hook is the single place that would grow a workspace *list* + an
- * "active workspace" selector when that's needed.
+ * first membership found. The shape is deliberately small so multi-workspace
+ * switching can be layered on later without a redesign — this hook is the
+ * single place that would grow a workspace *list* + an "active workspace"
+ * selector when that's needed.
  */
 export function useWorkspace(userId: string | undefined) {
   const [workspace, setWorkspace] = useState<ActiveWorkspace | null>(null);
@@ -36,7 +38,7 @@ export function useWorkspace(userId: string | undefined) {
       const { data: membership, error: membershipError } = await supabase
         .schema("client_os")
         .from("workspace_members")
-        .select("workspace_id, role")
+        .select("id, workspace_id, role, display_name")
         .eq("user_id", userId)
         .limit(1)
         .maybeSingle();
@@ -69,7 +71,13 @@ export function useWorkspace(userId: string | undefined) {
         setError(workspaceError?.message ?? "Workspace not found");
         setWorkspace(null);
       } else {
-        setWorkspace({ id: ws.id, name: ws.name, role: membership.role });
+        setWorkspace({
+          id: ws.id,
+          name: ws.name,
+          role: membership.role,
+          membershipId: membership.id,
+          displayName: membership.display_name,
+        });
       }
       setLoading(false);
     })();
@@ -79,5 +87,24 @@ export function useWorkspace(userId: string | undefined) {
     };
   }, [userId]);
 
-  return { workspace, loading, error };
+  async function updateDisplayName(displayName: string): Promise<{ error: string | null }> {
+    if (!workspace) return { error: "No active workspace." };
+    const trimmed = displayName.trim();
+    const previous = workspace;
+    setWorkspace({ ...workspace, displayName: trimmed || null });
+
+    const { error: updateError } = await supabase
+      .schema("client_os")
+      .from("workspace_members")
+      .update({ display_name: trimmed || null })
+      .eq("id", workspace.membershipId);
+
+    if (updateError) {
+      setWorkspace(previous);
+      return { error: updateError.message };
+    }
+    return { error: null };
+  }
+
+  return { workspace, loading, error, updateDisplayName };
 }

@@ -1,16 +1,42 @@
-import { Building2, CreditCard, LogOut, Users as UsersIcon } from "lucide-react";
+import { useState } from "react";
+import { Building2, Check, CreditCard, LogOut, Users as UsersIcon } from "lucide-react";
 
 export function SettingsPage({
   userEmail,
   workspaceName,
   role,
+  displayName,
+  onUpdateDisplayName,
   onSignOut,
 }: {
   userEmail?: string;
   workspaceName?: string;
   role?: string;
+  displayName?: string | null;
+  onUpdateDisplayName: (name: string) => Promise<{ error: string | null }>;
   onSignOut: () => void;
 }) {
+  const [nameInput, setNameInput] = useState(displayName ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const shownName = displayName || userEmail;
+  const dirty = nameInput.trim() !== (displayName ?? "").trim();
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    const { error: saveError } = await onUpdateDisplayName(nameInput);
+    setSaving(false);
+    if (saveError) {
+      setError(saveError);
+      return;
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-[720px] mx-auto px-8 pt-6 pb-8">
@@ -20,7 +46,7 @@ export function SettingsPage({
         <div className="mt-6 rounded-xl surface-panel p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[#c99a5f] flex items-center justify-center text-[13px] font-medium text-[#0a0a0c] shrink-0">
-              {(userEmail ?? "EM").slice(0, 2).toUpperCase()}
+              {(shownName ?? "EM").slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
               <p className="text-[13.5px] font-medium text-neutral-100 truncate">{workspaceName ?? "Client workspace"}</p>
@@ -28,6 +54,31 @@ export function SettingsPage({
                 {userEmail} {role && <span className="text-neutral-600">· {role}</span>}
               </p>
             </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-white/[0.06]">
+            <label className="text-[11.5px] font-medium text-neutral-300">Nickname</label>
+            <p className="mt-0.5 text-[11.5px] text-neutral-500">
+              Shown instead of your email throughout the app.
+            </p>
+            <div className="mt-2.5 flex items-center gap-2">
+              <input
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder={userEmail ?? "Your name"}
+                maxLength={40}
+                className="focus-glow flex-1 h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none"
+              />
+              <button
+                onClick={handleSave}
+                disabled={!dirty || saving}
+                className="press-feedback h-9 px-3.5 rounded-lg text-[12.5px] font-medium bg-[#c99a5f] text-[#0a0a0c] disabled:opacity-35 disabled:cursor-default hover:bg-[#ddb87e] transition-colors duration-150 flex items-center gap-1.5 shrink-0"
+              >
+                {saved ? <Check size={13} /> : null}
+                {saving ? "Saving…" : saved ? "Saved" : "Save"}
+              </button>
+            </div>
+            {error && <p className="mt-1.5 text-[11px] text-rose-400">{error}</p>}
           </div>
 
           <button

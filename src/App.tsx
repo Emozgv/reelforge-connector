@@ -34,7 +34,8 @@ function App() {
   }
 
   const { user, loading: authLoading, signIn, signOut } = useAuthSession();
-  const { workspace, loading: workspaceLoading } = useWorkspace(user?.id);
+  const { workspace, loading: workspaceLoading, updateDisplayName } = useWorkspace(user?.id);
+  const displayName = workspace?.displayName || user?.email;
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
   const activity = useActivityFeed(workspace?.id);
@@ -74,6 +75,7 @@ function App() {
         page={page}
         onNavigate={setPage}
         userEmail={user.email}
+        displayName={displayName}
         workspaceName={workspace.name}
         onSignOut={signOut}
         activity={activity}
@@ -82,7 +84,7 @@ function App() {
       <div key={page} className="relative z-10 flex-1 min-w-0 h-full animate-fade-in">
         {page === "dashboard" && (
           <DashboardPage
-            userName={user.email}
+            userName={displayName}
             creators={creatorsStore.creators}
             collections={collectionsStore.collections}
             activity={activity}
@@ -136,6 +138,8 @@ function App() {
             userEmail={user.email}
             workspaceName={workspace.name}
             role={workspace.role}
+            displayName={workspace.displayName}
+            onUpdateDisplayName={updateDisplayName}
             onSignOut={signOut}
           />
         )}

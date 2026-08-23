@@ -54,7 +54,8 @@ export function DashboardPage({
       <div className="max-w-[1160px] mx-auto px-8 pt-10 pb-8">
         <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#c99a5f]/75 font-medium">Dashboard</span>
         <h1 className="mt-1 text-[26px] font-serif font-medium text-neutral-50">
-          {greeting()}{userName ? `, ${userName.split(" ")[0].split("@")[0]}` : ""}
+          {greeting()}
+          {userName ? `, ${userName.includes("@") ? userName.split("@")[0] : userName}` : ""}
         </h1>
         <p className="mt-1 text-[13px] text-neutral-500">Here's where everything stands right now.</p>
 

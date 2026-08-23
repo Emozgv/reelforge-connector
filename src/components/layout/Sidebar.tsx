@@ -43,6 +43,7 @@ export function Sidebar({
   page,
   onNavigate,
   userEmail,
+  displayName,
   workspaceName,
   onSignOut,
   activity,
@@ -51,13 +52,15 @@ export function Sidebar({
   page: Page;
   onNavigate: (p: Page) => void;
   userEmail?: string;
+  displayName?: string;
   workspaceName?: string;
   onSignOut?: () => void;
   activity: { items: ActivityFeedItem[]; loading: boolean };
   onOpenCollection: (collectionId: string) => void;
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
-  const initials = userEmail ? userEmail.slice(0, 2).toUpperCase() : "EM";
+  const shownName = displayName || userEmail;
+  const initials = shownName ? shownName.slice(0, 2).toUpperCase() : "EM";
   const unread = activity.items.length > 0 && new Date(activity.items[0].createdAtRaw).getTime() > Date.now() - 24 * 60 * 60 * 1000;
 
   return (
@@ -155,7 +158,7 @@ export function Sidebar({
           </div>
           <div className="flex flex-col leading-tight min-w-0">
             <span className="text-[12px] xl:text-[12.5px] text-neutral-200 truncate">
-              {workspaceName ?? "Client workspace"}
+              {displayName || workspaceName || "Client workspace"}
             </span>
             <span className="text-[10.5px] xl:text-[11px] text-neutral-500 truncate">
               {userEmail ?? "Emre"}
