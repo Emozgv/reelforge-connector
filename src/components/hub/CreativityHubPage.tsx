@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Shuffle, Bookmark, SlidersHorizontal, AlertCircle } from "lucide-react";
+import { Search, Shuffle, Bookmark, SlidersHorizontal, Info, CloudOff } from "lucide-react";
 import { searchReels } from "../../lib/searchReels";
 import type { Creator, ReelVideo } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
@@ -39,7 +39,8 @@ export function CreativityHubPage({
   const [videos, setVideos] = useState<ReelVideo[]>([]);
   const [spinning, setSpinning] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState(false);
+  const [platformNotice, setPlatformNotice] = useState<string | null>(null);
   const [lastQuery, setLastQuery] = useState("");
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -100,15 +101,26 @@ export function CreativityHubPage({
     const trimmed = q.trim();
     if (!trimmed) return;
     if (filters.platform === "instagram") {
-      setSearchError("Instagram search isn't connected yet — try TikTok or All for now.");
+      setPlatformNotice("Instagram search isn't connected yet — try TikTok or All for now.");
       return;
     }
+    setPlatformNotice(null);
     setSearching(true);
-    setSearchError(null);
+    setSearchError(false);
     setLastQuery(trimmed);
     const { results, error } = await searchReels("tiktok", trimmed);
-    setVideos(results);
-    setSearchError(error ?? null);
+    // Every failure from a real search call today is the provider, not us —
+    // show one calm, on-brand message rather than the raw provider error text,
+    // so an upstream outage never makes the page itself look broken. The raw
+    // reason still goes to the console for us to debug, never to the client UI.
+    if (error) {
+      console.error("[search-reels] provider error:", error);
+      setSearchError(true);
+      setVideos([]);
+    } else {
+      setSearchError(false);
+      setVideos(results);
+    }
     setSearching(false);
   }
 
@@ -287,33 +299,52 @@ export function CreativityHubPage({
           </div>
         </div>
 
-        {searchError && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/[0.06] px-4 py-3 text-[12.5px] text-rose-200/90">
-            <AlertCircle size={14} className="shrink-0" />
-            {searchError}
+        {platformNotice && (
+          <div className="mb-5 flex items-center gap-2 rounded-xl surface-panel px-4 py-3 text-[12.5px] text-neutral-400">
+            <Info size={14} className="shrink-0 text-neutral-500" />
+            {platformNotice}
           </div>
         )}
 
-        <VideoGrid
-          videos={filtered}
-          onSaveClick={handleSaveClick}
-          onAddToCollection={setSavePanelVideo}
-          spacious
-          emptyTitle={
-            searching
-              ? "Searching…"
-              : lastQuery
-                ? "No results for that search."
-                : "Search a niche above to discover real reels."
-          }
-          emptyHint={
-            searching
-              ? "Pulling fresh results from TikTok."
-              : lastQuery
-                ? "Try a different keyword, or press Refresh for a new batch."
-                : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
-          }
-        />
+        {searchError ? (
+          <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
+            <CloudOff size={20} className="text-neutral-700 mb-2.5" />
+            <p className="text-[14.5px] font-serif text-neutral-300">Research is taking a short timeout.</p>
+            <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
+              One of our external data providers is currently unavailable. Everything inside ReelForge is running
+              normally.
+            </p>
+            <button
+              onClick={() => void runSearch(lastQuery)}
+              disabled={searching}
+              className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full surface-panel hover:bg-white/[0.06] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
+            >
+              <Shuffle size={13} className={searching ? "animate-spin" : ""} />
+              Retry
+            </button>
+          </div>
+        ) : (
+          <VideoGrid
+            videos={filtered}
+            onSaveClick={handleSaveClick}
+            onAddToCollection={setSavePanelVideo}
+            spacious
+            emptyTitle={
+              searching
+                ? "Searching…"
+                : lastQuery
+                  ? "No results for that search."
+                  : "Search a niche above to discover real reels."
+            }
+            emptyHint={
+              searching
+                ? "Pulling fresh results from TikTok."
+                : lastQuery
+                  ? "Try a different keyword, or press Refresh for a new batch."
+                  : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
+            }
+          />
+        )}
 
         <div className="h-10" />
       </div>
