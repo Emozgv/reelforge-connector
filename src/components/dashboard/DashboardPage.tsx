@@ -84,24 +84,6 @@ export function DashboardPage({
             background: "radial-gradient(760px 360px at 14% -25%, rgba(215,164,99,0.14), transparent 62%)",
           }}
         />
-        {/* Oversized brand watermark — quiet "this is a real, established product"
-            signal, purely decorative, never competes with the foreground text. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-16 w-[420px] h-[420px] opacity-[0.05]"
-          style={{
-            WebkitMaskImage: "url(/rf-mark.png)",
-            maskImage: "url(/rf-mark.png)",
-            WebkitMaskSize: "contain",
-            maskSize: "contain",
-            WebkitMaskRepeat: "no-repeat",
-            maskRepeat: "no-repeat",
-            WebkitMaskPosition: "center",
-            maskPosition: "center",
-            background: "linear-gradient(135deg, #e8c896, #c99a5f)",
-          }}
-        />
-
         <div className="relative z-10 max-w-[1160px] mx-auto flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 mb-3">
