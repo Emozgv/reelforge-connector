@@ -19,12 +19,14 @@ export function RegenerationPanel({
   open,
   collectionName,
   submissionIndex,
+  reelUsername,
   onClose,
   onConfirm,
 }: {
   open: boolean;
   collectionName: string;
   submissionIndex: number;
+  reelUsername: string;
   onClose: () => void;
   onConfirm: (reason: RegenerationReason, note: string) => void;
 }) {
@@ -78,8 +80,10 @@ export function RegenerationPanel({
               <div className="px-5 pt-4">
                 <div className="rounded-lg surface-field p-3.5">
                   <p className="text-[12.5px] text-neutral-300 leading-relaxed">
-                    <span className="text-neutral-100 font-medium">{collectionName}</span> · Submission #
-                    {submissionIndex}
+                    <span className="text-neutral-100 font-medium">@{reelUsername}</span>
+                  </p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    {collectionName} · Submission #{submissionIndex}
                   </p>
                 </div>
               </div>

@@ -4,6 +4,13 @@ import type { Collection, Creator, RegenerationReason } from "../../types";
 import { DriveGlyph } from "../collections/DriveGlyph";
 import { RegenerationPanel } from "./RegenerationPanel";
 
+interface DeliveredReel {
+  conceptId: string;
+  username: string;
+  thumbGradient: string;
+  pendingRegeneration: boolean;
+}
+
 interface DeliveredBatch {
   submissionId: string;
   index: number;
@@ -12,11 +19,18 @@ interface DeliveredBatch {
   collectionId: string;
   collectionName: string;
   conceptCount: number;
-  thumbGradients: string[];
+  reels: DeliveredReel[];
   creator?: Creator;
   favorited: boolean;
   approvedAt?: string;
-  pendingRegeneration: boolean;
+}
+
+interface RegenTarget {
+  collectionId: string;
+  collectionName: string;
+  submissionIndex: number;
+  conceptId: string;
+  username: string;
 }
 
 export function LibraryPage({
@@ -33,13 +47,14 @@ export function LibraryPage({
   onRequestRegeneration: (
     collectionId: string,
     submissionIndex: number,
+    conceptId: string,
     reason: RegenerationReason,
     note: string
   ) => void;
   onToggleFavorite: (collectionId: string, submissionId: string, favorited: boolean) => void;
   onApprove: (collectionId: string, submissionId: string) => void;
 }) {
-  const [regenTarget, setRegenTarget] = useState<DeliveredBatch | null>(null);
+  const [regenTarget, setRegenTarget] = useState<RegenTarget | null>(null);
 
   const batches: DeliveredBatch[] = collections
     .flatMap((c) =>
@@ -53,16 +68,20 @@ export function LibraryPage({
           collectionId: c.id,
           collectionName: c.name,
           conceptCount: s.conceptIds.length,
-          thumbGradients: c.concepts
+          reels: c.concepts
             .filter((concept) => s.conceptIds.includes(concept.video.id))
             .slice(0, 4)
-            .map((concept) => concept.video.thumbGradient),
+            .map((concept) => ({
+              conceptId: concept.video.id,
+              username: concept.video.username,
+              thumbGradient: concept.video.thumbGradient,
+              pendingRegeneration: c.regenerationRequests.some(
+                (r) => r.conceptId === concept.video.id && r.status !== "Done"
+              ),
+            })),
           creator: creators.find((cr) => cr.id === c.creatorId),
           favorited: s.favorited,
           approvedAt: s.approvedAt,
-          pendingRegeneration: c.regenerationRequests.some(
-            (r) => r.submissionId === s.id && r.status !== "Done"
-          ),
         }))
     )
     .sort((a, b) => Number(b.favorited) - Number(a.favorited) || b.sentAt.localeCompare(a.sentAt));
@@ -91,17 +110,45 @@ export function LibraryPage({
               className="group rounded-xl border border-white/[0.07] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.025] transition-colors duration-150 overflow-hidden"
             >
               <div className="relative">
-                <button onClick={() => onOpenCollection(b.collectionId)} className="block w-full text-left">
-                  <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
-                    {Array.from({ length: 4 }).map((_, i) =>
-                      b.thumbGradients[i] ? (
-                        <div key={i} style={{ background: b.thumbGradients[i] }} />
-                      ) : (
-                        <div key={i} className="bg-white/[0.03]" />
-                      )
-                    )}
-                  </div>
-                </button>
+                <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
+                  {Array.from({ length: 4 }).map((_, i) => {
+                    const reel = b.reels[i];
+                    if (!reel) return <div key={i} className="bg-white/[0.03]" />;
+                    return (
+                      <div key={reel.conceptId} className="group/reel relative" style={{ background: reel.thumbGradient }}>
+                        <button
+                          onClick={() => onOpenCollection(b.collectionId)}
+                          className="absolute inset-0"
+                          title={`@${reel.username}`}
+                        />
+                        {reel.pendingRegeneration ? (
+                          <span
+                            title="Regeneration requested"
+                            className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-[#e8c896]"
+                          >
+                            <RotateCcw size={10} />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setRegenTarget({
+                                collectionId: b.collectionId,
+                                collectionName: b.collectionName,
+                                submissionIndex: b.index,
+                                conceptId: reel.conceptId,
+                                username: reel.username,
+                              })
+                            }
+                            title={`Regenerate @${reel.username}`}
+                            className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover/reel:opacity-100 hover:bg-black/70 transition-all duration-150"
+                          >
+                            <RotateCcw size={10} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
                 <button
                   onClick={() => onToggleFavorite(b.collectionId, b.submissionId, !b.favorited)}
                   title={b.favorited ? "Unfavorite" : "Favorite"}
@@ -136,13 +183,6 @@ export function LibraryPage({
                   </p>
                 </button>
 
-                {b.pendingRegeneration && (
-                  <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] text-[#f0c987] bg-[#c99a5f]/20">
-                    <RotateCcw size={9} />
-                    Regeneration requested
-                  </span>
-                )}
-
                 <div className="mt-2.5 flex items-center justify-between gap-2">
                   {b.deliveryUrl ? (
                     <a
@@ -172,13 +212,6 @@ export function LibraryPage({
                         Approve
                       </button>
                     )}
-                    <button
-                      onClick={() => setRegenTarget(b)}
-                      className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-[#e8c896] opacity-0 group-hover:opacity-100 transition-all duration-150"
-                    >
-                      <RotateCcw size={11} />
-                      Regenerate
-                    </button>
                   </div>
                 </div>
               </div>
@@ -190,10 +223,13 @@ export function LibraryPage({
       <RegenerationPanel
         open={!!regenTarget}
         collectionName={regenTarget?.collectionName ?? ""}
-        submissionIndex={regenTarget?.index ?? 0}
+        submissionIndex={regenTarget?.submissionIndex ?? 0}
+        reelUsername={regenTarget?.username ?? ""}
         onClose={() => setRegenTarget(null)}
         onConfirm={(reason, note) => {
-          if (regenTarget) onRequestRegeneration(regenTarget.collectionId, regenTarget.index, reason, note);
+          if (regenTarget) {
+            onRequestRegeneration(regenTarget.collectionId, regenTarget.submissionIndex, regenTarget.conceptId, reason, note);
+          }
         }}
       />
     </div>

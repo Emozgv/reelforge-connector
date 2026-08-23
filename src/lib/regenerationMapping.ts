@@ -17,6 +17,7 @@ export interface RegenerationRequestRow {
   collection_id: string;
   submission_id: string | null;
   submission_index: number;
+  concept_id: string;
   reason: RegenerationReason;
   is_free: boolean;
   note: string;
@@ -31,6 +32,7 @@ export function regenerationRequestFromRow(row: RegenerationRequestRow): Regener
     collectionId: row.collection_id,
     submissionId: row.submission_id ?? undefined,
     submissionIndex: row.submission_index,
+    conceptId: row.concept_id,
     reason: row.reason,
     isFree: row.is_free,
     note: row.note,

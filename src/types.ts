@@ -154,6 +154,7 @@ export interface RegenerationRequest {
   collectionId: string;
   submissionId?: string;
   submissionIndex: number;
+  conceptId: string;
   reason: RegenerationReason;
   isFree: boolean;
   note: string;

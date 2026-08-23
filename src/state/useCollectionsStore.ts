@@ -409,6 +409,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
   async function requestRegeneration(
     collectionId: string,
     submissionIndex: number,
+    conceptId: string,
     reason: RegenerationReason,
     note: string
   ) {
@@ -425,6 +426,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         collection_id: collectionId,
         submission_id: submission?.id ?? null,
         submission_index: submissionIndex,
+        concept_id: conceptId,
         reason,
         is_free: isFree,
         note,
@@ -433,7 +435,11 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       .single();
 
     if (insertError || !data) {
-      setSaveError("Couldn't send that regeneration request — please try again.");
+      setSaveError(
+        isUniqueViolation(insertError)
+          ? "This reel already has an open regeneration request."
+          : "Couldn't send that regeneration request — please try again."
+      );
       return;
     }
 
@@ -444,10 +450,12 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       )
     );
 
+    const concept = target?.concepts.find((k) => k.video.id === conceptId);
+    const reelLabel = concept ? `@${concept.video.username}` : `a reel in Submission #${submissionIndex}`;
     const kind = isFree ? "free replacement" : "possible billable regeneration";
     const message = note
-      ? `Regeneration requested for Submission #${submissionIndex} — ${reason} (${kind}): "${note}"`
-      : `Regeneration requested for Submission #${submissionIndex} — ${reason} (${kind})`;
+      ? `Regeneration requested for ${reelLabel} (Submission #${submissionIndex}) — ${reason} (${kind}): "${note}"`
+      : `Regeneration requested for ${reelLabel} (Submission #${submissionIndex}) — ${reason} (${kind})`;
     void logActivity(collectionId, "regeneration_requested", message, submission?.id);
   }
 

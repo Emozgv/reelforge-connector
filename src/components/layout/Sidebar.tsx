@@ -17,6 +17,10 @@ import type { ActivityEventType } from "../../lib/activityMapping";
 // every log line (that full trail lives in Dashboard/Collection history).
 const NOTABLE_EVENT_TYPES: ActivityEventType[] = ["submission_created", "regeneration_requested"];
 
+// Read state is a per-browser affordance (localStorage), not a synced backend
+// concept — matches the single-workspace-per-browser assumption elsewhere.
+const LAST_READ_KEY = "reelforge_notifications_last_read_at";
+
 export type Page = "dashboard" | "hub" | "collections" | "creators" | "production" | "library" | "settings";
 
 const NAV_GROUPS: { label: string; items: { id: Page; label: string; icon: React.ReactNode }[] }[] = [
@@ -64,10 +68,17 @@ export function Sidebar({
   onOpenCollection: (collectionId: string) => void;
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
+  const [lastReadAt, setLastReadAt] = useState(() => Number(localStorage.getItem(LAST_READ_KEY) ?? 0));
   const shownName = displayName || userEmail;
   const initials = shownName ? shownName.slice(0, 2).toUpperCase() : "EM";
   const notifications = activity.items.filter((item) => NOTABLE_EVENT_TYPES.includes(item.eventType));
-  const unread = notifications.length > 0 && new Date(notifications[0].createdAtRaw).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+  const unread = notifications.length > 0 && new Date(notifications[0].createdAtRaw).getTime() > lastReadAt;
+
+  function markAllRead() {
+    const now = Date.now();
+    localStorage.setItem(LAST_READ_KEY, String(now));
+    setLastReadAt(now);
+  }
 
   return (
     <aside className="relative z-20 w-[212px] xl:w-[236px] 2xl:w-[260px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
@@ -103,9 +114,17 @@ export function Sidebar({
               onMouseLeave={() => setNotifOpen(false)}
               className="absolute left-0 top-9 z-30 w-72 rounded-xl surface-panel-strong p-1 animate-fade-in"
             >
-              <p className="px-2.5 pt-2 pb-1.5 text-[10.5px] tracking-wide uppercase text-neutral-500">
-                Notifications
-              </p>
+              <div className="flex items-center justify-between px-2.5 pt-2 pb-1.5">
+                <p className="text-[10.5px] tracking-wide uppercase text-neutral-500">Notifications</p>
+                {unread && (
+                  <button
+                    onClick={markAllRead}
+                    className="text-[10.5px] text-neutral-500 hover:text-[#e8c896] transition-colors duration-150"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
               <div className="max-h-[300px] overflow-y-auto">
                 {notifications.length === 0 && (
                   <p className="px-2.5 py-3 text-[11.5px] text-neutral-600">Nothing yet.</p>
