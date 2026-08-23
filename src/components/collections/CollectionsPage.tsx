@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FolderHeart, Plus } from "lucide-react";
 import type { Creator } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
+import { groupCollectionsByFamily } from "../../lib/collectionNaming";
 import { CreatorFilterBar } from "./CreatorFilterBar";
 import { CollectionRow } from "./CollectionRow";
 import { CollectionWorkspace } from "./CollectionWorkspace";
@@ -42,9 +43,11 @@ export function CollectionsPage({
     return relevantCreators
       .map((creator) => ({
         creator,
-        items: collections.filter((c) => c.creatorId === creator.id),
+        // One entry per numbered family ("Aesthetic Reels" + "Aesthetic Reels 2"
+        // is one folder, not two independent rows) — oldest -> newest within.
+        families: groupCollectionsByFamily(collections.filter((c) => c.creatorId === creator.id)),
       }))
-      .filter((g) => g.items.length > 0);
+      .filter((g) => g.families.length > 0);
   }, [collections, activeCreatorId]);
 
   const activeCollection = collections.find((c) => c.id === activeCollectionId) ?? null;
@@ -72,7 +75,7 @@ export function CollectionsPage({
         onSendSubmission={(note) => collectionsStore.sendSubmission(activeCollection.id, note)}
         siblingCollections={collections
           .filter((c) => c.creatorId === activeCollection.creatorId && c.id !== activeCollection.id)
-          .map((c) => ({ id: c.id, name: c.name }))}
+          .map((c) => ({ id: c.id, name: c.name, status: c.status }))}
         onStartNext={async (name) => {
           const result = await collectionsStore.createCollection(name, activeCollection.creatorId, "");
           if (result.id) setActiveCollectionId(result.id);
@@ -123,7 +126,7 @@ export function CollectionsPage({
         </div>
 
         <div className="mt-6 space-y-7">
-          {groups.map(({ creator, items }) => (
+          {groups.map(({ creator, families }) => (
             <div key={creator.id}>
               <div className="flex items-center gap-2 mb-2">
                 <div
@@ -132,26 +135,30 @@ export function CollectionsPage({
                 />
                 <h2 className="text-[13.5px] font-medium text-neutral-200">{creator.name}</h2>
                 <span className="text-[11px] text-neutral-600">
-                  {items.length} collection{items.length === 1 ? "" : "s"}
+                  {families.length} collection{families.length === 1 ? "" : "s"}
                 </span>
               </div>
               <div className="rounded-xl surface-panel divide-y divide-white/[0.05] [&>*:first-child]:rounded-t-xl [&>*:last-child]:rounded-b-xl">
-                {items.map((c) => (
-                  <CollectionRow
-                    key={c.id}
-                    collection={c}
-                    creators={creators}
-                    siblingCollections={items.filter((s) => s.id !== c.id).map((s) => ({ id: s.id, name: s.name }))}
-                    onOpen={() => setActiveCollectionId(c.id)}
-                    onRename={(name) => renameCollection(c.id, name)}
-                    onDuplicate={() => duplicateCollection(c.id)}
-                    onDelete={() => deleteCollection(c.id)}
-                    onStartNext={async (name) => {
-                      const result = await collectionsStore.createCollection(name, c.creatorId, "");
-                      if (result.id) setActiveCollectionId(result.id);
-                    }}
-                  />
-                ))}
+                {families.map((family) => {
+                  const current = family[family.length - 1];
+                  return (
+                    <CollectionRow
+                      key={current.id}
+                      family={family}
+                      current={current}
+                      creators={creators}
+                      onOpen={() => setActiveCollectionId(current.id)}
+                      onSwitch={(id) => setActiveCollectionId(id)}
+                      onRename={(name) => renameCollection(current.id, name)}
+                      onDuplicate={() => duplicateCollection(current.id)}
+                      onDelete={() => deleteCollection(current.id)}
+                      onStartNext={async (name) => {
+                        const result = await collectionsStore.createCollection(name, current.creatorId, "");
+                        if (result.id) setActiveCollectionId(result.id);
+                      }}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}

@@ -14,6 +14,10 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export function collectionBaseName(name: string): string {
+  return name.replace(/\s+\d+$/, "").trim();
+}
+
 // Every collection in the same numbered sequence as `name` — "Aesthetic
 // Reels" and "Aesthetic Reels 2" belong to the same family. Sorted so the
 // unnumbered base comes first, then 2, 3, ... Used to render them as tabs.
@@ -25,4 +29,20 @@ export function collectionFamily<T extends { id: string; name: string }>(name: s
     .filter((x): x is { item: T; match: RegExpMatchArray } => !!x.match)
     .sort((a, b) => (a.match[1] ? Number(a.match[1]) : 1) - (b.match[1] ? Number(b.match[1]) : 1))
     .map((x) => x.item);
+}
+
+// Groups a flat list into families ("Aesthetic Reels", "Aesthetic Reels 2", ...
+// all become one group), each sorted oldest -> newest version. Used to collapse
+// a Collections list from "many independent rows" into "one folder per family,
+// versions nested underneath" — a single numbered sequence is one folder, not
+// several unrelated Collections that happen to share a name.
+export function groupCollectionsByFamily<T extends { id: string; name: string }>(items: T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const base = collectionBaseName(item.name);
+    const list = groups.get(base) ?? [];
+    list.push(item);
+    groups.set(base, list);
+  }
+  return [...groups.values()].map((list) => collectionFamily(list[0].name, list));
 }

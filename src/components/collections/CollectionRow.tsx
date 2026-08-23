@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { MoreHorizontal, ArrowUpRight, Plus } from "lucide-react";
+import { MoreHorizontal, ArrowUpRight } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
-import { collectionFamily, nextCollectionName } from "../../lib/collectionNaming";
+import { nextCollectionName } from "../../lib/collectionNaming";
+import { CollectionVersionMenu } from "./CollectionVersionMenu";
 
 export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
   Draft: "text-neutral-400 bg-white/[0.04]",
@@ -11,19 +12,24 @@ export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
 };
 
 export function CollectionRow({
-  collection,
+  family,
+  current,
   creators,
-  siblingCollections,
   onOpen,
+  onSwitch,
   onRename,
   onDuplicate,
   onDelete,
   onStartNext,
 }: {
-  collection: Collection;
+  // Every version in this folder, oldest -> newest. `current` is always
+  // family[family.length - 1] — the row shows/manages that version, older
+  // ones are reachable by hovering the name.
+  family: Collection[];
+  current: Collection;
   creators: Creator[];
-  siblingCollections: { id: string; name: string }[];
   onOpen: () => void;
+  onSwitch: (id: string) => void;
   onRename: (name: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -31,21 +37,22 @@ export function CollectionRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const [draftName, setDraftName] = useState(collection.name);
-  const creator = creators.find((c) => c.id === collection.creatorId);
-  const preview = collection.concepts.slice(0, 4);
-  const total = collection.concepts.length;
-  const used = collection.concepts.filter((c) => c.status === "Used").length;
+  const [draftName, setDraftName] = useState(current.name);
+  const creator = creators.find((c) => c.id === current.creatorId);
+  const preview = current.concepts.slice(0, 4);
+  const total = current.concepts.length;
+  const used = current.concepts.filter((c) => c.status === "Used").length;
   const available = total - used;
-  const delivered = collection.submissions.some((s) => s.status === "Finished");
-  const family = collectionFamily(collection.name, [{ id: collection.id, name: collection.name }, ...siblingCollections]);
-  const isLastInFamily = family[family.length - 1]?.id === collection.id;
-  const suggestedName = nextCollectionName(collection.name, siblingCollections.map((s) => s.name));
+  const delivered = current.submissions.some((s) => s.status === "Finished");
+  const suggestedName = nextCollectionName(
+    current.name,
+    family.filter((f) => f.id !== current.id).map((f) => f.name)
+  );
 
   function commitRename() {
     const trimmed = draftName.trim();
     if (trimmed) onRename(trimmed);
-    else setDraftName(collection.name);
+    else setDraftName(current.name);
     setRenaming(false);
   }
 
@@ -76,7 +83,7 @@ export function CollectionRow({
             onKeyDown={(e) => {
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") {
-                setDraftName(collection.name);
+                setDraftName(current.name);
                 setRenaming(false);
               }
             }}
@@ -84,21 +91,26 @@ export function CollectionRow({
             className="w-full h-6 rounded surface-field px-1.5 text-[13px] text-neutral-100 outline-none focus-glow"
           />
         ) : (
-          <div className="flex items-center gap-1.5">
-            <h3 className="text-[13px] font-medium text-neutral-100 truncate">{collection.name}</h3>
-            {delivered && isLastInFamily && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartNext(suggestedName);
-                }}
-                title={`Start "${suggestedName}"`}
-                className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-neutral-600 hover:text-[#e8c896] hover:bg-white/[0.08] transition-colors duration-150 opacity-0 group-hover:opacity-100 shrink-0"
-              >
-                <Plus size={12} />
-              </button>
-            )}
-          </div>
+          <CollectionVersionMenu
+            family={family}
+            currentId={current.id}
+            canCreateNext={delivered}
+            nextName={suggestedName}
+            onSwitch={onSwitch}
+            onCreateNext={() => onStartNext(suggestedName)}
+          >
+            <h3
+              onClick={(e) => {
+                if (family.length > 1) e.stopPropagation();
+              }}
+              className="text-[13px] font-medium text-neutral-100 truncate"
+            >
+              {current.name}
+              {family.length > 1 && (
+                <span className="ml-1.5 text-[10.5px] font-normal text-neutral-600">{family.length} versions</span>
+              )}
+            </h3>
+          </CollectionVersionMenu>
         )}
         <p className="text-[11px] text-neutral-500 mt-0.5">
           {total} concepts · {used} used · {available} available
@@ -116,14 +128,14 @@ export function CollectionRow({
       <span
         className={[
           "shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] whitespace-nowrap",
-          COLLECTION_STATUS_STYLES[collection.status],
+          COLLECTION_STATUS_STYLES[current.status],
         ].join(" ")}
       >
-        {collection.status}
+        {current.status}
       </span>
 
       <span className="shrink-0 text-[10.5px] text-neutral-600 w-[92px] text-right">
-        {formatRelativeTime(collection.updatedAt)}
+        {formatRelativeTime(current.updatedAt)}
       </span>
 
       <ArrowUpRight

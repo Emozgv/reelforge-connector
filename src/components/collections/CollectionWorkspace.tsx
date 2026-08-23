@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox, Plus } from "lucide-react";
+import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox } from "lucide-react";
 import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { collectionFamily, nextCollectionName } from "../../lib/collectionNaming";
@@ -7,6 +7,7 @@ import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
 import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
+import { CollectionVersionMenu } from "./CollectionVersionMenu";
 
 const ALL_STATUSES: CollectionStatus[] = ["Draft", "Sent", "Completed"];
 
@@ -43,7 +44,7 @@ export function CollectionWorkspace({
   collection: Collection;
   creators: Creator[];
   saveError?: string | null;
-  siblingCollections: { id: string; name: string }[];
+  siblingCollections: { id: string; name: string; status: CollectionStatus }[];
   onBack: () => void;
   backLabel: string;
   onUpdateNotes: (notes: string) => void;
@@ -63,7 +64,10 @@ export function CollectionWorkspace({
   const notesSaveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const creator = creators.find((c) => c.id === collection.creatorId);
   const delivered = collection.submissions.some((s) => s.status === "Finished");
-  const family = collectionFamily(collection.name, [{ id: collection.id, name: collection.name }, ...siblingCollections]);
+  const family = collectionFamily(collection.name, [
+    { id: collection.id, name: collection.name, status: collection.status },
+    ...siblingCollections,
+  ]);
   const suggestedName = nextCollectionName(collection.name, siblingCollections.map((s) => s.name));
 
   useEffect(() => {
@@ -124,7 +128,23 @@ export function CollectionWorkspace({
         <div className="flex items-center justify-between gap-6 flex-wrap pb-3 border-b border-white/[0.06]">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-[19px] font-serif font-medium text-neutral-50">{collection.name}</h1>
+              <CollectionVersionMenu
+                family={family}
+                currentId={collection.id}
+                canCreateNext={delivered && family[family.length - 1]?.id === collection.id}
+                nextName={suggestedName}
+                onSwitch={onSwitchCollection}
+                onCreateNext={() => onStartNext(suggestedName)}
+              >
+                <h1 className="text-[19px] font-serif font-medium text-neutral-50 cursor-default">
+                  {collection.name}
+                  {family.length > 1 && (
+                    <span className="ml-2 text-[11px] font-sans font-normal text-neutral-600">
+                      {family.length} versions
+                    </span>
+                  )}
+                </h1>
+              </CollectionVersionMenu>
 
               <div className="relative">
                 <button
@@ -171,34 +191,6 @@ export function CollectionWorkspace({
               <span className="text-neutral-700">·</span>
               <span>Updated {formatRelativeTime(collection.updatedAt)}</span>
             </div>
-
-            {(family.length > 1 || delivered) && (
-              <div className="mt-2.5 flex items-center gap-1">
-                {family.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => f.id !== collection.id && onSwitchCollection(f.id)}
-                    className={[
-                      "h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors duration-150",
-                      f.id === collection.id
-                        ? "bg-[#c99a5f]/15 text-[#e8c896]"
-                        : "text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05]",
-                    ].join(" ")}
-                  >
-                    {f.name}
-                  </button>
-                ))}
-                {delivered && family[family.length - 1]?.id === collection.id && (
-                  <button
-                    onClick={() => onStartNext(suggestedName)}
-                    title={`Start "${suggestedName}"`}
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-neutral-600 hover:text-[#e8c896] hover:bg-white/[0.05] transition-colors duration-150"
-                  >
-                    <Plus size={12} />
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
