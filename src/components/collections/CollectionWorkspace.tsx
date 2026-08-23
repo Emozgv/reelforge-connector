@@ -9,6 +9,10 @@ import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
 
 const ALL_STATUSES: CollectionStatus[] = ["Draft", "Ready", "Sent", "Completed"];
 
+// ReelForge produces in batches — a submission needs enough concepts to make
+// a production run worthwhile. 10 is the floor; more is always fine.
+const MIN_SEND_COUNT = 10;
+
 // Production status is read-only for the client — ReelForge Internal owns it.
 const SUBMISSION_STATUS_STYLES: Record<SubmissionStatus, string> = {
   Sent: "text-neutral-400 bg-white/[0.05]",
@@ -81,6 +85,9 @@ export function CollectionWorkspace({
 
   const latestSubmission =
     collection.submissions.length > 0 ? collection.submissions[collection.submissions.length - 1] : null;
+
+  const belowMinimum = sendableConcepts.length < MIN_SEND_COUNT;
+  const remainingToMinimum = MIN_SEND_COUNT - sendableConcepts.length;
 
   const visibleConcepts =
     conceptFilter === "all" ? collection.concepts : collection.concepts.filter((c) => c.status === conceptFilter);
@@ -214,10 +221,11 @@ export function CollectionWorkspace({
 
               <button
                 onClick={() => setSendOpen(true)}
-                disabled={sendableConcepts.length === 0}
+                disabled={belowMinimum}
+                title={belowMinimum ? `Add at least ${MIN_SEND_COUNT}–15 concepts before sending` : undefined}
                 className={[
                   "mt-3 w-full h-9 rounded-md flex items-center justify-center gap-2 text-[12.5px] font-medium transition-colors duration-150",
-                  sendableConcepts.length === 0
+                  belowMinimum
                     ? "bg-white/[0.04] text-neutral-500 cursor-not-allowed"
                     : "bg-[#c99a5f] text-[#0a0a0c] hover:bg-[#ddb87e]",
                 ].join(" ")}
@@ -225,6 +233,12 @@ export function CollectionWorkspace({
                 <Send size={13} />
                 {latestSubmission ? "Send to ReelForge again" : "Send to ReelForge"}
               </button>
+              {belowMinimum && (
+                <p className="mt-2 text-[11px] text-neutral-500 leading-relaxed">
+                  Add {remainingToMinimum} more concept{remainingToMinimum === 1 ? "" : "s"} — collections need
+                  at least {MIN_SEND_COUNT}–15 before they can be sent.
+                </p>
+              )}
             </div>
 
             {collection.submissions.length > 0 && (
