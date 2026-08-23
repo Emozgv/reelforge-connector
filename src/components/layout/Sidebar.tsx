@@ -64,7 +64,7 @@ export function Sidebar({
   const unread = activity.items.length > 0 && new Date(activity.items[0].createdAtRaw).getTime() > Date.now() - 24 * 60 * 60 * 1000;
 
   return (
-    <aside className="relative z-10 w-[212px] xl:w-[236px] 2xl:w-[260px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
+    <aside className="relative z-20 w-[212px] xl:w-[236px] 2xl:w-[260px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
       <div className="h-14 xl:h-16 flex items-center justify-between px-4 xl:px-5 border-b border-white/[0.06]">
         <div className="flex items-center gap-2 xl:gap-2.5">
           <div
