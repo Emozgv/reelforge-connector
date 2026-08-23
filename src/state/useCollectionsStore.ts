@@ -567,9 +567,12 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     if (ok) void logActivity(collectionId, "collection_renamed", `Renamed to "${name}"`);
   }
 
-  async function duplicateCollection(collectionId: string) {
+  async function duplicateCollection(
+    collectionId: string,
+    targetName?: string
+  ): Promise<{ id: string | null }> {
     const source = collectionsRef.current.find((c) => c.id === collectionId);
-    if (!source || !workspaceId) return;
+    if (!source || !workspaceId) return { id: null };
 
     const { data, error: insertError } = await supabase
       .schema("client_os")
@@ -577,7 +580,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       .insert({
         workspace_id: workspaceId,
         creator_id: source.creatorId,
-        name: `${source.name} copy`,
+        name: targetName || `${source.name} copy`,
         notes: source.notes,
         status: "Draft",
       })
@@ -586,7 +589,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
 
     if (insertError || !data) {
       setSaveError("Couldn't duplicate that collection — please try again.");
-      return;
+      return { id: null };
     }
 
     const meta = collectionMetaFromRow(data as CollectionRow);
@@ -610,6 +613,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
 
     const suffix = concepts.length > 0 ? ` with ${concepts.length} concept${concepts.length === 1 ? "" : "s"}` : "";
     void logActivity(meta.id, "collection_created", `Duplicated from "${source.name}"${suffix}`);
+    return { id: meta.id };
   }
 
   async function deleteCollection(collectionId: string) {

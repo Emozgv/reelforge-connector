@@ -39,6 +39,7 @@ export function CollectionWorkspace({
   onSetConceptNotes,
   onSendSubmission,
   onStartNext,
+  onClone,
   onSwitchCollection,
 }: {
   collection: Collection;
@@ -54,6 +55,7 @@ export function CollectionWorkspace({
   onSetConceptNotes: (videoId: string, notes: string) => void;
   onSendSubmission: (note: string) => void;
   onStartNext: (name: string) => void;
+  onClone: (name: string) => void;
   onSwitchCollection: (id: string) => void;
 }) {
   const [notes, setNotes] = useState(collection.notes);
@@ -63,7 +65,6 @@ export function CollectionWorkspace({
   const [inboxNoteId, setInboxNoteId] = useState<string | null>(null);
   const notesSaveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const creator = creators.find((c) => c.id === collection.creatorId);
-  const delivered = collection.submissions.some((s) => s.status === "Finished");
   const family = collectionFamily(collection.name, [
     { id: collection.id, name: collection.name, status: collection.status },
     ...siblingCollections,
@@ -131,10 +132,10 @@ export function CollectionWorkspace({
               <CollectionVersionMenu
                 family={family}
                 currentId={collection.id}
-                canCreateNext={delivered && family[family.length - 1]?.id === collection.id}
                 nextName={suggestedName}
                 onSwitch={onSwitchCollection}
                 onCreateNext={() => onStartNext(suggestedName)}
+                onClone={() => onClone(suggestedName)}
               >
                 <h1 className="text-[19px] font-serif font-medium text-neutral-50 cursor-default">
                   {collection.name}

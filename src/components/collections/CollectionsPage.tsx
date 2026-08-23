@@ -80,6 +80,10 @@ export function CollectionsPage({
           const result = await collectionsStore.createCollection(name, activeCollection.creatorId, "");
           if (result.id) setActiveCollectionId(result.id);
         }}
+        onClone={async (name) => {
+          const result = await duplicateCollection(activeCollection.id, name);
+          if (result.id) setActiveCollectionId(result.id);
+        }}
         onSwitchCollection={(id) => setActiveCollectionId(id)}
       />
     );
@@ -154,6 +158,10 @@ export function CollectionsPage({
                       onDelete={() => deleteCollection(current.id)}
                       onStartNext={async (name) => {
                         const result = await collectionsStore.createCollection(name, current.creatorId, "");
+                        if (result.id) setActiveCollectionId(result.id);
+                      }}
+                      onClone={async (name) => {
+                        const result = await duplicateCollection(current.id, name);
                         if (result.id) setActiveCollectionId(result.id);
                       }}
                     />

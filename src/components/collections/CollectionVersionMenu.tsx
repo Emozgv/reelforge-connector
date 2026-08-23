@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Check, Plus } from "lucide-react";
+import { Check, Copy, Plus } from "lucide-react";
 import type { CollectionStatus } from "../../types";
 import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
 
@@ -10,31 +10,28 @@ export interface VersionEntry {
 }
 
 // One main folder, several numbered versions nested under it — hovering the
-// title reveals every version plus (once the current one has shipped) a
-// one-click "start the next version" action. This is the single place that
-// interaction lives, reused by both the Collections list row and the
-// workspace header so switching/creating feels identical everywhere.
+// title reveals every version plus actions to start a fresh next version or
+// clone the current one. This is a general Collection behavior: every
+// Collection in the app gets this menu, not a one-off for a specific one —
+// the only thing that varies is which versions happen to exist so far.
 export function CollectionVersionMenu({
   family,
   currentId,
-  canCreateNext,
   nextName,
   onSwitch,
   onCreateNext,
+  onClone,
   children,
 }: {
   family: VersionEntry[];
   currentId: string;
-  canCreateNext: boolean;
   nextName: string;
   onSwitch: (id: string) => void;
   onCreateNext: () => void;
+  onClone: () => void;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const hasMenu = family.length > 1 || canCreateNext;
-
-  if (!hasMenu) return <>{children}</>;
 
   return (
     <span className="relative inline-block" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
@@ -44,7 +41,7 @@ export function CollectionVersionMenu({
         // padding instead — padding is still part of this element's hoverable
         // box, unlike margin, so there's no dead pixel for the mouse to fall
         // through between the title and the popover.
-        <span className="absolute left-0 top-full pt-1 z-30 w-56 block">
+        <span className="absolute left-0 top-full pt-1 z-30 w-60 block">
           <span
             className="block rounded-lg surface-panel-strong p-1 animate-fade-in"
             onClick={(e) => e.stopPropagation()}
@@ -72,21 +69,29 @@ export function CollectionVersionMenu({
                 </span>
               </button>
             ))}
-            {canCreateNext && (
-              <>
-                {family.length > 1 && <span className="block my-1 h-px bg-white/[0.06]" />}
-                <button
-                  onClick={() => {
-                    setOpen(false);
-                    onCreateNext();
-                  }}
-                  className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-md text-[12px] text-[#e8c896] hover:bg-white/[0.06] transition-colors"
-                >
-                  <Plus size={11} />
-                  New version — "{nextName}"
-                </button>
-              </>
-            )}
+
+            <span className="block my-1 h-px bg-white/[0.06]" />
+
+            <button
+              onClick={() => {
+                setOpen(false);
+                onCreateNext();
+              }}
+              className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-md text-[12px] text-[#e8c896] hover:bg-white/[0.06] transition-colors"
+            >
+              <Plus size={11} />
+              New version — "{nextName}"
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onClone();
+              }}
+              className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+            >
+              <Copy size={11} />
+              Clone as "{nextName}"
+            </button>
           </span>
         </span>
       )}

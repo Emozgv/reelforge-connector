@@ -21,6 +21,7 @@ export function CollectionRow({
   onDuplicate,
   onDelete,
   onStartNext,
+  onClone,
 }: {
   // Every version in this folder, oldest -> newest. `current` is always
   // family[family.length - 1] — the row shows/manages that version, older
@@ -34,6 +35,7 @@ export function CollectionRow({
   onDuplicate: () => void;
   onDelete: () => void;
   onStartNext: (name: string) => void;
+  onClone: (name: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -43,7 +45,6 @@ export function CollectionRow({
   const total = current.concepts.length;
   const used = current.concepts.filter((c) => c.status === "Used").length;
   const available = total - used;
-  const delivered = current.submissions.some((s) => s.status === "Finished");
   const suggestedName = nextCollectionName(
     current.name,
     family.filter((f) => f.id !== current.id).map((f) => f.name)
@@ -94,17 +95,12 @@ export function CollectionRow({
           <CollectionVersionMenu
             family={family}
             currentId={current.id}
-            canCreateNext={delivered}
             nextName={suggestedName}
             onSwitch={onSwitch}
             onCreateNext={() => onStartNext(suggestedName)}
+            onClone={() => onClone(suggestedName)}
           >
-            <h3
-              onClick={(e) => {
-                if (family.length > 1) e.stopPropagation();
-              }}
-              className="text-[13px] font-medium text-neutral-100 truncate"
-            >
+            <h3 className="text-[13px] font-medium text-neutral-100 truncate">
               {current.name}
               {family.length > 1 && (
                 <span className="ml-1.5 text-[10.5px] font-normal text-neutral-600">{family.length} versions</span>
