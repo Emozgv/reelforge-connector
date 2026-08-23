@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatRelativeTime } from "../lib/relativeTime";
+import type { ActivityEventType } from "../lib/activityMapping";
 
 export interface ActivityFeedItem {
   id: string;
   message: string;
   collectionId: string | null;
+  eventType: ActivityEventType;
   createdAtRaw: string;
   relativeTime: string;
 }
@@ -34,7 +36,7 @@ export function useActivityFeed(workspaceId: string | undefined, limit = 12) {
       const { data } = await supabase
         .schema("client_os")
         .from("activity_events")
-        .select("id, message, collection_id, created_at")
+        .select("id, message, collection_id, event_type, created_at")
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
         .limit(limit);
@@ -45,6 +47,7 @@ export function useActivityFeed(workspaceId: string | undefined, limit = 12) {
           id: row.id as string,
           message: row.message as string,
           collectionId: row.collection_id as string | null,
+          eventType: row.event_type as ActivityEventType,
           createdAtRaw: row.created_at as string,
           relativeTime: formatRelativeTime(row.created_at as string),
         }))

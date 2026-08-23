@@ -1,6 +1,7 @@
 import { Clock, Inbox, PackageCheck, Sparkles, Users } from "lucide-react";
-import type { Collection, Creator } from "../../types";
+import type { Collection, Creator, WorkspacePackage } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
+import { computeUsageStats } from "../../lib/usageStats";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -24,6 +25,7 @@ export function DashboardPage({
   creators,
   collections,
   activity,
+  workspacePackage,
   onOpenHub,
   onOpenCreator,
   onOpenCollection,
@@ -32,6 +34,7 @@ export function DashboardPage({
   creators: Creator[];
   collections: Collection[];
   activity: { items: ActivityFeedItem[]; loading: boolean };
+  workspacePackage: WorkspacePackage | null;
   onOpenHub: () => void;
   onOpenCreator: (creatorId: string) => void;
   onOpenCollection: (collectionId: string) => void;
@@ -42,10 +45,7 @@ export function DashboardPage({
   const finishedCount = allSubmissions.filter((s) => s.status === "Finished").length;
   const savedTotal = collections.reduce((sum, c) => sum + c.concepts.length, 0);
 
-  // Preview-only — not a real package/billing figure yet (that's still V1.5
-  // backend work). Shown so the shape of the feature is visible and clickable
-  // rather than absent, per the product vision doc.
-  const usagePreview = { used: Math.min(savedTotal, 60), total: 60, label: "Growth" };
+  const usage = workspacePackage ? computeUsageStats(workspacePackage, collections, creators) : null;
 
   const firstName = userName ? (userName.includes("@") ? userName.split("@")[0] : userName) : "";
 
@@ -198,27 +198,27 @@ export function DashboardPage({
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-xl surface-panel p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10.5px] tracking-wide uppercase text-neutral-500">{usagePreview.label} plan</span>
-                <span className="text-[9px] tracking-wide uppercase text-neutral-600 border border-white/[0.08] rounded-[3px] px-1 py-[1px]">
-                  preview
+            {usage && workspacePackage && (
+              <div className="rounded-xl surface-panel p-4">
+                <span className="text-[10.5px] tracking-wide uppercase text-neutral-500">
+                  {workspacePackage.planName} plan
                 </span>
+                <p className="mt-1.5 text-[13px] text-neutral-200">
+                  <span className="text-[19px] font-serif text-neutral-50">{usage.reelsUsed}</span>
+                  <span className="text-neutral-500"> / {usage.reelsTotal} reels used</span>
+                </p>
+                <div className="mt-2.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#c99a5f] to-[#e8c896]"
+                    style={{ width: `${Math.min(100, (usage.reelsUsed / usage.reelsTotal) * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-neutral-600 leading-relaxed">
+                  {usage.regenerationsUsed} / {usage.regenerationsTotal} regenerations ·{" "}
+                  {usage.creatorSetupsUsed} / {usage.creatorSetupsTotal} creator setups
+                </p>
               </div>
-              <p className="mt-1.5 text-[13px] text-neutral-200">
-                <span className="text-[19px] font-serif text-neutral-50">{usagePreview.used}</span>
-                <span className="text-neutral-500"> / {usagePreview.total} reels used</span>
-              </p>
-              <div className="mt-2.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#c99a5f] to-[#e8c896]"
-                  style={{ width: `${Math.min(100, (usagePreview.used / usagePreview.total) * 100)}%` }}
-                />
-              </div>
-              <p className="mt-2 text-[11px] text-neutral-600 leading-relaxed">
-                Package &amp; billing detail lives in Settings once it's wired up.
-              </p>
-            </div>
+            )}
 
             <div className="rounded-xl surface-panel p-4">
               <span className="text-[10.5px] tracking-wide uppercase text-neutral-500 flex items-center gap-1.5">

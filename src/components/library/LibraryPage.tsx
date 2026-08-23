@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Library as LibraryIcon, RotateCcw } from "lucide-react";
-import type { Collection, Creator } from "../../types";
+import { Check, Heart, Library as LibraryIcon, RotateCcw } from "lucide-react";
+import type { Collection, Creator, RegenerationReason } from "../../types";
 import { DriveGlyph } from "../collections/DriveGlyph";
 import { RegenerationPanel } from "./RegenerationPanel";
 
@@ -14,6 +14,9 @@ interface DeliveredBatch {
   conceptCount: number;
   thumbGradients: string[];
   creator?: Creator;
+  favorited: boolean;
+  approvedAt?: string;
+  pendingRegeneration: boolean;
 }
 
 export function LibraryPage({
@@ -21,11 +24,20 @@ export function LibraryPage({
   collections,
   onOpenCollection,
   onRequestRegeneration,
+  onToggleFavorite,
+  onApprove,
 }: {
   creators: Creator[];
   collections: Collection[];
   onOpenCollection: (collectionId: string) => void;
-  onRequestRegeneration: (collectionId: string, submissionIndex: number, reason: string, note: string) => void;
+  onRequestRegeneration: (
+    collectionId: string,
+    submissionIndex: number,
+    reason: RegenerationReason,
+    note: string
+  ) => void;
+  onToggleFavorite: (collectionId: string, submissionId: string, favorited: boolean) => void;
+  onApprove: (collectionId: string, submissionId: string) => void;
 }) {
   const [regenTarget, setRegenTarget] = useState<DeliveredBatch | null>(null);
 
@@ -46,9 +58,14 @@ export function LibraryPage({
             .slice(0, 4)
             .map((concept) => concept.video.thumbGradient),
           creator: creators.find((cr) => cr.id === c.creatorId),
+          favorited: s.favorited,
+          approvedAt: s.approvedAt,
+          pendingRegeneration: c.regenerationRequests.some(
+            (r) => r.submissionId === s.id && r.status !== "Done"
+          ),
         }))
     )
-    .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+    .sort((a, b) => Number(b.favorited) - Number(a.favorited) || b.sentAt.localeCompare(a.sentAt));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -73,17 +90,29 @@ export function LibraryPage({
               key={b.submissionId}
               className="group rounded-xl border border-white/[0.07] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.025] transition-colors duration-150 overflow-hidden"
             >
-              <button onClick={() => onOpenCollection(b.collectionId)} className="block w-full text-left">
-                <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
-                  {Array.from({ length: 4 }).map((_, i) =>
-                    b.thumbGradients[i] ? (
-                      <div key={i} style={{ background: b.thumbGradients[i] }} />
-                    ) : (
-                      <div key={i} className="bg-white/[0.03]" />
-                    )
-                  )}
-                </div>
-              </button>
+              <div className="relative">
+                <button onClick={() => onOpenCollection(b.collectionId)} className="block w-full text-left">
+                  <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
+                    {Array.from({ length: 4 }).map((_, i) =>
+                      b.thumbGradients[i] ? (
+                        <div key={i} style={{ background: b.thumbGradients[i] }} />
+                      ) : (
+                        <div key={i} className="bg-white/[0.03]" />
+                      )
+                    )}
+                  </div>
+                </button>
+                <button
+                  onClick={() => onToggleFavorite(b.collectionId, b.submissionId, !b.favorited)}
+                  title={b.favorited ? "Unfavorite" : "Favorite"}
+                  className={[
+                    "absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all duration-150",
+                    b.favorited ? "text-rose-400 opacity-100" : "text-white opacity-0 group-hover:opacity-100",
+                  ].join(" ")}
+                >
+                  <Heart size={13} fill={b.favorited ? "currentColor" : "none"} />
+                </button>
+              </div>
               <div className="p-3.5">
                 <button onClick={() => onOpenCollection(b.collectionId)} className="block w-full text-left">
                   <div className="flex items-center gap-2 mb-1.5">
@@ -107,6 +136,13 @@ export function LibraryPage({
                   </p>
                 </button>
 
+                {b.pendingRegeneration && (
+                  <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] text-[#f0c987] bg-[#c99a5f]/20">
+                    <RotateCcw size={9} />
+                    Regeneration requested
+                  </span>
+                )}
+
                 <div className="mt-2.5 flex items-center justify-between gap-2">
                   {b.deliveryUrl ? (
                     <a
@@ -121,13 +157,29 @@ export function LibraryPage({
                   ) : (
                     <span />
                   )}
-                  <button
-                    onClick={() => setRegenTarget(b)}
-                    className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-[#e8c896] opacity-0 group-hover:opacity-100 transition-all duration-150"
-                  >
-                    <RotateCcw size={11} />
-                    Regenerate
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {b.approvedAt ? (
+                      <span className="flex items-center gap-1 text-[11px] text-emerald-300/80">
+                        <Check size={11} />
+                        Approved
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => onApprove(b.collectionId, b.submissionId)}
+                        className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-emerald-300 opacity-0 group-hover:opacity-100 transition-all duration-150"
+                      >
+                        <Check size={11} />
+                        Approve
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setRegenTarget(b)}
+                      className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-[#e8c896] opacity-0 group-hover:opacity-100 transition-all duration-150"
+                    >
+                      <RotateCcw size={11} />
+                      Regenerate
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

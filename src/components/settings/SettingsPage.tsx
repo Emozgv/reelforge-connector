@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Building2, Check, CreditCard, LogOut, Users as UsersIcon } from "lucide-react";
+import type { Collection, Creator, WorkspacePackage } from "../../types";
+import { computeUsageStats } from "../../lib/usageStats";
 
 export function SettingsPage({
   userEmail,
@@ -8,6 +10,9 @@ export function SettingsPage({
   displayName,
   onUpdateDisplayName,
   onSignOut,
+  workspacePackage,
+  collections,
+  creators,
 }: {
   userEmail?: string;
   workspaceName?: string;
@@ -15,6 +20,9 @@ export function SettingsPage({
   displayName?: string | null;
   onUpdateDisplayName: (name: string) => Promise<{ error: string | null }>;
   onSignOut: () => void;
+  workspacePackage: WorkspacePackage | null;
+  collections: Collection[];
+  creators: Creator[];
 }) {
   const [nameInput, setNameInput] = useState(displayName ?? "");
   const [saving, setSaving] = useState(false);
@@ -23,6 +31,7 @@ export function SettingsPage({
 
   const shownName = displayName || userEmail;
   const dirty = nameInput.trim() !== (displayName ?? "").trim();
+  const usage = workspacePackage ? computeUsageStats(workspacePackage, collections, creators) : null;
 
   async function handleSave() {
     setSaving(true);
@@ -90,6 +99,40 @@ export function SettingsPage({
           </button>
         </div>
 
+        {usage && workspacePackage && (
+          <>
+            <h2 className="mt-8 text-[13px] font-medium text-neutral-200 flex items-center gap-2">
+              <CreditCard size={14} className="text-[#ddb87e]" />
+              {workspacePackage.planName} plan
+            </h2>
+            <div className="mt-3 rounded-xl surface-panel p-4 grid grid-cols-3 gap-4">
+              <div>
+                <span className="text-[10px] tracking-wide uppercase text-neutral-500">Reels</span>
+                <p className="mt-1 text-[16px] font-serif text-neutral-100 tabular-nums">
+                  {usage.reelsUsed} <span className="text-[12px] text-neutral-500 font-sans">/ {usage.reelsTotal}</span>
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] tracking-wide uppercase text-neutral-500">Regenerations</span>
+                <p className="mt-1 text-[16px] font-serif text-neutral-100 tabular-nums">
+                  {usage.regenerationsUsed}{" "}
+                  <span className="text-[12px] text-neutral-500 font-sans">/ {usage.regenerationsTotal}</span>
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] tracking-wide uppercase text-neutral-500">Creator setups</span>
+                <p className="mt-1 text-[16px] font-serif text-neutral-100 tabular-nums">
+                  {usage.creatorSetupsUsed}{" "}
+                  <span className="text-[12px] text-neutral-500 font-sans">/ {usage.creatorSetupsTotal}</span>
+                </p>
+              </div>
+              <p className="col-span-3 mt-1 text-[11px] text-neutral-600">
+                Billing cycle started {new Date(workspacePackage.billingCycleStart).toLocaleDateString("en-US", { month: "long", day: "numeric" })}.
+              </p>
+            </div>
+          </>
+        )}
+
         <h2 className="mt-8 text-[13px] font-medium text-neutral-200">Coming soon</h2>
         <p className="mt-1 text-[12px] text-neutral-600 max-w-md">
           These aren't wired up yet — placeholders so you can see where they'll live.
@@ -106,19 +149,6 @@ export function SettingsPage({
             </div>
             <p className="mt-1.5 text-[11.5px] text-neutral-500">
               Invite teammates, assign roles, control who can save, send, and approve.
-            </p>
-          </div>
-
-          <div className="rounded-xl surface-panel p-4 opacity-60">
-            <div className="flex items-center gap-2.5">
-              <CreditCard size={15} className="text-neutral-500" />
-              <span className="text-[13px] font-medium text-neutral-300">Package &amp; billing</span>
-              <span className="ml-auto text-[9px] tracking-wide uppercase text-neutral-600 border border-white/[0.08] rounded-[3px] px-1 py-[1px]">
-                soon
-              </span>
-            </div>
-            <p className="mt-1.5 text-[11.5px] text-neutral-500">
-              Your reel allowance, regenerations remaining, and billing cycle.
             </p>
           </div>
 

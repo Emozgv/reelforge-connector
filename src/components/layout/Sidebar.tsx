@@ -11,6 +11,11 @@ import {
   Bell,
 } from "lucide-react";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
+import type { ActivityEventType } from "../../lib/activityMapping";
+
+// The bell is for things worth interrupting the client for — not a mirror of
+// every log line (that full trail lives in Dashboard/Collection history).
+const NOTABLE_EVENT_TYPES: ActivityEventType[] = ["submission_created", "regeneration_requested"];
 
 export type Page = "dashboard" | "hub" | "collections" | "creators" | "production" | "library" | "settings";
 
@@ -61,7 +66,8 @@ export function Sidebar({
   const [notifOpen, setNotifOpen] = useState(false);
   const shownName = displayName || userEmail;
   const initials = shownName ? shownName.slice(0, 2).toUpperCase() : "EM";
-  const unread = activity.items.length > 0 && new Date(activity.items[0].createdAtRaw).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+  const notifications = activity.items.filter((item) => NOTABLE_EVENT_TYPES.includes(item.eventType));
+  const unread = notifications.length > 0 && new Date(notifications[0].createdAtRaw).getTime() > Date.now() - 24 * 60 * 60 * 1000;
 
   return (
     <aside className="relative z-20 w-[212px] xl:w-[236px] 2xl:w-[260px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
@@ -98,13 +104,13 @@ export function Sidebar({
               className="absolute left-0 top-9 z-30 w-72 rounded-xl surface-panel-strong p-1 animate-fade-in"
             >
               <p className="px-2.5 pt-2 pb-1.5 text-[10.5px] tracking-wide uppercase text-neutral-500">
-                Recent activity
+                Notifications
               </p>
               <div className="max-h-[300px] overflow-y-auto">
-                {activity.items.length === 0 && (
+                {notifications.length === 0 && (
                   <p className="px-2.5 py-3 text-[11.5px] text-neutral-600">Nothing yet.</p>
                 )}
-                {activity.items.map((item) => (
+                {notifications.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => {

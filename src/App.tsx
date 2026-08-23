@@ -15,6 +15,7 @@ import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
 import { useWorkspace } from "./state/useWorkspace";
 import { useActivityFeed } from "./state/useActivityFeed";
+import { usePackage } from "./state/usePackage";
 import { usePauseAnimationsWhenHidden } from "./state/usePauseAnimationsWhenHidden";
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
   const activity = useActivityFeed(workspace?.id);
+  const { package: workspacePackage } = usePackage(workspace?.id);
 
   if (authLoading) {
     return <FullScreenLoader />;
@@ -88,6 +90,7 @@ function App() {
             creators={creatorsStore.creators}
             collections={collectionsStore.collections}
             activity={activity}
+            workspacePackage={workspacePackage}
             onOpenHub={() => setPage("hub")}
             onOpenCreator={navigateToCreator}
             onOpenCollection={navigateToCollection}
@@ -131,6 +134,8 @@ function App() {
             collections={collectionsStore.collections}
             onOpenCollection={navigateToCollection}
             onRequestRegeneration={collectionsStore.requestRegeneration}
+            onToggleFavorite={collectionsStore.toggleFavoriteSubmission}
+            onApprove={collectionsStore.approveSubmission}
           />
         )}
         {page === "settings" && (
@@ -141,6 +146,9 @@ function App() {
             displayName={workspace.displayName}
             onUpdateDisplayName={updateDisplayName}
             onSignOut={signOut}
+            workspacePackage={workspacePackage}
+            collections={collectionsStore.collections}
+            creators={creatorsStore.creators}
           />
         )}
       </div>

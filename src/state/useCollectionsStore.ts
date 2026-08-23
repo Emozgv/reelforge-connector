@@ -4,8 +4,13 @@ import { collectionMetaFromRow, type CollectionRow } from "../lib/collectionMapp
 import { conceptFromRow, conceptToInsertRow, type ConceptRow } from "../lib/conceptMapping";
 import { submissionFromRow, type SubmissionConceptRow, type SubmissionRow } from "../lib/submissionMapping";
 import { activityEventInsert, historyEntryFromRow, type ActivityEventRow } from "../lib/activityMapping";
+import {
+  isFreeReason,
+  regenerationRequestFromRow,
+  type RegenerationRequestRow,
+} from "../lib/regenerationMapping";
 import { formatTimestamp } from "../lib/dateFormat";
-import type { Collection, CollectionStatus, ConceptStatus, ReelVideo } from "../types";
+import type { Collection, CollectionStatus, ConceptStatus, ReelVideo, RegenerationReason } from "../types";
 
 function isUniqueViolation(error: { code?: string } | null): boolean {
   return error?.code === "23505";
@@ -43,29 +48,41 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     setError(null);
 
     (async () => {
-      const [collectionsResult, conceptsResult, submissionsResult, submissionConceptsResult, activityResult] =
-        await Promise.all([
-          supabase
-            .schema("client_os")
-            .from("collections")
-            .select("*")
-            .eq("workspace_id", workspaceId)
-            .order("name", { ascending: true }),
-          supabase.schema("client_os").from("concepts").select("*").eq("workspace_id", workspaceId),
-          supabase
-            .schema("client_os")
-            .from("submissions")
-            .select("*")
-            .eq("workspace_id", workspaceId)
-            .order("index", { ascending: true }),
-          supabase.schema("client_os").from("submission_concepts").select("*"),
-          supabase
-            .schema("client_os")
-            .from("activity_events")
-            .select("*")
-            .eq("workspace_id", workspaceId)
-            .order("created_at", { ascending: true }),
-        ]);
+      const [
+        collectionsResult,
+        conceptsResult,
+        submissionsResult,
+        submissionConceptsResult,
+        activityResult,
+        regenerationResult,
+      ] = await Promise.all([
+        supabase
+          .schema("client_os")
+          .from("collections")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("name", { ascending: true }),
+        supabase.schema("client_os").from("concepts").select("*").eq("workspace_id", workspaceId),
+        supabase
+          .schema("client_os")
+          .from("submissions")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("index", { ascending: true }),
+        supabase.schema("client_os").from("submission_concepts").select("*"),
+        supabase
+          .schema("client_os")
+          .from("activity_events")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .schema("client_os")
+          .from("regeneration_requests")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: false }),
+      ]);
 
       if (!active) return;
 
@@ -74,7 +91,8 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         conceptsResult.error ??
         submissionsResult.error ??
         submissionConceptsResult.error ??
-        activityResult.error;
+        activityResult.error ??
+        regenerationResult.error;
       if (firstError) {
         setError(firstError.message);
         setCollections([]);
@@ -111,6 +129,13 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         historyByCollectionId.set(row.collection_id, list);
       }
 
+      const regenerationsByCollectionId = new Map<string, Collection["regenerationRequests"]>();
+      for (const row of regenerationResult.data as RegenerationRequestRow[]) {
+        const list = regenerationsByCollectionId.get(row.collection_id) ?? [];
+        list.push(regenerationRequestFromRow(row));
+        regenerationsByCollectionId.set(row.collection_id, list);
+      }
+
       const rows = collectionsResult.data as CollectionRow[];
       setCollections(
         rows.map((row) => {
@@ -120,6 +145,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
             history: historyByCollectionId.get(row.id) ?? [],
             concepts: conceptsByCollectionId.get(row.id) ?? [],
             submissions: submissionsByCollectionId.get(row.id) ?? [],
+            regenerationRequests: regenerationsByCollectionId.get(row.id) ?? [],
           };
         })
       );
@@ -250,7 +276,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       if (conceptRow) concepts = [conceptFromRow(conceptRow as ConceptRow)];
     }
 
-    const created: Collection = { ...meta, concepts, submissions: [], history: [] };
+    const created: Collection = { ...meta, concepts, submissions: [], history: [], regenerationRequests: [] };
     setCollections((prev) => [created, ...prev]);
     void logActivity(meta.id, "collection_created", "Collection created");
     return { id: created.id, error: null };
@@ -376,15 +402,103 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     void logActivity(collectionId, "submission_created", `Submission #${row.index} sent to ReelForge`, row.id);
   }
 
-  // Logs a real, visible activity event — there's no dedicated regeneration
-  // table/workflow yet (that's real backend work for ReelForge Internal to
-  // pick up and action), but the request itself is genuine, not a fake UI
-  // action, and shows up in both the collection's history and the global feed.
-  function requestRegeneration(collectionId: string, submissionIndex: number, reason: string, note: string) {
+  // Writes a real row to client_os.regeneration_requests (free/paid decided
+  // here, at request time, from the reason) plus the usual activity entry.
+  // status starts "Requested" and only a future Internal connection can move
+  // it — same system-controlled pattern as Submission.status.
+  async function requestRegeneration(
+    collectionId: string,
+    submissionIndex: number,
+    reason: RegenerationReason,
+    note: string
+  ) {
+    if (!workspaceId) return;
+    const target = collectionsRef.current.find((c) => c.id === collectionId);
+    const submission = target?.submissions.find((s) => s.index === submissionIndex);
+    const isFree = isFreeReason(reason);
+
+    const { data, error: insertError } = await supabase
+      .schema("client_os")
+      .from("regeneration_requests")
+      .insert({
+        workspace_id: workspaceId,
+        collection_id: collectionId,
+        submission_id: submission?.id ?? null,
+        submission_index: submissionIndex,
+        reason,
+        is_free: isFree,
+        note,
+      })
+      .select()
+      .single();
+
+    if (insertError || !data) {
+      setSaveError("Couldn't send that regeneration request — please try again.");
+      return;
+    }
+
+    const request = regenerationRequestFromRow(data as RegenerationRequestRow);
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === collectionId ? { ...c, regenerationRequests: [request, ...c.regenerationRequests] } : c
+      )
+    );
+
+    const kind = isFree ? "free replacement" : "possible billable regeneration";
     const message = note
-      ? `Regeneration requested for Submission #${submissionIndex} — ${reason}: "${note}"`
-      : `Regeneration requested for Submission #${submissionIndex} — ${reason}`;
-    void logActivity(collectionId, "regeneration_requested", message);
+      ? `Regeneration requested for Submission #${submissionIndex} — ${reason} (${kind}): "${note}"`
+      : `Regeneration requested for Submission #${submissionIndex} — ${reason} (${kind})`;
+    void logActivity(collectionId, "regeneration_requested", message, submission?.id);
+  }
+
+  async function toggleFavoriteSubmission(collectionId: string, submissionId: string, favorited: boolean) {
+    const previous = collectionsRef.current;
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === collectionId
+          ? { ...c, submissions: c.submissions.map((s) => (s.id === submissionId ? { ...s, favorited } : s)) }
+          : c
+      )
+    );
+
+    const { error: updateError } = await supabase
+      .schema("client_os")
+      .from("submissions")
+      .update({ favorited })
+      .eq("id", submissionId);
+
+    if (updateError) {
+      setCollections(previous);
+      setSaveError("Couldn't save that — please try again.");
+    }
+  }
+
+  async function approveSubmission(collectionId: string, submissionId: string) {
+    const previous = collectionsRef.current;
+    const approvedAtIso = new Date().toISOString();
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === collectionId
+          ? {
+              ...c,
+              submissions: c.submissions.map((s) =>
+                s.id === submissionId ? { ...s, approvedAt: formatTimestamp(new Date(approvedAtIso)) } : s
+              ),
+            }
+          : c
+      )
+    );
+
+    const { error: updateError } = await supabase
+      .schema("client_os")
+      .from("submissions")
+      .update({ approved_at: approvedAtIso })
+      .eq("id", submissionId);
+
+    if (updateError) {
+      setCollections(previous);
+      setSaveError("Couldn't approve that — please try again.");
+    }
   }
 
   function updateNotes(collectionId: string, notes: string) {
@@ -440,7 +554,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       if (conceptRows) concepts = (conceptRows as ConceptRow[]).map(conceptFromRow);
     }
 
-    const copy: Collection = { ...meta, concepts, submissions: [], history: [] };
+    const copy: Collection = { ...meta, concepts, submissions: [], history: [], regenerationRequests: [] };
     setCollections((prev) => [copy, ...prev]);
 
     const suffix = concepts.length > 0 ? ` with ${concepts.length} concept${concepts.length === 1 ? "" : "s"}` : "";
@@ -479,6 +593,8 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     setConceptStatus,
     updateConceptNotes,
     requestRegeneration,
+    toggleFavoriteSubmission,
+    approveSubmission,
     sendSubmission,
     updateNotes,
     updateStatus,

@@ -1,5 +1,17 @@
 import type { Creator } from "../../types";
+import { creatorSetupStatus } from "../../lib/creatorMapping";
 import type { CreatorStats } from "./creatorStats";
+
+const SETUP_STATUS_STYLE = {
+  draft: "text-neutral-500 bg-white/[0.05]",
+  in_progress: "text-amber-300/80 bg-amber-400/10",
+  ready: "text-emerald-300/80 bg-emerald-400/10",
+} as const;
+const SETUP_STATUS_LABEL = {
+  draft: "Draft",
+  in_progress: "In progress",
+  ready: "Ready",
+} as const;
 
 export function CreatorCard({
   creator,
@@ -10,6 +22,7 @@ export function CreatorCard({
   stats: CreatorStats;
   onOpen: () => void;
 }) {
+  const setupStatus = creatorSetupStatus(creator);
   const initials = creator.name
     .split(" ")
     .map((w) => w[0])
@@ -37,6 +50,11 @@ export function CreatorCard({
           <h3 className="text-[14px] font-medium text-neutral-100 truncate">{creator.name}</h3>
           <p className="text-[11.5px] text-neutral-500 truncate">{creator.handle}</p>
         </div>
+        <span
+          className={["ml-auto shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", SETUP_STATUS_STYLE[setupStatus]].join(" ")}
+        >
+          {SETUP_STATUS_LABEL[setupStatus]}
+        </span>
       </div>
 
       <div className="mt-3.5 grid grid-cols-2 gap-y-1.5 text-[11.5px] text-neutral-400">

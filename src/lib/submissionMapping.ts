@@ -14,6 +14,8 @@ export interface SubmissionRow {
   delivery_url: string | null;
   submitted_at: string;
   updated_at: string;
+  favorited: boolean;
+  approved_at: string | null;
 }
 
 // Shape of a row from client_os.submission_concepts — the only place
@@ -32,5 +34,7 @@ export function submissionFromRow(row: SubmissionRow, conceptIds: string[]): Sub
     note: row.note ?? undefined,
     status: row.status,
     deliveryUrl: row.delivery_url ?? undefined,
+    favorited: row.favorited,
+    approvedAt: row.approved_at ?? undefined,
   };
 }

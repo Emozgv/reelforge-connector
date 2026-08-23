@@ -3,6 +3,22 @@ import { supabase } from "../lib/supabase";
 import { creatorFromRow, type CreatorRow } from "../lib/creatorMapping";
 import type { Creator, ContentStyle, Setting } from "../types";
 
+// snake_case DB column for every generically-editable Creator field —
+// keeps updateField's call sites short without losing type safety on `field`.
+const FIELD_COLUMNS: Partial<Record<keyof Creator, string>> = {
+  bodyNotes: "body_notes",
+  tattooNotes: "tattoo_notes",
+  identityNotes: "identity_notes",
+  preferredOutfits: "preferred_outfits",
+  settingNotes: "setting_notes",
+  preferredLanguage: "preferred_language",
+  contentDos: "content_dos",
+  contentDonts: "content_donts",
+  brandDirection: "brand_direction",
+  clientNotes: "client_notes",
+  aiBrainEnabled: "ai_brain_enabled",
+};
+
 /**
  * Creators for the active workspace, backed by client_os.creators.
  * Creative Profile edits (traits, direction, styles, talking/setting) are
@@ -99,6 +115,40 @@ export function useCreatorsStore(workspaceId: string | undefined) {
     void applyUpdate(creatorId, { preferredSetting }, { preferred_setting: preferredSetting });
   }
 
+  function updateField<K extends keyof Creator>(creatorId: string, field: K, value: Creator[K]) {
+    const column = FIELD_COLUMNS[field];
+    if (!column) return;
+    void applyUpdate(creatorId, { [field]: value } as Partial<Creator>, { [column]: value });
+  }
+
+  async function uploadReferencePhoto(creatorId: string, file: File): Promise<{ error: string | null }> {
+    if (!workspaceId) return { error: "No active workspace." };
+    const current = creatorsRef.current.find((c) => c.id === creatorId);
+    if (!current) return { error: "Creator not found." };
+    if (current.referencePhotos.length >= 5) return { error: "Up to 5 reference photos." };
+
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${workspaceId}/${creatorId}/${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("client-os-creator-references")
+      .upload(path, file, { cacheControl: "3600" });
+
+    if (uploadError) return { error: uploadError.message };
+
+    const { data: publicUrlData } = supabase.storage.from("client-os-creator-references").getPublicUrl(path);
+    const referencePhotos = [...current.referencePhotos, publicUrlData.publicUrl];
+    await applyUpdate(creatorId, { referencePhotos }, { reference_photo_urls: referencePhotos });
+    return { error: null };
+  }
+
+  function removeReferencePhoto(creatorId: string, url: string) {
+    const current = creatorsRef.current.find((c) => c.id === creatorId);
+    if (!current) return;
+    const referencePhotos = current.referencePhotos.filter((u) => u !== url);
+    void applyUpdate(creatorId, { referencePhotos }, { reference_photo_urls: referencePhotos });
+  }
+
   async function uploadProfileImage(creatorId: string, file: File): Promise<{ error: string | null }> {
     if (!workspaceId) return { error: "No active workspace." };
 
@@ -122,8 +172,8 @@ export function useCreatorsStore(workspaceId: string | undefined) {
     return { error: null };
   }
 
-  async function createCreator(name: string, handle: string): Promise<{ error: string | null }> {
-    if (!workspaceId) return { error: "No active workspace." };
+  async function createCreator(name: string, handle: string): Promise<{ id: string | null; error: string | null }> {
+    if (!workspaceId) return { id: null, error: "No active workspace." };
 
     const { data, error: insertError } = await supabase
       .schema("client_os")
@@ -133,12 +183,12 @@ export function useCreatorsStore(workspaceId: string | undefined) {
       .single();
 
     if (insertError || !data) {
-      return { error: insertError?.message ?? "Couldn't create creator." };
+      return { id: null, error: insertError?.message ?? "Couldn't create creator." };
     }
 
     const created = creatorFromRow(data as CreatorRow);
     setCreators((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-    return { error: null };
+    return { id: created.id, error: null };
   }
 
   return {
@@ -152,7 +202,10 @@ export function useCreatorsStore(workspaceId: string | undefined) {
     updateAvoidedStyles,
     updatePreferredTalking,
     updatePreferredSetting,
+    updateField,
     uploadProfileImage,
+    uploadReferencePhoto,
+    removeReferencePhoto,
     createCreator,
   };
 }

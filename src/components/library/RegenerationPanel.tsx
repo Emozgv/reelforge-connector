@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import { X, Check, RotateCcw } from "lucide-react";
+import { isFreeReason } from "../../lib/regenerationMapping";
+import type { RegenerationReason } from "../../types";
 
-const REASONS = ["Body", "Face", "Tattoos", "Outfit", "Movement", "Scene", "Technical issue", "Creative preference", "Other"];
+const REASONS: RegenerationReason[] = [
+  "Body",
+  "Face",
+  "Tattoos",
+  "Outfit",
+  "Movement",
+  "Scene",
+  "Technical issue",
+  "Creative preference",
+  "Other",
+];
 
 export function RegenerationPanel({
   open,
@@ -14,9 +26,9 @@ export function RegenerationPanel({
   collectionName: string;
   submissionIndex: number;
   onClose: () => void;
-  onConfirm: (reason: string, note: string) => void;
+  onConfirm: (reason: RegenerationReason, note: string) => void;
 }) {
-  const [reason, setReason] = useState(REASONS[0]);
+  const [reason, setReason] = useState<RegenerationReason>(REASONS[0]);
   const [note, setNote] = useState("");
   const [done, setDone] = useState(false);
 
@@ -90,6 +102,16 @@ export function RegenerationPanel({
                     </button>
                   ))}
                 </div>
+                <p
+                  className={[
+                    "mt-2 text-[11px] leading-relaxed",
+                    isFreeReason(reason) ? "text-emerald-300/80" : "text-[#e8c896]/80",
+                  ].join(" ")}
+                >
+                  {isFreeReason(reason)
+                    ? "Quality issue — this is a free replacement."
+                    : "Creative change — this may be a billable regeneration."}
+                </p>
               </div>
 
               <div className="px-5 pt-3.5">

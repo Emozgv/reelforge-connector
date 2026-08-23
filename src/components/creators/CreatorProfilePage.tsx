@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, Camera, PackageCheck, Plus, Sparkles } from "lucide-react";
-import type { Collection, Creator, Setting } from "../../types";
+import { ArrowLeft, Camera, Check, ImagePlus, PackageCheck, Plus, Sparkles, X } from "lucide-react";
+import type { Collection, Creator, Language, Setting } from "../../types";
 import type { CreatorsStore } from "../../state/useCreatorsStore";
 import { CONTENT_STYLES } from "../../data/mockData";
+import { creatorSetupStatus } from "../../lib/creatorMapping";
 import { COLLECTION_STATUS_STYLES } from "../collections/CollectionRow";
 import { DriveGlyph } from "../collections/DriveGlyph";
 import { NewCollectionPanel } from "../collections/NewCollectionPanel";
@@ -11,6 +12,18 @@ import { TraitsInput } from "./TraitsInput";
 
 const TALKING_OPTIONS: Creator["preferredTalking"][] = ["Talking", "Non-Talking", "Any"];
 const SETTING_OPTIONS: (Setting | "Any")[] = ["Indoor", "Outdoor", "Any"];
+const LANGUAGE_OPTIONS: (Language | "Any")[] = ["Any", "English", "Spanish", "German", "Non-verbal"];
+
+const SETUP_STATUS_LABEL: Record<ReturnType<typeof creatorSetupStatus>, string> = {
+  draft: "Setup: Draft",
+  in_progress: "Setup: In progress",
+  ready: "Setup: Ready",
+};
+const SETUP_STATUS_STYLE: Record<ReturnType<typeof creatorSetupStatus>, string> = {
+  draft: "text-neutral-500 bg-white/[0.05]",
+  in_progress: "text-amber-300/80 bg-amber-400/10",
+  ready: "text-emerald-300/80 bg-emerald-400/10",
+};
 
 function Chip({
   active,
@@ -36,6 +49,48 @@ function Chip({
   );
 }
 
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">{children}</label>;
+}
+
+function NotesField({
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  rows?: number;
+}) {
+  return (
+    <textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={rows}
+      placeholder={placeholder}
+      className="mt-1.5 w-full resize-none rounded-md surface-field p-2.5 text-[12.5px] leading-relaxed text-neutral-300 placeholder:text-neutral-600 outline-none focus-glow"
+    />
+  );
+}
+
+function ChecklistRow({ done, label }: { done: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={[
+          "w-4 h-4 rounded-full flex items-center justify-center shrink-0",
+          done ? "bg-emerald-400/20 text-emerald-300" : "bg-white/[0.06] text-neutral-600",
+        ].join(" ")}
+      >
+        {done ? <Check size={10} strokeWidth={3} /> : <span className="w-1 h-1 rounded-full bg-current" />}
+      </div>
+      <span className={["text-[12px]", done ? "text-neutral-300" : "text-neutral-500"].join(" ")}>{label}</span>
+    </div>
+  );
+}
+
 export function CreatorProfilePage({
   creator,
   collections,
@@ -53,8 +108,11 @@ export function CreatorProfilePage({
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingReference, setUploadingReference] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const referenceInputRef = useRef<HTMLInputElement>(null);
   const stats = computeCreatorStats(creator.id, collections);
+  const setupStatus = creatorSetupStatus(creator);
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -64,6 +122,16 @@ export function CreatorProfilePage({
     await creatorsStore.uploadProfileImage(creator.id, file);
     setUploadingPhoto(false);
   }
+
+  async function handleReferenceChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingReference(true);
+    await creatorsStore.uploadReferencePhoto(creator.id, file);
+    setUploadingReference(false);
+  }
+
   const ownCollections = collections.filter((c) => c.creatorId === creator.id);
   const allSubmissions = ownCollections
     .flatMap((c) => c.submissions.map((s) => ({ ...s, collectionName: c.name })))
@@ -116,8 +184,15 @@ export function CreatorProfilePage({
             </div>
           </button>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-          <div>
-            <h1 className="text-[20px] font-serif font-medium text-neutral-50">{creator.name}</h1>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-[20px] font-serif font-medium text-neutral-50 truncate">{creator.name}</h1>
+              <span
+                className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", SETUP_STATUS_STYLE[setupStatus]].join(" ")}
+              >
+                {SETUP_STATUS_LABEL[setupStatus]}
+              </span>
+            </div>
             <p className="text-[12.5px] text-neutral-500">{creator.handle}</p>
           </div>
         </div>
@@ -134,6 +209,24 @@ export function CreatorProfilePage({
 
         <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
           <div className="space-y-6">
+            {setupStatus !== "ready" && (
+              <div className="rounded-xl border border-[#c99a5f]/25 bg-[#c99a5f]/[0.06] p-4">
+                <h2 className="text-[13px] font-medium text-neutral-100 mb-2.5">Setup checklist</h2>
+                <div className="space-y-1.5">
+                  <ChecklistRow done={!!creator.profileImage} label="Profile photo" />
+                  <ChecklistRow done={creator.referencePhotos.length >= 3} label="At least 3 reference photos" />
+                  <ChecklistRow
+                    done={creator.bodyNotes.trim() !== "" || creator.identityNotes.trim() !== ""}
+                    label="Body / identity notes"
+                  />
+                  <ChecklistRow
+                    done={creator.contentDos.trim() !== "" || creator.contentDonts.trim() !== "" || creator.creativeDirection.trim() !== ""}
+                    label="Content direction"
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-[13px] font-medium text-neutral-200">Collections</h2>
@@ -211,10 +304,145 @@ export function CreatorProfilePage({
                 ))}
               </div>
             </div>
+
+            {/* Character & Identity — the visual anchor Production works from */}
+            <div className="rounded-lg surface-panel p-3.5">
+              <h2 className="text-[13px] font-medium text-neutral-100">Character &amp; identity</h2>
+              <p className="mt-1 text-[11px] text-neutral-500 leading-relaxed">
+                Reference photos and body/identity notes Production uses to keep this Creator consistent.
+              </p>
+
+              <div className="mt-4">
+                <FieldLabel>Reference photos ({creator.referencePhotos.length}/5)</FieldLabel>
+                <div className="mt-1.5 grid grid-cols-5 gap-2">
+                  {creator.referencePhotos.map((url) => (
+                    <div key={url} className="group relative aspect-square rounded-lg overflow-hidden ring-1 ring-white/10">
+                      <img src={url} alt="Reference" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => creatorsStore.removeReferencePhoto(creator.id, url)}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ))}
+                  {creator.referencePhotos.length < 5 && (
+                    <button
+                      onClick={() => referenceInputRef.current?.click()}
+                      className="aspect-square rounded-lg border border-dashed border-white/15 flex items-center justify-center text-neutral-500 hover:text-neutral-300 hover:border-white/25 transition-colors duration-150"
+                    >
+                      {uploadingReference ? (
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      ) : (
+                        <ImagePlus size={16} />
+                      )}
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={referenceInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleReferenceChange}
+                />
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>Body notes</FieldLabel>
+                  <NotesField
+                    value={creator.bodyNotes}
+                    onChange={(v) => creatorsStore.updateField(creator.id, "bodyNotes", v)}
+                    placeholder="Proportions, build..."
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Tattoo notes</FieldLabel>
+                  <NotesField
+                    value={creator.tattooNotes}
+                    onChange={(v) => creatorsStore.updateField(creator.id, "tattooNotes", v)}
+                    placeholder="Location, size, none..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <FieldLabel>Hair / face / identity notes</FieldLabel>
+                <NotesField
+                  value={creator.identityNotes}
+                  onChange={(v) => creatorsStore.updateField(creator.id, "identityNotes", v)}
+                  placeholder="Hair color/length, distinguishing features..."
+                />
+              </div>
+            </div>
+
+            {/* Direction — do's/don'ts and brand tone */}
+            <div className="rounded-lg surface-panel p-3.5">
+              <h2 className="text-[13px] font-medium text-neutral-100">Direction</h2>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>Content do's</FieldLabel>
+                  <NotesField
+                    value={creator.contentDos}
+                    onChange={(v) => creatorsStore.updateField(creator.id, "contentDos", v)}
+                    placeholder="What always works..."
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Content don'ts</FieldLabel>
+                  <NotesField
+                    value={creator.contentDonts}
+                    onChange={(v) => creatorsStore.updateField(creator.id, "contentDonts", v)}
+                    placeholder="What to avoid..."
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <FieldLabel>Preferred outfits &amp; settings</FieldLabel>
+                <NotesField
+                  value={creator.preferredOutfits}
+                  onChange={(v) => creatorsStore.updateField(creator.id, "preferredOutfits", v)}
+                  placeholder="Typical wardrobe..."
+                  rows={2}
+                />
+                <NotesField
+                  value={creator.settingNotes}
+                  onChange={(v) => creatorsStore.updateField(creator.id, "settingNotes", v)}
+                  placeholder="Typical settings beyond indoor/outdoor..."
+                  rows={2}
+                />
+              </div>
+              <div className="mt-3">
+                <FieldLabel>Brand direction</FieldLabel>
+                <NotesField
+                  value={creator.brandDirection}
+                  onChange={(v) => creatorsStore.updateField(creator.id, "brandDirection", v)}
+                  placeholder="Overall tone and positioning for this Creator..."
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg surface-panel p-3.5">
+              <h2 className="text-[13px] font-medium text-neutral-100">Client notes</h2>
+              <p className="mt-1 text-[11px] text-neutral-500">Private notes for your own team — not sent to ReelForge.</p>
+              <NotesField
+                value={creator.clientNotes}
+                onChange={(v) => creatorsStore.updateField(creator.id, "clientNotes", v)}
+                placeholder="Internal notes..."
+              />
+            </div>
+
+            <div className="rounded-lg surface-panel p-3.5">
+              <h2 className="text-[13px] font-medium text-neutral-100">Notes from ReelForge</h2>
+              <p className="mt-2 text-[12px] text-neutral-600 leading-relaxed">
+                Nothing from the ReelForge team yet — this fills in once Internal can write back to this Creator's profile.
+              </p>
+            </div>
           </div>
 
           {/* Creative Profile / AI Preferences */}
-          <div className="sticky top-0 space-y-3">
+          <div className="space-y-3">
             <div className="rounded-lg surface-panel p-3.5">
               <div className="flex items-center gap-1.5">
                 <Sparkles size={13} className="text-[#c99a5f]" />
@@ -240,15 +468,12 @@ export function CreatorProfilePage({
               </div>
 
               <div className="mt-4">
-                <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">
-                  Creative direction
-                </label>
-                <textarea
+                <FieldLabel>Creative direction</FieldLabel>
+                <NotesField
                   value={creator.creativeDirection}
-                  onChange={(e) => creatorsStore.updateCreativeDirection(creator.id, e.target.value)}
-                  rows={4}
+                  onChange={(v) => creatorsStore.updateCreativeDirection(creator.id, v)}
                   placeholder="e.g. Works best with simple POV concepts and soft lifestyle content..."
-                  className="mt-1.5 w-full resize-none rounded-md surface-field p-2.5 text-[12.5px] leading-relaxed text-neutral-300 placeholder:text-neutral-600 outline-none focus-glow"
+                  rows={4}
                 />
               </div>
 
@@ -262,6 +487,23 @@ export function CreatorProfilePage({
                       key={opt}
                       active={creator.preferredTalking === opt}
                       onClick={() => creatorsStore.updatePreferredTalking(creator.id, opt)}
+                    >
+                      {opt}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">
+                  Preferred language
+                </label>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {LANGUAGE_OPTIONS.map((opt) => (
+                    <Chip
+                      key={opt}
+                      active={creator.preferredLanguage === opt}
+                      onClick={() => creatorsStore.updateField(creator.id, "preferredLanguage", opt)}
                     >
                       {opt}
                     </Chip>
@@ -314,6 +556,24 @@ export function CreatorProfilePage({
                     placeholder="e.g. heavy acting, complex scenes"
                   />
                 </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-white/[0.06] flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[12px] text-neutral-300 font-medium">AI Brain</p>
+                  <p className="text-[10.5px] text-neutral-600 leading-relaxed">
+                    Opt in for future AI Creator Fit scoring. No effect yet.
+                  </p>
+                </div>
+                <button
+                  onClick={() => creatorsStore.updateField(creator.id, "aiBrainEnabled", !creator.aiBrainEnabled)}
+                  className={[
+                    "shrink-0 w-9 h-5 rounded-full flex items-center px-0.5 transition-colors duration-150",
+                    creator.aiBrainEnabled ? "bg-[#c99a5f] justify-end" : "bg-white/10 justify-start",
+                  ].join(" ")}
+                >
+                  <span className="w-4 h-4 rounded-full bg-white block" />
+                </button>
               </div>
 
               <p className="mt-4 text-[10.5px] text-neutral-600 leading-relaxed">

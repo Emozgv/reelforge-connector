@@ -27,7 +27,26 @@ export interface Creator {
   avoidedStyles: string[];
   preferredTalking: "Talking" | "Non-Talking" | "Any";
   preferredSetting: Setting | "Any";
+  // Character-set reference photos (up to 5) — the visual anchor Production works from.
+  referencePhotos: string[];
+  bodyNotes: string;
+  tattooNotes: string;
+  identityNotes: string;
+  preferredOutfits: string;
+  settingNotes: string;
+  preferredLanguage: Language | "Any";
+  contentDos: string;
+  contentDonts: string;
+  brandDirection: string;
+  clientNotes: string;
+  // Opt-in only — has no effect until AI Creator Fit / scoring actually ships.
+  aiBrainEnabled: boolean;
 }
+
+// Rule-based (no AI involved) read on how ready a Creator's setup is —
+// computed from field presence, never stored, so it can never drift from
+// what's actually filled in.
+export type CreatorSetupStatus = "draft" | "in_progress" | "ready";
 
 export interface ReelVideo {
   id: string;
@@ -108,6 +127,47 @@ export interface Submission {
   // Present only once this specific submission is Finished — each batch gets its
   // own delivery folder, never one shared link for the whole Collection.
   deliveryUrl?: string;
+  // Client-writable — the only two fields on a Submission the client can set.
+  favorited: boolean;
+  approvedAt?: string;
+}
+
+export type RegenerationReason =
+  | "Body"
+  | "Face"
+  | "Tattoos"
+  | "Outfit"
+  | "Movement"
+  | "Scene"
+  | "Technical issue"
+  | "Creative preference"
+  | "Other";
+
+export type RegenerationStatus = "Requested" | "Acknowledged" | "Done";
+
+// A structured regeneration request (client_os.regeneration_requests) — replaces
+// the earlier activity-log-only version. isFree is decided at request time from
+// the reason (QC-type reasons are always free; creative ones may be billable),
+// shown to the client so there's never a billing surprise.
+export interface RegenerationRequest {
+  id: string;
+  collectionId: string;
+  submissionId?: string;
+  submissionIndex: number;
+  reason: RegenerationReason;
+  isFree: boolean;
+  note: string;
+  status: RegenerationStatus;
+  createdAt: string;
+}
+
+// Package/plan terms — set by ReelForge, read-only for the client (client_os.workspace_packages).
+export interface WorkspacePackage {
+  planName: string;
+  monthlyAllowance: number;
+  regenerationsIncluded: number;
+  creatorSetupsIncluded: number;
+  billingCycleStart: string;
 }
 
 export interface Collection {
@@ -119,6 +179,7 @@ export interface Collection {
   notes: string;
   concepts: CollectionConcept[];
   submissions: Submission[];
+  regenerationRequests: RegenerationRequest[];
   status: CollectionStatus;
   // Real Supabase timestamp — format for display with formatRelativeTime()
   // rather than storing a precomputed string like "2 hours ago".

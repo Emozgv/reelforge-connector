@@ -5,7 +5,7 @@ import type { CreatorsStore } from "../../state/useCreatorsStore";
 import { CreatorCard } from "./CreatorCard";
 import { computeCreatorStats } from "./creatorStats";
 import { CreatorProfilePage } from "./CreatorProfilePage";
-import { NewCreatorPanel } from "./NewCreatorPanel";
+import { CreatorSetupWizard } from "./CreatorSetupWizard";
 
 export function CreatorsPage({
   creatorsStore,
@@ -90,7 +90,15 @@ export function CreatorsPage({
         </div>
       </div>
 
-      <NewCreatorPanel open={createOpen} onClose={() => setCreateOpen(false)} onCreate={creatorsStore.createCreator} />
+      <CreatorSetupWizard
+        open={createOpen}
+        creatorsStore={creatorsStore}
+        onClose={() => setCreateOpen(false)}
+        onDone={(creatorId) => {
+          setCreateOpen(false);
+          setActiveCreatorId(creatorId);
+        }}
+      />
     </div>
   );
 }
