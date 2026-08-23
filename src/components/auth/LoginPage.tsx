@@ -28,7 +28,7 @@ export function LoginPage({
 
   return (
     <div className="relative flex h-screen w-screen items-center justify-center bg-[#020508] overflow-hidden">
-      <StarfieldBackground starCount={55} />
+      <StarfieldBackground starCount={68} />
       <div
         className="pointer-events-none fixed inset-0"
         style={{

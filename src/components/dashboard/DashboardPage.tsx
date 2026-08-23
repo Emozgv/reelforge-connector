@@ -149,7 +149,7 @@ export function DashboardPage({
       >
         <div className="pointer-events-none absolute inset-0 bg-black/35" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#020508]" />
-        <StarfieldBackground starCount={55} />
+        <StarfieldBackground starCount={70} />
         <div className="relative z-10 max-w-[1200px] mx-auto flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 mb-3.5">

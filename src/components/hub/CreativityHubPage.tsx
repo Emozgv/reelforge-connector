@@ -141,7 +141,7 @@ export function CreativityHubPage({
     <div className="h-full overflow-y-auto">
       {/* hero */}
       <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12 bg-[#020508]">
-        <StarfieldBackground starCount={26} />
+        <StarfieldBackground starCount={34} />
         <div
           className="pointer-events-none absolute inset-0"
           style={{

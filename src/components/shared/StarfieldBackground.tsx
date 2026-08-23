@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface Star {
   left: number;
@@ -10,22 +10,99 @@ interface Star {
   glow: boolean;
 }
 
+interface ShootingStar {
+  id: number;
+  top: number;
+  left: number;
+  rotate: number;
+  dx: number;
+  dy: number;
+  duration: number;
+  width: number;
+}
+
+let shootingStarIdSeq = 0;
+
+// A single "falling" trajectory — angle and travel distance are randomized,
+// then dx/dy are derived from them so the streak actually moves along the
+// direction it's tilted in, rather than an approximated fixed ratio.
+function makeShootingStar(overrides?: Partial<Pick<ShootingStar, "top" | "left" | "rotate">>): ShootingStar {
+  const rotate = overrides?.rotate ?? 8 + Math.random() * 30;
+  const travel = 170 + Math.random() * 230;
+  const rad = (rotate * Math.PI) / 180;
+  return {
+    id: shootingStarIdSeq++,
+    top: overrides?.top ?? 4 + Math.random() * 42,
+    left: overrides?.left ?? Math.random() * 68,
+    rotate,
+    dx: travel * Math.cos(rad),
+    dy: travel * Math.sin(rad),
+    duration: 500 + Math.random() * 650,
+    width: 85 + Math.random() * 55,
+  };
+}
+
 // A calm, cinematic night-sky backdrop — used behind the app's hero moments
 // (Dashboard, Login, Creativity Hub) so they read as one coherent product.
 // Stars twinkle independently (randomized duration/delay so nothing pulses
-// in unison) and a single shooting star drifts through on a slow, quiet
-// cycle. Star count is intentionally modest and animations are pure CSS
-// opacity/transform — cheap to composite, paused with every other ambient
-// animation when the tab is hidden (see index.css).
+// in unison). Shooting stars spawn on an irregular schedule — different
+// timing, angle, speed and position every time, occasionally a close pair —
+// rather than one fixed path repeating on a fixed interval. Everything is
+// cheap CSS opacity/transform, paused with other ambient animations when the
+// tab is hidden (see index.css).
 export function StarfieldBackground({ starCount = 70 }: { starCount?: number }) {
-  const shooting = useMemo(
-    () => ({
-      top: 6 + Math.random() * 30,
-      rotate: 14 + Math.random() * 16,
-      travel: 260 + Math.random() * 160,
-    }),
-    []
-  );
+  const [shootingStars, setShootingStars] = useState<ShootingStar[]>([]);
+  const cleanupTimeouts = useRef<number[]>([]);
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    let nextSpawnTimeout: number;
+
+    function addStar(star: ShootingStar) {
+      setShootingStars((prev) => [...prev, star]);
+      const removeAt = window.setTimeout(() => {
+        setShootingStars((prev) => prev.filter((s) => s.id !== star.id));
+      }, star.duration + 150);
+      cleanupTimeouts.current.push(removeAt);
+    }
+
+    function spawn() {
+      if (!document.hidden) {
+        const first = makeShootingStar();
+        addStar(first);
+
+        // Roughly one time in five, a second star follows close behind on a
+        // near-parallel path — never more than a loose pair, never a cluster.
+        if (Math.random() < 0.2) {
+          const followDelay = 180 + Math.random() * 420;
+          const followTimeout = window.setTimeout(() => {
+            addStar(
+              makeShootingStar({
+                top: first.top + (Math.random() * 10 - 5),
+                left: first.left + (Math.random() * 8 - 4),
+                rotate: first.rotate + (Math.random() * 8 - 4),
+              })
+            );
+          }, followDelay);
+          cleanupTimeouts.current.push(followTimeout);
+        }
+      }
+
+      // Irregular gap between spawns — never a fixed cadence.
+      nextSpawnTimeout = window.setTimeout(spawn, 7000 + Math.random() * 16000);
+      cleanupTimeouts.current.push(nextSpawnTimeout);
+    }
+
+    nextSpawnTimeout = window.setTimeout(spawn, 3000 + Math.random() * 6000);
+    cleanupTimeouts.current.push(nextSpawnTimeout);
+
+    return () => {
+      window.clearTimeout(nextSpawnTimeout);
+      cleanupTimeouts.current.forEach((id) => window.clearTimeout(id));
+      cleanupTimeouts.current = [];
+    };
+  }, []);
 
   const stars = useMemo<Star[]>(() => {
     // Deterministic per mount, not per render — a plain seeded-ish spread is
@@ -65,16 +142,24 @@ export function StarfieldBackground({ starCount = 70 }: { starCount?: number }) 
           }}
         />
       ))}
-      <div
-        className="shooting-star"
-        style={{
-          top: `${shooting.top}%`,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ["--shoot-rotate" as any]: `${shooting.rotate}deg`,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ["--shoot-travel" as any]: `${shooting.travel}px`,
-        }}
-      />
+      {shootingStars.map((s) => (
+        <div
+          key={s.id}
+          className="shooting-star-instance"
+          style={{
+            top: `${s.top}%`,
+            left: `${s.left}%`,
+            width: s.width,
+            animationDuration: `${s.duration}ms`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ["--shoot-rotate" as any]: `${s.rotate}deg`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ["--shoot-dx" as any]: `${s.dx}px`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ["--shoot-dy" as any]: `${s.dy}px`,
+          }}
+        />
+      ))}
     </div>
   );
 }
