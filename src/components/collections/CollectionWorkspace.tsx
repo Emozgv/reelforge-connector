@@ -28,6 +28,7 @@ export function CollectionWorkspace({
   onUpdateStatus,
   onRemoveVideo,
   onSetConceptStatus,
+  onSetConceptNotes,
   onSendSubmission,
 }: {
   collection: Collection;
@@ -38,6 +39,7 @@ export function CollectionWorkspace({
   onUpdateStatus: (status: CollectionStatus) => void;
   onRemoveVideo: (videoId: string) => void;
   onSetConceptStatus: (videoId: string, status: ConceptStatus) => void;
+  onSetConceptNotes: (videoId: string, notes: string) => void;
   onSendSubmission: (note: string) => void;
 }) {
   const [notes, setNotes] = useState(collection.notes);
@@ -182,6 +184,7 @@ export function CollectionWorkspace({
             submittedConceptIds={submittedConceptIds}
             onStatusChange={onSetConceptStatus}
             onRemove={onRemoveVideo}
+            onNotesChange={onSetConceptNotes}
           />
 
           <div className="sticky top-0 space-y-3">

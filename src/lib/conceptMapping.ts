@@ -24,6 +24,8 @@ export interface ConceptRow {
   status: ConceptStatus;
   produced_at: string | null;
   ai_metadata: Record<string, unknown>;
+  notes: string;
+  creator_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,10 +81,18 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
     video,
     status: row.status,
     producedDate: row.produced_at ? formatTimestampFromIso(row.produced_at) : undefined,
+    notes: row.notes ?? "",
+    creatorId: row.creator_id ?? undefined,
   };
 }
 
-export function conceptToInsertRow(video: ReelVideo, collectionId: string, workspaceId: string) {
+export function conceptToInsertRow(
+  video: ReelVideo,
+  collectionId: string,
+  workspaceId: string,
+  notes?: string,
+  creatorId?: string
+) {
   return {
     workspace_id: workspaceId,
     collection_id: collectionId,
@@ -99,6 +109,8 @@ export function conceptToInsertRow(video: ReelVideo, collectionId: string, works
     ai_score: video.aiScore,
     creator_fit: video.creatorFit,
     status: "Unused" as ConceptStatus,
+    notes: notes || "",
+    creator_id: creatorId || null,
     ai_metadata: {
       talking: video.talking,
       aiReady: video.aiReady,

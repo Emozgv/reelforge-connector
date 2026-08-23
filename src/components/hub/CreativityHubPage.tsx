@@ -45,10 +45,6 @@ export function CreativityHubPage({
     }
   }, [creators, selectedCreator]);
 
-  const creatorCollections = selectedCreator
-    ? collectionsStore.collections.filter((c) => c.creatorId === selectedCreator.id)
-    : [];
-
   const savedCount = videos.filter((v) => v.saved).length;
   const activeFilterCount = countActiveFilters(filters);
 
@@ -274,21 +270,33 @@ export function CreativityHubPage({
       <SavePanel
         open={!!savePanelVideo}
         video={savePanelVideo}
-        creatorName={selectedCreator.name}
-        collections={creatorCollections}
+        creators={creators}
+        defaultCreatorId={selectedCreator.id}
+        collections={collectionsStore.collections}
         onClose={() => setSavePanelVideo(null)}
-        onQuickSave={() => {
-          if (savePanelVideo) markSaved(savePanelVideo.id);
-        }}
-        onSaveToCollection={(collectionId) => {
+        onQuickSave={(note, creatorOverrideId) => {
           if (!savePanelVideo) return;
           markSaved(savePanelVideo.id);
-          collectionsStore.addVideoToCollection(collectionId, savePanelVideo);
+          const targetCreatorId = creatorOverrideId ?? selectedCreator.id;
+          const quickSaves = collectionsStore.collections.find(
+            (c) => c.creatorId === targetCreatorId && c.name === "Quick Saves"
+          );
+          if (quickSaves) {
+            void collectionsStore.addVideoToCollection(quickSaves.id, savePanelVideo, note);
+          } else {
+            void collectionsStore.createCollection("Quick Saves", targetCreatorId, "", savePanelVideo, note);
+          }
         }}
-        onCreateCollection={(name, note) => {
+        onSaveToCollection={(collectionId, note) => {
           if (!savePanelVideo) return;
           markSaved(savePanelVideo.id);
-          void collectionsStore.createCollection(name, selectedCreator.id, note, savePanelVideo);
+          void collectionsStore.addVideoToCollection(collectionId, savePanelVideo, note);
+        }}
+        onCreateCollection={(name, note, creatorOverrideId) => {
+          if (!savePanelVideo) return;
+          markSaved(savePanelVideo.id);
+          const targetCreatorId = creatorOverrideId ?? selectedCreator.id;
+          void collectionsStore.createCollection(name, targetCreatorId, "", savePanelVideo, note);
         }}
       />
     </div>

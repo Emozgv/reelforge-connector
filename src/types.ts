@@ -75,6 +75,13 @@ export interface CollectionConcept {
   video: ReelVideo;
   status: ConceptStatus;
   producedDate?: string;
+  // Free-text creative direction for this one saved concept — independent
+  // from the collection-level notes field (e.g. "black dress", "German talking version").
+  notes: string;
+  // Optional per-concept creator override. undefined means "use the
+  // collection's creator" (the default/primary case, matching the existing
+  // research flow where the creator is picked up front).
+  creatorId?: string;
 }
 
 // Production progress for one real Submission (client_os.submissions). "Check

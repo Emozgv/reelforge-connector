@@ -6,11 +6,13 @@ export function ConceptGrid({
   submittedConceptIds,
   onStatusChange,
   onRemove,
+  onNotesChange,
 }: {
   concepts: CollectionConcept[];
   submittedConceptIds: Set<string>;
   onStatusChange: (videoId: string, status: ConceptStatus) => void;
   onRemove: (videoId: string) => void;
+  onNotesChange: (videoId: string, notes: string) => void;
 }) {
   if (concepts.length === 0) {
     return (
@@ -36,6 +38,7 @@ export function ConceptGrid({
             submitted={submittedConceptIds.has(concept.video.id)}
             onStatusChange={(status) => onStatusChange(concept.video.id, status)}
             onRemove={() => onRemove(concept.video.id)}
+            onNotesChange={(notes) => onNotesChange(concept.video.id, notes)}
           />
         </div>
       ))}

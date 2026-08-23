@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, Send, Eye } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, Send, Eye, MessageSquarePlus } from "lucide-react";
 import type { CollectionConcept, ConceptStatus } from "../../types";
 import { PlatformIcon } from "../hub/PlatformIcon";
 
@@ -16,14 +16,28 @@ export function ConceptCard({
   submitted,
   onStatusChange,
   onRemove,
+  onNotesChange,
 }: {
   concept: CollectionConcept;
   submitted: boolean;
   onStatusChange: (status: ConceptStatus) => void;
   onRemove: () => void;
+  onNotesChange: (notes: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(concept.notes);
+  const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const { video } = concept;
+
+  useEffect(() => {
+    if (editingNote) noteInputRef.current?.focus();
+  }, [editingNote]);
+
+  function commitNote() {
+    setEditingNote(false);
+    if (noteDraft !== concept.notes) onNotesChange(noteDraft);
+  }
 
   return (
     <div className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] transition-all duration-200 ease-out hover:border-white/[0.16] hover:shadow-[0_10px_24px_-10px_rgba(0,0,0,0.55)]">
@@ -74,6 +88,52 @@ export function ConceptCard({
 
         {concept.status === "Used" && concept.producedDate && (
           <p className="mt-0.5 text-[9.5px] text-emerald-300/70">Produced {concept.producedDate}</p>
+        )}
+
+        {editingNote ? (
+          <textarea
+            ref={noteInputRef}
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={commitNote}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                commitNote();
+              }
+              if (e.key === "Escape") {
+                setNoteDraft(concept.notes);
+                setEditingNote(false);
+              }
+            }}
+            rows={2}
+            placeholder='e.g. "black dress", "German talking version"'
+            className="mt-1.5 w-full resize-none rounded-md bg-black/55 backdrop-blur-sm border border-white/15 px-2 py-1.5 text-[10.5px] text-neutral-100 placeholder:text-neutral-500 outline-none focus:border-[#ddb87e]/50"
+          />
+        ) : concept.notes ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setNoteDraft(concept.notes);
+              setEditingNote(true);
+            }}
+            className="mt-1.5 w-full text-left text-[10.5px] text-white/70 bg-black/35 backdrop-blur-sm rounded-md px-1.5 py-1 line-clamp-2 hover:bg-black/50 transition-colors"
+          >
+            {concept.notes}
+          </button>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setNoteDraft("");
+              setEditingNote(true);
+            }}
+            className="mt-1.5 flex items-center gap-1 text-[10px] text-white/40 hover:text-white/70 transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <MessageSquarePlus size={11} />
+            Add note
+          </button>
         )}
 
         <div className="relative mt-1.5">

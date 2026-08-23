@@ -186,7 +186,12 @@ export function useCollectionsStore(workspaceId: string | undefined) {
   // this local check is just a fast path — concurrent/multi-tab saves still
   // can't create a duplicate). Saving the same source into a DIFFERENT
   // Collection is allowed. No global (cross-collection) dedup exists yet.
-  async function addVideoToCollection(collectionId: string, video: ReelVideo) {
+  async function addVideoToCollection(
+    collectionId: string,
+    video: ReelVideo,
+    notes?: string,
+    creatorId?: string
+  ) {
     const target = collectionsRef.current.find((c) => c.id === collectionId);
     if (!target || !workspaceId) return;
     if (target.concepts.some((k) => k.video.sourceUrl && k.video.sourceUrl === video.sourceUrl)) return;
@@ -194,7 +199,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     const { data, error: insertError } = await supabase
       .schema("client_os")
       .from("concepts")
-      .insert(conceptToInsertRow(video, collectionId, workspaceId))
+      .insert(conceptToInsertRow(video, collectionId, workspaceId, notes, creatorId))
       .select()
       .single();
 
@@ -215,7 +220,9 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     name: string,
     creatorId: string,
     note: string,
-    initialVideo?: ReelVideo
+    initialVideo?: ReelVideo,
+    conceptNotes?: string,
+    conceptCreatorId?: string
   ): Promise<{ id: string | null; error: string | null }> {
     if (!workspaceId) return { id: null, error: "No active workspace." };
 
@@ -237,7 +244,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       const { data: conceptRow } = await supabase
         .schema("client_os")
         .from("concepts")
-        .insert(conceptToInsertRow(initialVideo, meta.id, workspaceId))
+        .insert(conceptToInsertRow(initialVideo, meta.id, workspaceId, conceptNotes, conceptCreatorId))
         .select()
         .single();
       if (conceptRow) concepts = [conceptFromRow(conceptRow as ConceptRow)];
@@ -309,6 +316,19 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     const eventType = status === "Used" ? "concept_marked_used" : status === "Rejected" ? "concept_rejected" : "concept_marked_unused";
     const message = status === "Used" ? "Concept marked as Used" : status === "Rejected" ? "Concept marked as Rejected" : "Concept marked as Unused";
     void logActivity(collectionId, eventType, message);
+  }
+
+  function updateConceptNotes(collectionId: string, videoId: string, notes: string) {
+    // Autosaves as the user types, matching the collection-level notes pattern
+    // — intentionally not logged to Activity.
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === collectionId
+          ? { ...c, concepts: c.concepts.map((k) => (k.video.id === videoId ? { ...k, notes } : k)) }
+          : c
+      )
+    );
+    void supabase.schema("client_os").from("concepts").update({ notes }).eq("id", videoId);
   }
 
   // Sending creates one real Submission row plus one submission_concepts row
@@ -404,7 +424,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       const { data: conceptRows } = await supabase
         .schema("client_os")
         .from("concepts")
-        .insert(source.concepts.map((k) => conceptToInsertRow(k.video, meta.id, workspaceId)))
+        .insert(source.concepts.map((k) => conceptToInsertRow(k.video, meta.id, workspaceId, k.notes, k.creatorId)))
         .select();
       if (conceptRows) concepts = (conceptRows as ConceptRow[]).map(conceptFromRow);
     }
@@ -441,6 +461,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     createCollection,
     removeVideoFromCollection,
     setConceptStatus,
+    updateConceptNotes,
     sendSubmission,
     updateNotes,
     updateStatus,

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { X, Check, Zap, Plus, FolderHeart } from "lucide-react";
-import type { Collection, ReelVideo } from "../../types";
+import { X, Check, Zap, Plus, FolderHeart, ChevronDown } from "lucide-react";
+import type { Collection, Creator, ReelVideo } from "../../types";
 
 export function SavePanel({
   open,
   video,
-  creatorName,
+  creators,
+  defaultCreatorId,
   collections,
   onClose,
   onQuickSave,
@@ -14,17 +15,20 @@ export function SavePanel({
 }: {
   open: boolean;
   video: ReelVideo | null;
-  creatorName: string;
+  creators: Creator[];
+  defaultCreatorId: string;
   collections: Collection[];
   onClose: () => void;
-  onQuickSave: (note: string) => void;
-  onSaveToCollection: (collectionId: string, note: string) => void;
-  onCreateCollection: (name: string, note: string) => void;
+  onQuickSave: (note: string, creatorOverrideId: string | undefined) => void;
+  onSaveToCollection: (collectionId: string, note: string, creatorOverrideId: string | undefined) => void;
+  onCreateCollection: (name: string, note: string, creatorOverrideId: string | undefined) => void;
 }) {
   const [note, setNote] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [confirmedLabel, setConfirmedLabel] = useState<string | null>(null);
+  const [assigneeId, setAssigneeId] = useState(defaultCreatorId);
+  const [assigneeMenuOpen, setAssigneeMenuOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -32,8 +36,18 @@ export function SavePanel({
       setCreating(false);
       setNewName("");
       setConfirmedLabel(null);
+      setAssigneeId(defaultCreatorId);
+      setAssigneeMenuOpen(false);
     }
-  }, [open, video?.id]);
+  }, [open, video?.id, defaultCreatorId]);
+
+  // undefined = no override, use the collection's/default creator.
+  const overrideId = assigneeId === defaultCreatorId ? undefined : assigneeId;
+  const assignee = creators.find((c) => c.id === assigneeId);
+  const creatorName = assignee?.name ?? "";
+  // Collections belong to exactly one creator, so switching who this save is
+  // assigned to switches which existing collections are even valid targets.
+  const collectionsForAssignee = collections.filter((c) => c.creatorId === assigneeId);
 
   function finish(label: string) {
     setConfirmedLabel(label);
@@ -61,10 +75,45 @@ export function SavePanel({
           ) : (
             <>
               <div className="flex items-center justify-between px-5 h-14 border-b border-white/[0.07]">
-                <div>
-                  <h2 className="text-[15px] font-serif font-medium text-neutral-50">
-                    Save for <span className="text-[#e8c896]">{creatorName}</span>
-                  </h2>
+                <div className="relative">
+                  {creators.length > 1 ? (
+                    <button
+                      onClick={() => setAssigneeMenuOpen((v) => !v)}
+                      className="flex items-center gap-1.5 text-[15px] font-serif font-medium text-neutral-50 hover:text-neutral-200 transition-colors"
+                    >
+                      Save for <span className="text-[#e8c896]">{creatorName}</span>
+                      <ChevronDown size={13} className="text-neutral-500" />
+                    </button>
+                  ) : (
+                    <h2 className="text-[15px] font-serif font-medium text-neutral-50">
+                      Save for <span className="text-[#e8c896]">{creatorName}</span>
+                    </h2>
+                  )}
+
+                  {assigneeMenuOpen && (
+                    <div
+                      onMouseLeave={() => setAssigneeMenuOpen(false)}
+                      className="absolute left-0 top-8 z-20 w-56 rounded-xl surface-panel-strong p-1 animate-fade-in"
+                    >
+                      <p className="px-2.5 pt-1.5 pb-1 text-[10px] tracking-wide uppercase text-neutral-600">
+                        Assign to a different creator
+                      </p>
+                      {creators.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setAssigneeId(c.id);
+                            setAssigneeMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+                        >
+                          <div className="w-4 h-4 rounded-full shrink-0" style={{ background: c.avatarColor }} />
+                          <span className="text-[12.5px] text-neutral-200 truncate">{c.name}</span>
+                          {c.id === assigneeId && <Check size={13} className="ml-auto text-[#d7a463] shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={onClose}
@@ -73,6 +122,12 @@ export function SavePanel({
                   <X size={15} />
                 </button>
               </div>
+
+              {overrideId && (
+                <div className="mx-5 mt-3 rounded-md bg-[#c99a5f]/[0.08] px-2.5 py-1.5 text-[11px] text-[#e8c896]">
+                  Assigning to a different creator than the current research session.
+                </div>
+              )}
 
               <div className="px-5 pt-4 flex items-center gap-3">
                 <div
@@ -88,32 +143,35 @@ export function SavePanel({
               <div className="px-5 pt-4">
                 <button
                   onClick={() => {
-                    onQuickSave(note);
-                    finish("Saved");
+                    onQuickSave(note, overrideId);
+                    finish("Saved to Quick Saves");
                   }}
                   className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors"
                 >
                   <Zap size={14} fill="currentColor" />
                   Quick Save
                 </button>
+                <p className="mt-1.5 text-[10.5px] text-neutral-600 text-center">
+                  Saves into {creatorName}'s "Quick Saves" collection
+                </p>
               </div>
 
-              <div className="px-5 pt-4 pb-1 flex items-center gap-2 text-[10.5px] tracking-wide uppercase text-neutral-500">
+              <div className="px-5 pt-2 pb-1 flex items-center gap-2 text-[10.5px] tracking-wide uppercase text-neutral-500">
                 <FolderHeart size={11} />
                 Or choose a collection
               </div>
 
               <div className="px-3 max-h-[168px] overflow-y-auto">
-                {collections.length === 0 && (
+                {collectionsForAssignee.length === 0 && (
                   <p className="px-2.5 py-2 text-[11.5px] text-neutral-600">
                     No collections yet for {creatorName} — create one below.
                   </p>
                 )}
-                {collections.map((c) => (
+                {collectionsForAssignee.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => {
-                      onSaveToCollection(c.id, note);
+                      onSaveToCollection(c.id, note, overrideId);
                       finish(`Saved to ${c.name}`);
                     }}
                     className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg hover:bg-white/[0.05] transition-colors"
@@ -135,7 +193,7 @@ export function SavePanel({
                       onChange={(e) => setNewName(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && newName.trim()) {
-                          onCreateCollection(newName.trim(), note);
+                          onCreateCollection(newName.trim(), note, overrideId);
                           finish(`Created "${newName.trim()}" and saved`);
                         }
                       }}
@@ -145,7 +203,7 @@ export function SavePanel({
                     <button
                       disabled={!newName.trim()}
                       onClick={() => {
-                        onCreateCollection(newName.trim(), note);
+                        onCreateCollection(newName.trim(), note, overrideId);
                         finish(`Created "${newName.trim()}" and saved`);
                       }}
                       className="h-9 px-3 rounded-lg bg-[#d7a463] text-[#0a0a0c] text-[12px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors"

@@ -45,6 +45,9 @@ export function CollectionsPage({
         onSetConceptStatus={(videoId, status) =>
           collectionsStore.setConceptStatus(activeCollection.id, videoId, status)
         }
+        onSetConceptNotes={(videoId, notes) =>
+          collectionsStore.updateConceptNotes(activeCollection.id, videoId, notes)
+        }
         onSendSubmission={(note) => collectionsStore.sendSubmission(activeCollection.id, note)}
       />
     );
