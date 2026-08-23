@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Shuffle, Bookmark, SlidersHorizontal, Info, CloudOff } from "lucide-react";
-import { searchReels } from "../../lib/searchReels";
+import { Search, Shuffle, Bookmark, SlidersHorizontal, Info, CloudOff, AtSign } from "lucide-react";
+import { searchReels, fetchProfileReels } from "../../lib/searchReels";
 import type { Creator, ReelVideo } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { CreatorSelector } from "./CreatorSelector";
@@ -41,7 +41,8 @@ export function CreativityHubPage({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [platformNotice, setPlatformNotice] = useState<string | null>(null);
-  const [lastQuery, setLastQuery] = useState("");
+  const [lastAction, setLastAction] = useState<{ kind: "search" | "profile"; value: string } | null>(null);
+  const [profileHandle, setProfileHandle] = useState("");
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
@@ -97,22 +98,16 @@ export function CreativityHubPage({
     return list;
   }, [videos, filters]);
 
-  async function runSearch(q: string) {
-    const trimmed = q.trim();
-    if (!trimmed) return;
-    if (filters.platform === "instagram") {
-      setPlatformNotice("Instagram search isn't connected yet — try TikTok or All for now.");
-      return;
-    }
-    setPlatformNotice(null);
+  // Shared by both research modes — one gives real videos or a provider
+  // error, the caller decides what "success" means for its own UI copy.
+  async function loadVideos(fetcher: () => Promise<{ results: ReelVideo[]; error?: string }>) {
     setSearching(true);
     setSearchError(false);
-    setLastQuery(trimmed);
-    const { results, error } = await searchReels("tiktok", trimmed);
-    // Every failure from a real search call today is the provider, not us —
-    // show one calm, on-brand message rather than the raw provider error text,
-    // so an upstream outage never makes the page itself look broken. The raw
-    // reason still goes to the console for us to debug, never to the client UI.
+    const { results, error } = await fetcher();
+    // Every failure from a real call today is the provider, not us — show one
+    // calm, on-brand message rather than the raw provider error text, so an
+    // upstream outage never makes the page itself look broken. The raw reason
+    // still goes to the console for us to debug, never to the client UI.
     if (error) {
       console.error("[search-reels] provider error:", error);
       setSearchError(true);
@@ -124,10 +119,37 @@ export function CreativityHubPage({
     setSearching(false);
   }
 
+  async function runSearch(q: string) {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    if (filters.platform === "instagram") {
+      setPlatformNotice("Instagram search isn't connected yet — try TikTok or All for now.");
+      return;
+    }
+    setPlatformNotice(null);
+    setLastAction({ kind: "search", value: trimmed });
+    await loadVideos(() => searchReels("tiktok", trimmed));
+  }
+
+  // Profile-based research: a public creator's own recent reels, independent
+  // of the (currently unstable) keyword search endpoint.
+  async function runProfileLookup(handle: string) {
+    const trimmed = handle.trim();
+    if (!trimmed) return;
+    if (filters.platform === "instagram") {
+      setPlatformNotice("Instagram profiles aren't connected yet — try TikTok or All for now.");
+      return;
+    }
+    setPlatformNotice(null);
+    setLastAction({ kind: "profile", value: trimmed });
+    await loadVideos(() => fetchProfileReels("tiktok", trimmed));
+  }
+
   function handleRefresh() {
-    if (!lastQuery) return;
+    if (!lastAction) return;
     setSpinning(true);
-    void runSearch(lastQuery).finally(() => setSpinning(false));
+    const rerun = lastAction.kind === "search" ? runSearch(lastAction.value) : runProfileLookup(lastAction.value);
+    void rerun.finally(() => setSpinning(false));
   }
 
   function markSaved(id: string) {
@@ -264,6 +286,28 @@ export function CreativityHubPage({
             </div>
           </div>
 
+          {/* profile-based research — a public creator's own reels, independent
+              of (and a fallback for) the keyword search above */}
+          <div className="flex-1 min-w-[220px] max-w-sm flex items-center gap-2 h-11 px-3.5 rounded-full glass-panel">
+            <AtSign size={14} className="text-neutral-500 shrink-0" />
+            <input
+              value={profileHandle}
+              onChange={(e) => setProfileHandle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void runProfileLookup(profileHandle);
+              }}
+              placeholder="Browse a public profile — @username"
+              className="flex-1 min-w-0 bg-transparent text-[12.5px] text-neutral-200 placeholder:text-neutral-500 outline-none"
+            />
+            <button
+              onClick={() => void runProfileLookup(profileHandle)}
+              disabled={!profileHandle.trim() || searching}
+              className="shrink-0 text-[11.5px] font-medium text-[#D39448] hover:brightness-110 transition-[filter] disabled:opacity-40"
+            >
+              Browse
+            </button>
+          </div>
+
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setSavedPopoverOpen(true)}
@@ -276,8 +320,8 @@ export function CreativityHubPage({
 
             <button
               onClick={handleRefresh}
-              disabled={!lastQuery || searching}
-              title={lastQuery ? "Fetch a fresh batch for the same search" : "Search something first"}
+              disabled={!lastAction || searching}
+              title={lastAction ? "Fetch a fresh batch for the same search" : "Search something first"}
               className="flex items-center gap-2 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <Shuffle size={14} className={spinning ? "animate-spin" : ""} />
@@ -315,8 +359,8 @@ export function CreativityHubPage({
               normally.
             </p>
             <button
-              onClick={() => void runSearch(lastQuery)}
-              disabled={searching}
+              onClick={handleRefresh}
+              disabled={searching || !lastAction}
               className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full surface-panel hover:bg-white/[0.06] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
             >
               <Shuffle size={13} className={searching ? "animate-spin" : ""} />
@@ -331,17 +375,21 @@ export function CreativityHubPage({
             spacious
             emptyTitle={
               searching
-                ? "Searching…"
-                : lastQuery
-                  ? "No results for that search."
-                  : "Search a niche above to discover real reels."
+                ? lastAction?.kind === "profile"
+                  ? `Loading @${lastAction.value.replace(/^@/, "")}'s reels…`
+                  : "Searching…"
+                : lastAction
+                  ? "No results found."
+                  : "Search a niche, or browse a public profile above."
             }
             emptyHint={
               searching
                 ? "Pulling fresh results from TikTok."
-                : lastQuery
-                  ? "Try a different keyword, or press Refresh for a new batch."
-                  : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
+                : lastAction?.kind === "profile"
+                  ? "Double-check the username, or try a different public profile."
+                  : lastAction
+                    ? "Try a different keyword, or press Refresh for a new batch."
+                    : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
             }
           />
         )}
