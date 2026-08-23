@@ -424,7 +424,7 @@ export function CreatorProfilePage({
             </div>
 
             <div className="rounded-lg surface-panel p-3.5">
-              <h2 className="text-[13px] font-medium text-neutral-100">Client notes</h2>
+              <h2 className="text-[13px] font-medium text-neutral-100">Notes</h2>
               <p className="mt-1 text-[11px] text-neutral-500">Private notes for your own team — not sent to ReelForge.</p>
               <NotesField
                 value={creator.clientNotes}
