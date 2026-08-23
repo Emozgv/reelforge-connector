@@ -172,7 +172,7 @@ export function DashboardPage({
             backgroundPosition: "center 28%",
           }}
         />
-        <div className="pointer-events-none absolute inset-0 bg-black/35" />
+        <div className="pointer-events-none absolute inset-0 bg-black/30" />
         {/* the photo's own horizon glow reads as too big/blob-like at this crop —
             darken it back down to a restrained hint instead of a visible cloud */}
         <div
