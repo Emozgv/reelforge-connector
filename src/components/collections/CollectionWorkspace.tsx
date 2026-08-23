@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox } from "lucide-react";
+import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox, Plus, Sparkles } from "lucide-react";
 import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
+import { nextCollectionName } from "../../lib/collectionNaming";
 import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
 import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
 
-const ALL_STATUSES: CollectionStatus[] = ["Draft", "Ready", "Sent", "Completed"];
+const ALL_STATUSES: CollectionStatus[] = ["Draft", "Sent", "Completed"];
 
 // ReelForge produces in batches — a submission needs enough concepts to make
 // a production run worthwhile. 10 is the floor; more is always fine.
@@ -27,6 +28,7 @@ export function CollectionWorkspace({
   collection,
   creators,
   saveError,
+  siblingNames,
   onBack,
   onUpdateNotes,
   onUpdateStatus,
@@ -34,10 +36,12 @@ export function CollectionWorkspace({
   onSetConceptStatus,
   onSetConceptNotes,
   onSendSubmission,
+  onStartNext,
 }: {
   collection: Collection;
   creators: Creator[];
   saveError?: string | null;
+  siblingNames: string[];
   onBack: () => void;
   onUpdateNotes: (notes: string) => void;
   onUpdateStatus: (status: CollectionStatus) => void;
@@ -45,14 +49,18 @@ export function CollectionWorkspace({
   onSetConceptStatus: (videoId: string, status: ConceptStatus) => void;
   onSetConceptNotes: (videoId: string, notes: string) => void;
   onSendSubmission: (note: string) => void;
+  onStartNext: (name: string) => void;
 }) {
   const [notes, setNotes] = useState(collection.notes);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [nextOpen, setNextOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [conceptFilter, setConceptFilter] = useState<ConceptFilter>("all");
   const [inboxNoteId, setInboxNoteId] = useState<string | null>(null);
   const notesSaveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const creator = creators.find((c) => c.id === collection.creatorId);
+  const delivered = collection.submissions.some((s) => s.status === "Finished");
+  const suggestedName = nextCollectionName(collection.name, siblingNames);
 
   useEffect(() => {
     return () => clearTimeout(notesSaveTimeout.current);
@@ -150,6 +158,40 @@ export function CollectionWorkspace({
                   </div>
                 )}
               </div>
+
+              {delivered && (
+                <div className="relative">
+                  <button
+                    onClick={() => setNextOpen((v) => !v)}
+                    title={`Start "${suggestedName}"`}
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-neutral-600 hover:text-[#e8c896] hover:bg-white/[0.08] transition-colors duration-150"
+                  >
+                    <Plus size={13} />
+                  </button>
+                  {nextOpen && (
+                    <div
+                      onMouseLeave={() => setNextOpen(false)}
+                      className="absolute left-0 top-7 z-20 w-60 rounded-lg surface-panel-strong p-1 animate-fade-in"
+                    >
+                      <button
+                        onClick={() => {
+                          setNextOpen(false);
+                          onStartNext(suggestedName);
+                        }}
+                        className="w-full flex items-center gap-2 text-left px-2.5 py-2 rounded-md text-[12px] text-neutral-200 hover:bg-white/[0.06] transition-colors"
+                      >
+                        <Sparkles size={12} className="text-[#ddb87e] shrink-0" />
+                        <span>
+                          Start <span className="text-[#e8c896]">"{suggestedName}"</span>
+                        </span>
+                      </button>
+                      <p className="px-2.5 pb-1.5 pt-0.5 text-[10.5px] text-neutral-600 leading-relaxed">
+                        Delivered — keeps this one as-is, starts fresh for {creator?.name ?? "this creator"}.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-neutral-500">

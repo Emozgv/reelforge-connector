@@ -75,10 +75,13 @@ export interface ReelVideo {
   language: Language;
 }
 
-// The long-lived creative folder's workflow stage. Production progress lives on
-// each Submission instead — a Collection can have several Submissions at once,
-// so it has no single "In Production" state of its own.
-export type CollectionStatus = "Draft" | "Ready" | "Sent" | "Completed";
+// The long-lived creative folder's workflow stage. Draft -> Sent happens
+// automatically on send, Sent -> Completed happens automatically once any
+// Submission is delivered (client_os DB trigger) — this is a status readout,
+// not really a manual field, though it stays editable as a fallback.
+// Production progress lives on each Submission instead — a Collection can
+// have several Submissions at once, so it has no single "In Production" state.
+export type CollectionStatus = "Draft" | "Sent" | "Completed";
 
 // A concept's own lifecycle inside a collection — independent from the collection's
 // overall status. Sending a batch to ReelForge does not, by itself, mark a concept Used.

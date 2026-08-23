@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { MoreHorizontal, ArrowUpRight } from "lucide-react";
+import { MoreHorizontal, ArrowUpRight, Plus, Sparkles } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
+import { nextCollectionName } from "../../lib/collectionNaming";
 
 export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
   Draft: "text-neutral-400 bg-white/[0.04]",
-  Ready: "text-[#ddb87e] bg-[#c99a5f]/12",
   Sent: "text-sky-300/80 bg-sky-400/10",
   Completed: "text-emerald-300/80 bg-emerald-400/10",
 };
@@ -13,19 +13,24 @@ export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
 export function CollectionRow({
   collection,
   creators,
+  siblingNames,
   onOpen,
   onRename,
   onDuplicate,
   onDelete,
+  onStartNext,
 }: {
   collection: Collection;
   creators: Creator[];
+  siblingNames: string[];
   onOpen: () => void;
   onRename: (name: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onStartNext: (name: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [nextOpen, setNextOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(collection.name);
   const creator = creators.find((c) => c.id === collection.creatorId);
@@ -33,6 +38,8 @@ export function CollectionRow({
   const total = collection.concepts.length;
   const used = collection.concepts.filter((c) => c.status === "Used").length;
   const available = total - used;
+  const delivered = collection.submissions.some((s) => s.status === "Finished");
+  const suggestedName = nextCollectionName(collection.name, siblingNames);
 
   function commitRename() {
     const trimmed = draftName.trim();
@@ -76,7 +83,42 @@ export function CollectionRow({
             className="w-full h-6 rounded surface-field px-1.5 text-[13px] text-neutral-100 outline-none focus-glow"
           />
         ) : (
-          <h3 className="text-[13px] font-medium text-neutral-100 truncate">{collection.name}</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-[13px] font-medium text-neutral-100 truncate">{collection.name}</h3>
+            {delivered && (
+              <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setNextOpen((v) => !v)}
+                  title={`Start "${suggestedName}"`}
+                  className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-neutral-600 hover:text-[#e8c896] hover:bg-white/[0.08] transition-colors duration-150"
+                >
+                  <Plus size={12} />
+                </button>
+                {nextOpen && (
+                  <div
+                    onMouseLeave={() => setNextOpen(false)}
+                    className="absolute left-0 top-6 z-20 w-56 rounded-lg surface-panel-strong p-1 animate-fade-in"
+                  >
+                    <button
+                      onClick={() => {
+                        setNextOpen(false);
+                        onStartNext(suggestedName);
+                      }}
+                      className="w-full flex items-center gap-2 text-left px-2.5 py-2 rounded-md text-[12px] text-neutral-200 hover:bg-white/[0.06] transition-colors"
+                    >
+                      <Sparkles size={12} className="text-[#ddb87e] shrink-0" />
+                      <span>
+                        Start <span className="text-[#e8c896]">"{suggestedName}"</span>
+                      </span>
+                    </button>
+                    <p className="px-2.5 pb-1.5 pt-0.5 text-[10.5px] text-neutral-600 leading-relaxed">
+                      Delivered — keeps this one as-is, starts fresh for {creator?.name ?? "this creator"}.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
         <p className="text-[11px] text-neutral-500 mt-0.5">
           {total} concepts · {used} used · {available} available
