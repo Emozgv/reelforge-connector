@@ -10,13 +10,11 @@ function greeting(): string {
   return "Good evening";
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
+function StatusStripItem({ label, value, last }: { label: string; value: number; last?: boolean }) {
   return (
-    <div className="rounded-xl surface-panel p-4">
-      <span className="text-[10.5px] tracking-wide uppercase text-neutral-500">{label}</span>
-      <p className={["mt-1.5 text-[26px] font-serif", accent ? "text-[#e8c896]" : "text-neutral-50"].join(" ")}>
-        {value}
-      </p>
+    <div className={["flex-1 px-5 py-3.5", !last && "border-r border-white/[0.06]"].join(" ")}>
+      <span className="text-[10px] tracking-wide uppercase text-neutral-500">{label}</span>
+      <p className="mt-1 text-[19px] font-serif text-neutral-100 tabular-nums">{value}</p>
     </div>
   );
 }
@@ -49,21 +47,97 @@ export function DashboardPage({
   // rather than absent, per the product vision doc.
   const usagePreview = { used: Math.min(savedTotal, 60), total: 60, label: "Growth" };
 
+  const firstName = userName ? (userName.includes("@") ? userName.split("@")[0] : userName) : "";
+
+  // The hero leads with whichever single number is most true right now —
+  // never a wall of equal-weight stats. Attention beats production beats
+  // a quiet "you're set up" read.
+  const heroFocus =
+    needsAttention.length > 0
+      ? {
+          value: needsAttention.length,
+          label: needsAttention.length === 1 ? "submission needs you" : "submissions need you",
+          accent: true,
+          pulse: true,
+        }
+      : activeSubmissions.length > 0
+        ? {
+            value: activeSubmissions.length,
+            label: activeSubmissions.length === 1 ? "reel in production" : "reels in production",
+            accent: false,
+            pulse: false,
+          }
+        : {
+            value: savedTotal,
+            label: savedTotal === 1 ? "concept saved, ready to brief" : "concepts saved, ready to brief",
+            accent: false,
+            pulse: false,
+          };
+
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-[1160px] mx-auto px-8 pt-10 pb-8">
-        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#c99a5f]/75 font-medium">Dashboard</span>
-        <h1 className="mt-1 text-[26px] font-serif font-medium text-neutral-50">
-          {greeting()}
-          {userName ? `, ${userName.includes("@") ? userName.split("@")[0] : userName}` : ""}
-        </h1>
-        <p className="mt-1 text-[13px] text-neutral-500">Here's where everything stands right now.</p>
+      {/* hero — dominant, full-bleed focus band, shared visual language with the Creativity Hub */}
+      <div className="relative overflow-hidden px-8 xl:px-12 pt-12 pb-10">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: "radial-gradient(760px 360px at 14% -25%, rgba(215,164,99,0.14), transparent 62%)",
+          }}
+        />
 
-        <div className="mt-7 grid grid-cols-4 gap-3">
-          <StatCard label="Creators" value={creators.length} />
-          <StatCard label="Saved concepts" value={savedTotal} />
-          <StatCard label="In production" value={activeSubmissions.length} accent={activeSubmissions.length > 0} />
-          <StatCard label="Delivered" value={finishedCount} />
+        <div className="relative z-10 max-w-[1160px] mx-auto flex items-end justify-between gap-8 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#d7a463]/60" />
+              <span className="text-[11px] tracking-[0.22em] uppercase text-[#d7a463]/85 font-medium">
+                Dashboard
+              </span>
+            </div>
+            <h1 className="text-[36px] leading-[1.1] font-serif font-medium text-neutral-50">
+              {greeting()}
+              {firstName && (
+                <>
+                  , <span className="text-gradient-warm">{firstName}</span>
+                </>
+              )}
+            </h1>
+            <p className="mt-2.5 text-[13.5px] text-neutral-500 max-w-md">
+              Here's where everything stands right now.
+            </p>
+            <button
+              onClick={onOpenHub}
+              className="mt-6 inline-flex items-center gap-2 h-10 px-4 rounded-full bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 press-feedback"
+            >
+              <Sparkles size={14} />
+              Find your next concept
+            </button>
+          </div>
+
+          <div className="shrink-0 text-right">
+            <p
+              className={[
+                "text-[58px] leading-none font-serif font-medium tabular-nums",
+                heroFocus.accent ? "text-[#e8c896]" : "text-neutral-50",
+              ].join(" ")}
+            >
+              {heroFocus.value}
+            </p>
+            <p className="mt-2 text-[12px] text-neutral-400 flex items-center justify-end gap-1.5">
+              {heroFocus.pulse && <span className="w-1.5 h-1.5 rounded-full bg-[#e8c896] animate-pulse" />}
+              {heroFocus.label}
+            </p>
+          </div>
+        </div>
+
+        <div className="shimmer-divider absolute bottom-0 left-0 right-0" />
+      </div>
+
+      <div className="max-w-[1160px] mx-auto px-8 pt-7 pb-8">
+        <div className="rounded-xl surface-panel-strong flex overflow-hidden">
+          <StatusStripItem label="Creators" value={creators.length} />
+          <StatusStripItem label="Saved concepts" value={savedTotal} />
+          <StatusStripItem label="In production" value={activeSubmissions.length} />
+          <StatusStripItem label="Delivered" value={finishedCount} last />
         </div>
 
         <div className="mt-6 grid grid-cols-[1fr_300px] gap-5 items-start">
@@ -121,19 +195,6 @@ export function DashboardPage({
                 </div>
               )}
             </div>
-
-            <button
-              onClick={onOpenHub}
-              className="w-full rounded-xl border border-white/[0.07] bg-white/[0.015] hover:border-[#d7a463]/30 hover:bg-[#d7a463]/[0.04] transition-colors duration-150 p-4 flex items-center gap-3 text-left"
-            >
-              <div className="w-9 h-9 rounded-lg bg-[#c99a5f]/15 flex items-center justify-center shrink-0">
-                <Sparkles size={15} className="text-[#ddb87e]" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium text-neutral-100">Find your next concept</p>
-                <p className="text-[11.5px] text-neutral-500">Open the Creativity Hub to keep researching.</p>
-              </div>
-            </button>
           </div>
 
           <div className="space-y-4">
