@@ -84,6 +84,23 @@ export function DashboardPage({
             background: "radial-gradient(760px 360px at 14% -25%, rgba(215,164,99,0.14), transparent 62%)",
           }}
         />
+        {/* Oversized brand watermark — quiet "this is a real, established product"
+            signal, purely decorative, never competes with the foreground text. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -top-16 w-[420px] h-[420px] opacity-[0.05]"
+          style={{
+            WebkitMaskImage: "url(/rf-mark.png)",
+            maskImage: "url(/rf-mark.png)",
+            WebkitMaskSize: "contain",
+            maskSize: "contain",
+            WebkitMaskRepeat: "no-repeat",
+            maskRepeat: "no-repeat",
+            WebkitMaskPosition: "center",
+            maskPosition: "center",
+            background: "linear-gradient(135deg, #e8c896, #c99a5f)",
+          }}
+        />
 
         <div className="relative z-10 max-w-[1160px] mx-auto flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
@@ -104,13 +121,40 @@ export function DashboardPage({
             <p className="mt-2.5 text-[13.5px] text-neutral-500 max-w-md">
               Here's where everything stands right now.
             </p>
-            <button
-              onClick={onOpenHub}
-              className="mt-6 inline-flex items-center gap-2 h-10 px-4 rounded-full bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 press-feedback"
-            >
-              <Sparkles size={14} />
-              Find your next concept
-            </button>
+
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                onClick={onOpenHub}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 press-feedback"
+              >
+                <Sparkles size={14} />
+                Find your next concept
+              </button>
+
+              {creators.length > 0 && (
+                <button
+                  onClick={() => onOpenCreator(creators[0].id)}
+                  className="flex items-center gap-2.5 h-10 pl-1.5 pr-3.5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors duration-150"
+                >
+                  <div className="flex items-center -space-x-2.5">
+                    {creators.slice(0, 5).map((c) => (
+                      <div
+                        key={c.id}
+                        className="w-7 h-7 rounded-full ring-2 ring-[#0c0c0e] shrink-0 overflow-hidden"
+                        style={c.profileImage ? undefined : { background: c.avatarColor }}
+                      >
+                        {c.profileImage && (
+                          <img src={c.profileImage} alt={c.name} className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-[12px] text-neutral-300">
+                    {creators.length} creator{creators.length === 1 ? "" : "s"}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="shrink-0 text-right">
