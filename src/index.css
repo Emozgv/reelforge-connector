@@ -188,8 +188,7 @@ html[data-tab-hidden="true"] .star-twinkle,
 html[data-tab-hidden="true"] .shooting-star-instance,
 html[data-tab-hidden="true"] .starfield-drift,
 html[data-tab-hidden="true"] .dust-particle,
-html[data-tab-hidden="true"] .hero-photo-layer,
-html[data-tab-hidden="true"] .hero-glow-breathe {
+html[data-tab-hidden="true"] .hero-photo-layer {
   animation-play-state: paused !important;
 }
 @keyframes headline-drift {
@@ -339,15 +338,4 @@ html[data-tab-hidden="true"] .hero-glow-breathe {
 @keyframes hero-photo-drift {
   0%, 100% { transform: scale(1.05) translate(0, 0); }
   50% { transform: scale(1.08) translate(-1%, -0.6%); }
-}
-
-/* the warm horizon glow slowly breathes — a quiet pulse, not a strobe */
-@media (prefers-reduced-motion: no-preference) {
-  .hero-glow-breathe {
-    animation: glow-breathe 11s ease-in-out infinite;
-  }
-}
-@keyframes glow-breathe {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
 }

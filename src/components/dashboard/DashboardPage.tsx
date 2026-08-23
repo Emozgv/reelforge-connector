@@ -153,9 +153,11 @@ export function DashboardPage({
           }}
         />
         <div className="pointer-events-none absolute inset-0 bg-black/35" />
+        {/* the photo's own horizon glow reads as too big/blob-like at this crop —
+            darken it back down to a restrained hint instead of a visible cloud */}
         <div
-          className="hero-glow-breathe pointer-events-none absolute inset-0"
-          style={{ background: "radial-gradient(640px 260px at 82% 96%, rgba(224,164,79,0.35), transparent 70%)" }}
+          className="pointer-events-none absolute inset-0"
+          style={{ background: "radial-gradient(680px 320px at 82% 96%, rgba(2,5,8,0.6), transparent 72%)" }}
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#020508]" />
         <StarfieldBackground starCount={70} dustCount={10} />
