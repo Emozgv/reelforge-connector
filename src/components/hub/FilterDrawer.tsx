@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { CONTENT_STYLES } from "../../data/mockData";
 import { DEFAULT_FILTERS, type HubFilters } from "./filterTypes";
 
@@ -15,7 +15,7 @@ function Section({
   return (
     <div>
       <div className="flex items-baseline gap-1.5 mb-2.5">
-        <span className="text-[10.5px] tracking-wide uppercase text-neutral-500">{label}</span>
+        <span className="text-[10.5px] tracking-[0.08em] uppercase text-neutral-500 font-medium">{label}</span>
         {helper && <span className="text-[10.5px] text-neutral-600 italic">{helper}</span>}
       </div>
       <div className="flex flex-wrap gap-1.5">{children}</div>
@@ -36,12 +36,13 @@ function Chip({
     <button
       onClick={onClick}
       className={[
-        "text-[12px] px-2.5 py-1.5 rounded-lg border transition-colors duration-150",
+        "flex items-center gap-1 text-[12px] pl-2.5 pr-3 py-[7px] rounded-full border transition-all duration-200 ease-out",
         active
-          ? "border-[#d7a463]/45 bg-[#d7a463]/14 text-[#e8c896]"
-          : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.05]",
+          ? "border-[#d7a463]/50 bg-[#d7a463]/[0.14] text-[#e8c896] shadow-[0_0_0_1px_rgba(215,164,99,0.08)]"
+          : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-white/[0.16] hover:bg-white/[0.04]",
       ].join(" ")}
     >
+      {active && <Check size={11} strokeWidth={2.5} />}
       {children}
     </button>
   );
@@ -78,23 +79,24 @@ export function FilterDrawer({
       <div
         onClick={onClose}
         className={[
-          "fixed inset-0 z-30 bg-black/70 backdrop-blur-[2px] transition-opacity duration-300",
+          "fixed inset-0 z-30 bg-black/75 backdrop-blur-[6px] transition-opacity duration-300 ease-out",
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
         ].join(" ")}
       />
 
       <div
         className={[
-          "fixed left-0 right-0 bottom-0 z-40 bg-[#131315] border-t border-white/[0.08] shadow-[0_-20px_50px_-20px_rgba(0,0,0,0.6)] transition-transform duration-300 ease-out flex flex-col",
-          "rounded-t-[20px] max-h-[76vh]",
-          open ? "translate-y-0" : "translate-y-full",
+          "fixed left-0 right-0 bottom-0 z-40 bg-[#131315]/98 backdrop-blur-2xl border-t border-white/[0.08] shadow-[0_-24px_60px_-16px_rgba(0,0,0,0.7)] flex flex-col",
+          "rounded-t-[24px] max-h-[76vh]",
+          "transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.19,1,0.22,1)]",
+          open ? "translate-y-0 opacity-100" : "translate-y-[12px] opacity-0 pointer-events-none",
         ].join(" ")}
       >
-        <div className="shimmer-divider absolute -top-px left-0 right-0" />
+        <div className="pointer-events-none absolute -top-px left-1/2 -translate-x-1/2 w-16 h-1 rounded-full bg-white/[0.14]" />
 
         <div className="flex items-center justify-between px-8 h-16 border-b border-white/[0.07] shrink-0">
           <div>
-            <span className="text-[15px] font-serif font-medium text-neutral-50">Refine results</span>
+            <span className="text-[19px] font-serif text-neutral-50">Refine results</span>
           </div>
           <div className="flex items-center gap-4">
             <button
@@ -263,13 +265,13 @@ export function FilterDrawer({
         <div className="flex items-center justify-end gap-3 px-8 h-16 border-t border-white/[0.07] shrink-0">
           <button
             onClick={() => setDraft(DEFAULT_FILTERS)}
-            className="h-9 px-4 rounded-lg text-[12.5px] text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05] transition-colors duration-150"
+            className="h-9 px-4 rounded-full text-[12.5px] text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05] transition-colors duration-150"
           >
             Reset
           </button>
           <button
             onClick={apply}
-            className="h-9 px-5 rounded-lg bg-[#d7a463] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors duration-150"
+            className="h-9 px-5 rounded-full bg-[#d7a463] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors duration-150"
           >
             Apply Filters
           </button>
