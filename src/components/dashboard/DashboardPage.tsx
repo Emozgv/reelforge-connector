@@ -203,7 +203,12 @@ export function DashboardPage({
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-8 pt-7 pb-8">
+      <div className="relative max-w-[1200px] mx-auto px-8 pt-7 pb-8">
+        {/* a few faint stars bleeding down from the hero so this gap reads as
+            the same night sky continuing, not a hard cut to flat dark */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 overflow-hidden -z-10">
+          <StarfieldBackground starCount={20} shootingStars={false} />
+        </div>
         {needsAttention.length > 0 && (
           <div className="mb-5 rounded-xl border border-[#D39448]/25 bg-[#D39448]/[0.06] p-4">
             <div className="flex items-center gap-1.5 mb-2.5">

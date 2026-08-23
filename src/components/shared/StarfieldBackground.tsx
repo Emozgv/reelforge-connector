@@ -61,11 +61,20 @@ function makeShootingStar(overrides?: Partial<Pick<ShootingStar, "top" | "left" 
 // rather than one fixed path repeating on a fixed interval. Everything is
 // cheap CSS opacity/transform, paused with other ambient animations when the
 // tab is hidden (see index.css).
-export function StarfieldBackground({ starCount = 70, dustCount = 0 }: { starCount?: number; dustCount?: number }) {
+export function StarfieldBackground({
+  starCount = 70,
+  dustCount = 0,
+  shootingStars: shootingStarsEnabled = true,
+}: {
+  starCount?: number;
+  dustCount?: number;
+  shootingStars?: boolean;
+}) {
   const [shootingStars, setShootingStars] = useState<ShootingStar[]>([]);
   const cleanupTimeouts = useRef<number[]>([]);
 
   useEffect(() => {
+    if (!shootingStarsEnabled) return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
 
     let nextSpawnTimeout: number;
@@ -113,7 +122,7 @@ export function StarfieldBackground({ starCount = 70, dustCount = 0 }: { starCou
       cleanupTimeouts.current.forEach((id) => window.clearTimeout(id));
       cleanupTimeouts.current = [];
     };
-  }, []);
+  }, [shootingStarsEnabled]);
 
   const stars = useMemo<Star[]>(() => {
     // Deterministic per mount, not per render — a plain seeded-ish spread is
