@@ -134,6 +134,21 @@ body {
     animation: headline-drift 20s ease-in-out infinite;
   }
 }
+
+/* Every continuous/infinite decorative animation in the app (hero rail drift,
+   chip idle drift, shimmer dividers, the headline sweep above) freezes the
+   instant the tab is backgrounded — toggled by the visibilitychange listener
+   in App.tsx. Infinite CSS animations otherwise keep compositing even when
+   nobody can see them, which is real, avoidable battery/heat cost. Scoped to
+   just the infinite/ambient animations, never the one-shot entrance
+   animations (fade-in/rise-in) — pausing those mid-flight would freeze
+   content at opacity:0 forever. */
+html[data-tab-hidden="true"] .animate-chip-drift,
+html[data-tab-hidden="true"] .shimmer-divider,
+html[data-tab-hidden="true"] .text-gradient-warm,
+html[data-tab-hidden="true"] .rail-track {
+  animation-play-state: paused !important;
+}
 @keyframes headline-drift {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }

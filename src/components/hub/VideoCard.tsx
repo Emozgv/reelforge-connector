@@ -58,8 +58,10 @@ export function VideoCard({
         </div>
       </div>
 
-      {/* right quick-action rail — hover only */}
-      <div className="absolute top-11 right-2.5 flex flex-col gap-1.5 translate-x-3 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
+      {/* right quick-action rail — hover only. One shared blurred backdrop
+          instead of one per button — same look, a quarter of the compositing
+          cost when a grid of these is on screen. */}
+      <div className="absolute top-11 right-2.5 flex flex-col gap-1.5 p-1 rounded-full bg-black/45 backdrop-blur-md border border-white/10 translate-x-3 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -67,10 +69,8 @@ export function VideoCard({
           }}
           title={video.saved ? "Unsave" : "Save"}
           className={[
-            "w-7 h-7 rounded-full flex items-center justify-center border backdrop-blur-md transition-colors",
-            video.saved
-              ? "bg-[#d7a463] border-[#d7a463] text-[#0a0a0c]"
-              : "bg-black/45 border-white/10 text-white hover:bg-black/65",
+            "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+            video.saved ? "bg-[#d7a463] text-[#0a0a0c]" : "text-white hover:bg-white/15",
           ].join(" ")}
         >
           <Bookmark size={12.5} fill={video.saved ? "currentColor" : "none"} strokeWidth={2} />
@@ -78,7 +78,7 @@ export function VideoCard({
         <button
           onClick={(e) => e.stopPropagation()}
           title="Find similar"
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-black/45 border border-white/10 text-white backdrop-blur-md hover:bg-black/65 transition-colors"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors"
         >
           <Sparkles size={12.5} strokeWidth={2} />
         </button>
@@ -88,14 +88,14 @@ export function VideoCard({
             onAddToCollection?.(video);
           }}
           title="Add to collection"
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-black/45 border border-white/10 text-white backdrop-blur-md hover:bg-black/65 transition-colors"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors"
         >
           <FolderPlus size={12.5} strokeWidth={2} />
         </button>
         <button
           onClick={(e) => e.stopPropagation()}
           title="Open source"
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-black/45 border border-white/10 text-white backdrop-blur-md hover:bg-black/65 transition-colors"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors"
         >
           <ExternalLink size={12.5} strokeWidth={2} />
         </button>

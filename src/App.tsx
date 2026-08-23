@@ -15,8 +15,10 @@ import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
 import { useWorkspace } from "./state/useWorkspace";
 import { useActivityFeed } from "./state/useActivityFeed";
+import { usePauseAnimationsWhenHidden } from "./state/usePauseAnimationsWhenHidden";
 
 function App() {
+  usePauseAnimationsWhenHidden();
   const [page, setPage] = useState<Page>("dashboard");
   const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
   const [openCreatorId, setOpenCreatorId] = useState<string | null>(null);

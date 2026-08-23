@@ -22,7 +22,7 @@ function Column({
   return (
     <div className="relative w-11 h-full overflow-hidden">
       <div
-        className="absolute inset-x-0 top-0 flex flex-col gap-3"
+        className="rail-track absolute inset-x-0 top-0 flex flex-col gap-3"
         style={{
           animation: `rail-scroll ${duration}s linear infinite`,
           animationDirection: reverse ? "reverse" : "normal",
