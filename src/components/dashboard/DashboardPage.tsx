@@ -3,7 +3,6 @@ import type { Collection, Creator, WorkspacePackage } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import { computeUsageStats } from "../../lib/usageStats";
 import { formatRelativeTime } from "../../lib/relativeTime";
-import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 // Local time of the person actually looking at the screen — already
 // naturally "session aware" without any extra plumbing.
@@ -15,40 +14,25 @@ function greeting(): string {
   return "Good evening";
 }
 
-// Soft, atmospheric horizon — warm haze + gently rolling silhouette built
-// entirely from blurred radial shapes (no hard edges, no literal mountain
-// peaks) so it reads as depth and mood rather than a drawn landscape.
-function HeroHorizon() {
+// A purely decorative curve — never tied to real usage numbers, it's the
+// same visual flourish for every workspace. The real number lives in the
+// progress bar next to it.
+function GrowthSparkline() {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] overflow-hidden">
-      <div
-        className="absolute inset-0"
-        style={{ background: "radial-gradient(1000px 340px at 82% 108%, rgba(224,164,79,0.32), transparent 68%)" }}
+    <svg viewBox="0 0 220 46" fill="none" className="absolute right-0 bottom-0 w-[62%] h-[46px] opacity-70">
+      <path
+        d="M0 36 C 14 34, 22 30, 32 32 S 48 40, 58 38 S 72 20, 84 22 S 100 34, 112 30 S 128 12, 142 16 S 158 26, 170 22 S 188 6, 200 10 S 214 4, 220 3"
+        stroke="url(#spark-grad)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
       />
-      <div
-        className="absolute bottom-[-70px] right-[-8%] w-[90%] h-[230px]"
-        style={{
-          background: "radial-gradient(closest-side, #100d10, transparent 78%)",
-          filter: "blur(34px)",
-          opacity: 0.75,
-        }}
-      />
-      <div
-        className="absolute bottom-[-46px] right-[4%] w-[56%] h-[165px]"
-        style={{
-          background: "radial-gradient(closest-side, #0a080a, transparent 80%)",
-          filter: "blur(22px)",
-          opacity: 0.85,
-        }}
-      />
-      <div
-        className="absolute bottom-[-30px] right-[24%] w-[34%] h-[110px]"
-        style={{
-          background: "radial-gradient(closest-side, #060506, transparent 82%)",
-          filter: "blur(14px)",
-        }}
-      />
-    </div>
+      <defs>
+        <linearGradient id="spark-grad" x1="0" y1="0" x2="220" y2="0">
+          <stop offset="0%" stopColor="#c99a5f" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#f0c987" stopOpacity="0.95" />
+        </linearGradient>
+      </defs>
+    </svg>
   );
 }
 
@@ -64,13 +48,13 @@ function StatChip({
   value: number;
 }) {
   return (
-    <div className="flex-1 flex items-center gap-3 px-5 py-4">
-      <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center border border-[#c99a5f]/25 bg-white/[0.015] text-[#ddb87e]">
+    <div className="flex-1 flex items-center gap-3.5 px-5 xl:px-6 py-5">
+      <div className="w-11 h-11 rounded-lg shrink-0 flex items-center justify-center border border-[#c99a5f]/25 bg-white/[0.015] text-[#ddb87e]">
         {icon}
       </div>
       <div className="min-w-0">
         <p className="text-[10px] tracking-wide uppercase text-neutral-500 truncate">{label}</p>
-        <p className="text-[20px] font-serif text-neutral-50 tabular-nums leading-tight">{value}</p>
+        <p className="text-[22px] font-serif text-neutral-50 tabular-nums leading-tight">{value}</p>
         <p className="text-[10.5px] text-neutral-600">{sublabel}</p>
       </div>
     </div>
@@ -153,42 +137,36 @@ export function DashboardPage({
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* hero — dominant, full-bleed focus band, shared visual language with the Creativity Hub */}
-      <div className="relative overflow-hidden px-8 xl:px-12 pt-14 pb-12 min-h-[440px] bg-[#07070a]">
-        <StarfieldBackground starCount={130} />
-        <HeroHorizon />
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: "radial-gradient(820px 420px at 14% -25%, rgba(224,164,79,0.13), transparent 62%)" }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: "radial-gradient(1100px 640px at 50% 0%, transparent 55%, rgba(0,0,0,0.4) 100%)" }}
-        />
-        <div className="relative z-10 max-w-[1160px] mx-auto flex items-end justify-between gap-8 flex-wrap">
+      {/* hero — a real night-sky photograph, not a CSS approximation, so the mood matches exactly */}
+      <div
+        className="relative overflow-hidden px-8 xl:px-12 pt-16 pb-12 h-[420px] xl:h-[460px] bg-[#050505]"
+        style={{
+          backgroundImage: "url(/images/dashboard-hero-sky.jpg)",
+          backgroundSize: "cover",
+          backgroundPosition: "center bottom",
+        }}
+      >
+        <div className="shooting-star" style={{ top: "18%", ["--shoot-rotate" as string]: "16deg", ["--shoot-travel" as string]: "300px" }} />
+        <div className="relative z-10 max-w-[1200px] mx-auto flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-2.5 mb-3">
+            <div className="flex items-center gap-2.5 mb-3.5">
               <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#d7a463]/60" />
               <span className="text-[11px] tracking-[0.22em] uppercase text-[#d7a463]/85 font-medium">
                 Dashboard
               </span>
             </div>
-            <h1 className="text-[36px] leading-[1.1] font-serif font-medium text-neutral-50">
+            <h1 className="text-[42px] xl:text-[46px] leading-[1.1] font-serif font-medium text-neutral-50">
               {greeting()}
-              {firstName && (
-                <>
-                  , <span className="text-gradient-warm">{firstName}</span>
-                </>
-              )}
+              {firstName && <>, {firstName}</>}
             </h1>
-            <p className="mt-2.5 text-[13.5px] text-neutral-500 max-w-md">
+            <p className="mt-2.5 text-[14px] text-neutral-400 max-w-md">
               Here's where everything stands right now.
             </p>
 
-            <div className="mt-5 flex items-center gap-3">
+            <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={onOpenHub}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 press-feedback"
+                className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-[#c99a5f] text-[#0a0a0c] text-[13px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 press-feedback"
               >
                 <Sparkles size={14} />
                 Find your next concept
@@ -197,10 +175,10 @@ export function DashboardPage({
               {collections.length > 0 && (
                 <button
                   onClick={onOpenCollections}
-                  className="flex items-center gap-2.5 h-10 pl-3.5 pr-4 rounded-full border border-white/[0.14] hover:bg-white/[0.05] transition-colors duration-150"
+                  className="flex items-center gap-2.5 h-11 pl-4 pr-5 rounded-full border border-white/[0.16] hover:bg-white/[0.05] transition-colors duration-150"
                 >
                   <FolderHeart size={14} className="text-[#ddb87e]" />
-                  <span className="text-[12px] text-neutral-300">
+                  <span className="text-[12.5px] text-neutral-300">
                     <span className="text-neutral-100 font-medium">{activeCollectionsCount}</span> active collection
                     {activeCollectionsCount === 1 ? "" : "s"}
                   </span>
@@ -211,7 +189,7 @@ export function DashboardPage({
         </div>
       </div>
 
-      <div className="max-w-[1160px] mx-auto px-8 pt-7 pb-8">
+      <div className="max-w-[1200px] mx-auto px-8 pt-7 pb-8">
         {needsAttention.length > 0 && (
           <div className="mb-5 rounded-xl border border-[#c99a5f]/25 bg-[#c99a5f]/[0.06] p-4">
             <div className="flex items-center gap-1.5 mb-2.5">
@@ -286,7 +264,7 @@ export function DashboardPage({
             )}
           </div>
 
-          <div className="rounded-xl surface-panel p-4">
+          <div className="rounded-xl surface-panel p-4 relative overflow-hidden">
             <PanelHeader title={workspacePackage ? `${workspacePackage.planName} plan` : "Plan"} onViewAll={onOpenSettings} cta="View plan" />
             {usage && workspacePackage ? (
               <>
@@ -294,7 +272,7 @@ export function DashboardPage({
                   <span className="text-[19px] font-serif text-neutral-50">{usage.reelsUsed}</span>
                   <span className="text-neutral-500"> / {usage.reelsTotal} reels used</span>
                 </p>
-                <div className="mt-2.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="relative mt-2.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-[#c99a5f] to-[#e8c896]"
                     style={{ width: `${Math.min(100, (usage.reelsUsed / usage.reelsTotal) * 100)}%` }}
@@ -304,6 +282,7 @@ export function DashboardPage({
                   {usage.regenerationsUsed} / {usage.regenerationsTotal} regenerations ·{" "}
                   {usage.creatorSetupsUsed} / {usage.creatorSetupsTotal} creator setups
                 </p>
+                <GrowthSparkline />
               </>
             ) : (
               <p className="text-[12px] text-neutral-500">No active plan yet.</p>
