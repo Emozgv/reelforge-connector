@@ -6,6 +6,7 @@ import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { CreatorSelector } from "./CreatorSelector";
 import { FilterDrawer } from "./FilterDrawer";
 import { HeroReelRails } from "./HeroReelRail";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { RotatingMicrocopy } from "./RotatingMicrocopy";
 import { SavedCollectionsPopover } from "./SavedCollectionsPopover";
 import { SavePanel } from "./SavePanel";
@@ -139,12 +140,13 @@ export function CreativityHubPage({
   return (
     <div className="h-full overflow-y-auto">
       {/* hero */}
-      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12">
+      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12 bg-[#08080a]">
+        <StarfieldBackground starCount={26} />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(720px 340px at 50% -20%, rgba(215,164,99,0.15), transparent 65%)",
+              "radial-gradient(720px 340px at 50% -20%, rgba(224,164,79,0.15), transparent 65%)",
           }}
         />
         <HeroReelRails />

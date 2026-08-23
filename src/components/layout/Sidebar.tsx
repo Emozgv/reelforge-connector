@@ -166,15 +166,12 @@ export function Sidebar({
                       onNavigate(item.id);
                     }}
                     className={[
-                      "relative w-full flex items-center gap-2.5 xl:gap-3 px-2.5 xl:px-3 py-[7px] xl:py-2 rounded-md text-[12.5px] xl:text-[13.5px] transition-colors duration-150",
+                      "relative w-full flex items-center gap-2.5 xl:gap-3 px-2.5 xl:px-3 py-[7px] xl:py-2 rounded-md text-[12.5px] xl:text-[13.5px] transition-colors duration-150 border",
                       active
-                        ? "text-neutral-100 bg-white/[0.05]"
-                        : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.035]",
+                        ? "text-neutral-100 bg-[#c99a5f]/[0.09] border-[#c99a5f]/30"
+                        : "text-neutral-400 border-transparent hover:text-neutral-100 hover:bg-white/[0.035]",
                     ].join(" ")}
                   >
-                    {active && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-3.5 w-[2px] rounded-full bg-[#c99a5f]" />
-                    )}
                     <span className={active ? "text-[#ddb87e]" : ""}>{item.icon}</span>
                     {item.label}
                   </button>

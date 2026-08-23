@@ -161,7 +161,9 @@ body {
 html[data-tab-hidden="true"] .animate-chip-drift,
 html[data-tab-hidden="true"] .shimmer-divider,
 html[data-tab-hidden="true"] .text-gradient-warm,
-html[data-tab-hidden="true"] .rail-track {
+html[data-tab-hidden="true"] .rail-track,
+html[data-tab-hidden="true"] .star-twinkle,
+html[data-tab-hidden="true"] .shooting-star {
   animation-play-state: paused !important;
 }
 @keyframes headline-drift {
@@ -210,4 +212,55 @@ html[data-tab-hidden="true"] .rail-track {
 }
 .animate-chip-drift {
   animation: chip-drift 5s ease-in-out infinite;
+}
+
+/* ---- cinematic starfield — shared hero backdrop (Dashboard, Login, Hub) ----
+   Each star twinkles on its own randomized duration/delay (set inline by
+   StarfieldBackground) so nothing pulses in unison. One shooting star drifts
+   through on a slow ~16s cycle, visible for only a sliver of it — calm and
+   occasional, not a flashy space animation. */
+.star-twinkle {
+  opacity: 0.15;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .star-twinkle {
+    animation-name: star-twinkle;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+}
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: var(--star-peak, 0.75); }
+}
+
+.shooting-star {
+  position: absolute;
+  left: -6%;
+  width: 120px;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(255, 244, 230, 0.85), transparent);
+  border-radius: 999px;
+  opacity: 0;
+  transform: rotate(var(--shoot-rotate, 16deg));
+  transform-origin: left center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .shooting-star {
+    animation: shooting-star-cycle 16s ease-in infinite;
+  }
+}
+@keyframes shooting-star-cycle {
+  0%, 88% { opacity: 0; transform: translate(0, 0) rotate(var(--shoot-rotate, 16deg)); }
+  90% { opacity: 0.9; }
+  96% {
+    opacity: 0;
+    transform: translate(var(--shoot-travel, 300px), calc(var(--shoot-travel, 300px) * 0.36))
+      rotate(var(--shoot-rotate, 16deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--shoot-travel, 300px), calc(var(--shoot-travel, 300px) * 0.36))
+      rotate(var(--shoot-rotate, 16deg));
+  }
 }

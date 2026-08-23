@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 export function LoginPage({
   onSignIn,
@@ -26,12 +27,13 @@ export function LoginPage({
   }
 
   return (
-    <div className="relative flex h-screen w-screen items-center justify-center bg-[#0b0b0d] overflow-hidden">
+    <div className="relative flex h-screen w-screen items-center justify-center bg-[#08080a] overflow-hidden">
+      <StarfieldBackground starCount={55} />
       <div
         className="pointer-events-none fixed inset-0"
         style={{
           background:
-            "radial-gradient(900px 460px at 50% -10%, rgba(201,154,95,0.08), transparent 62%)",
+            "radial-gradient(900px 460px at 50% -10%, rgba(224,164,79,0.10), transparent 62%)",
         }}
       />
       <div className="grain-overlay" />

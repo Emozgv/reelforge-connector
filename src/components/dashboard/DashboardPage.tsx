@@ -1,8 +1,11 @@
-import { Clock, FolderHeart, Inbox, PackageCheck, Sparkles, Users } from "lucide-react";
+import { Clapperboard, Clock, FolderHeart, Inbox, PackageCheck, Sparkles, Users } from "lucide-react";
 import type { Collection, Creator, WorkspacePackage } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import { computeUsageStats } from "../../lib/usageStats";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 
+// Local time of the person actually looking at the screen — already
+// naturally "session aware" without any extra plumbing.
 function greeting(): string {
   const h = new Date().getHours();
   if (h < 5) return "Good night";
@@ -11,11 +14,28 @@ function greeting(): string {
   return "Good evening";
 }
 
-function StatusStripItem({ label, value, last }: { label: string; value: number; last?: boolean }) {
+function StatChip({
+  icon,
+  label,
+  sublabel,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sublabel: string;
+  value: number;
+}) {
   return (
-    <div className={["flex-1 px-5 py-3.5", !last && "border-r border-white/[0.06]"].join(" ")}>
-      <span className="text-[10px] tracking-wide uppercase text-neutral-500">{label}</span>
-      <p className="mt-1 text-[19px] font-serif text-neutral-100 tabular-nums">{value}</p>
+    <div className="flex-1 flex items-center gap-3 px-5 py-4">
+      <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center bg-[#c99a5f]/[0.12] text-[#ddb87e]">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[18px] font-serif text-neutral-50 tabular-nums leading-tight">{value}</p>
+        <p className="text-[11px] text-neutral-500 truncate">
+          {label} <span className="text-neutral-600">· {sublabel}</span>
+        </p>
+      </div>
     </div>
   );
 }
@@ -55,11 +75,13 @@ export function DashboardPage({
   return (
     <div className="h-full overflow-y-auto">
       {/* hero — dominant, full-bleed focus band, shared visual language with the Creativity Hub */}
-      <div className="relative overflow-hidden px-8 xl:px-12 pt-12 pb-10">
+      <div className="relative overflow-hidden px-8 xl:px-12 pt-12 pb-10 bg-[#08080a]">
+        <StarfieldBackground starCount={60} />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
-            background: "radial-gradient(760px 360px at 14% -25%, rgba(215,164,99,0.14), transparent 62%)",
+            background:
+              "radial-gradient(820px 420px at 18% -20%, rgba(224,164,79,0.16), transparent 60%), radial-gradient(700px 260px at 50% 115%, rgba(224,164,79,0.10), transparent 65%)",
           }}
         />
         <div className="relative z-10 max-w-[1160px] mx-auto flex items-end justify-between gap-8 flex-wrap">
@@ -111,11 +133,21 @@ export function DashboardPage({
       </div>
 
       <div className="max-w-[1160px] mx-auto px-8 pt-7 pb-8">
-        <div className="rounded-xl surface-panel-strong flex overflow-hidden">
-          <StatusStripItem label="Creators" value={creators.length} />
-          <StatusStripItem label="Saved concepts" value={savedTotal} />
-          <StatusStripItem label="In production" value={activeSubmissions.length} />
-          <StatusStripItem label="Delivered" value={finishedCount} last />
+        <div className="rounded-xl surface-panel-strong flex divide-x divide-white/[0.06] overflow-hidden">
+          <StatChip icon={<Users size={16} />} label="Creators" sublabel="active" value={creators.length} />
+          <StatChip icon={<Sparkles size={16} />} label="Saved concepts" sublabel="concepts" value={savedTotal} />
+          <StatChip
+            icon={<Clapperboard size={16} />}
+            label="In production"
+            sublabel="projects"
+            value={activeSubmissions.length}
+          />
+          <StatChip
+            icon={<PackageCheck size={16} />}
+            label="Delivered"
+            sublabel="completed"
+            value={finishedCount}
+          />
         </div>
 
         <div className="mt-6 grid grid-cols-[1fr_300px] gap-5 items-start">
