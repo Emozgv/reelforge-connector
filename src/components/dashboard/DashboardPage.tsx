@@ -140,14 +140,14 @@ export function DashboardPage({
     <div className="h-full overflow-y-auto">
       {/* hero — a real night-sky photograph, not a CSS approximation, so the mood matches exactly */}
       <div
-        className="relative overflow-hidden px-8 xl:px-12 pt-10 pb-9 h-[280px] xl:h-[300px] bg-[#050505]"
+        className="relative overflow-hidden px-8 xl:px-12 pt-10 pb-9 h-[420px] xl:h-[450px] bg-[#050505]"
         style={{
           backgroundImage: "url(/images/dashboard-hero-sky.jpg)",
           backgroundSize: "cover",
-          backgroundPosition: "center 28%",
+          backgroundPosition: "center bottom",
         }}
       >
-        <div className="pointer-events-none absolute inset-0 bg-black/35" />
+        <div className="pointer-events-none absolute inset-0 bg-black/25" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#0c0c0e]" />
         <StarfieldBackground starCount={55} />
         <div className="relative z-10 max-w-[1200px] mx-auto flex items-end justify-between gap-8 flex-wrap">
