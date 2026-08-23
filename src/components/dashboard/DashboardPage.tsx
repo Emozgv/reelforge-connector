@@ -52,31 +52,6 @@ export function DashboardPage({
 
   const firstName = userName ? (userName.includes("@") ? userName.split("@")[0] : userName) : "";
 
-  // The hero leads with whichever single number is most true right now —
-  // never a wall of equal-weight stats. Attention beats production beats
-  // a quiet "you're set up" read.
-  const heroFocus =
-    needsAttention.length > 0
-      ? {
-          value: needsAttention.length,
-          label: needsAttention.length === 1 ? "submission needs you" : "submissions need you",
-          accent: true,
-          pulse: true,
-        }
-      : activeSubmissions.length > 0
-        ? {
-            value: activeSubmissions.length,
-            label: activeSubmissions.length === 1 ? "reel in production" : "reels in production",
-            accent: false,
-            pulse: false,
-          }
-        : {
-            value: savedTotal,
-            label: savedTotal === 1 ? "concept saved, ready to brief" : "concepts saved, ready to brief",
-            accent: false,
-            pulse: false,
-          };
-
   return (
     <div className="h-full overflow-y-auto">
       {/* hero — dominant, full-bleed focus band, shared visual language with the Creativity Hub */}
@@ -129,21 +104,6 @@ export function DashboardPage({
                 </button>
               )}
             </div>
-          </div>
-
-          <div className="shrink-0 text-right">
-            <p
-              className={[
-                "text-[58px] leading-none font-serif font-medium tabular-nums",
-                heroFocus.accent ? "text-[#e8c896]" : "text-neutral-50",
-              ].join(" ")}
-            >
-              {heroFocus.value}
-            </p>
-            <p className="mt-2 text-[12px] text-neutral-400 flex items-center justify-end gap-1.5">
-              {heroFocus.pulse && <span className="w-1.5 h-1.5 rounded-full bg-[#e8c896] animate-pulse" />}
-              {heroFocus.label}
-            </p>
           </div>
         </div>
 
