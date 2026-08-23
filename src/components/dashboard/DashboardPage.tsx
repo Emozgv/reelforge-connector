@@ -140,7 +140,7 @@ export function DashboardPage({
     <div className="h-full overflow-y-auto">
       {/* hero — a real night-sky photograph, not a CSS approximation, so the mood matches exactly */}
       <div
-        className="relative overflow-hidden px-8 xl:px-12 pt-10 pb-9 h-[280px] xl:h-[300px] bg-[#020508]"
+        className="relative overflow-hidden px-8 xl:px-12 pt-14 xl:pt-16 pb-6 h-[255px] xl:h-[270px] bg-[#020508]"
         style={{
           backgroundImage: "url(/images/dashboard-hero-sky.jpg)",
           backgroundSize: "cover",
@@ -178,7 +178,7 @@ export function DashboardPage({
               {collections.length > 0 && (
                 <button
                   onClick={onOpenCollections}
-                  className="flex items-center gap-2.5 h-11 pl-4 pr-5 rounded-full border border-white/[0.16] hover:bg-white/[0.05] transition-colors duration-150"
+                  className="flex items-center gap-2.5 h-11 pl-4 pr-5 rounded-full surface-panel hover:bg-white/[0.06] transition-colors duration-150"
                 >
                   <FolderHeart size={14} className="text-[#D39448]" />
                   <span className="text-[12.5px] text-neutral-300">
