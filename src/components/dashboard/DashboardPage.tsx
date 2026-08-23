@@ -15,31 +15,45 @@ function greeting(): string {
   return "Good evening";
 }
 
-// A purely decorative curve — never tied to real usage numbers, it's the
-// same visual flourish for every workspace. The real number lives in the
-// progress bar next to it. Kept short and low in the panel on purpose so it
-// never reaches up into the "N regenerations / N creator setups" text above it.
+// A purely decorative curve — never tied to real historical usage numbers
+// (we don't store daily snapshots yet), it's the same visual flourish for
+// every workspace. The real number lives in the progress bar above it. In
+// normal document flow with its own height, not overlaid on other content.
 function GrowthSparkline() {
   return (
-    <svg
-      viewBox="0 0 220 26"
-      fill="none"
-      className="absolute right-0 bottom-1 w-[56%] h-[22px] opacity-45 pointer-events-none"
-      preserveAspectRatio="none"
-    >
-      <path
-        d="M0 20 C 14 19, 22 16, 32 17 S 48 22, 58 21 S 72 13, 84 14 S 100 19, 112 17 S 128 9, 142 11 S 158 15, 170 13 S 188 6, 200 8 S 214 5, 220 4"
-        stroke="url(#spark-grad)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <defs>
-        <linearGradient id="spark-grad" x1="0" y1="0" x2="220" y2="0">
-          <stop offset="0%" stopColor="#D39448" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#D39448" stopOpacity="0.9" />
-        </linearGradient>
-      </defs>
-    </svg>
+    <div className="mt-3 h-12">
+      <svg viewBox="0 0 220 44" className="w-full h-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="spark-line" x1="0" y1="0" x2="220" y2="0">
+            <stop offset="0%" stopColor="#A97942" stopOpacity="0.75" />
+            <stop offset="100%" stopColor="#F0C987" stopOpacity="1" />
+          </linearGradient>
+          <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="44" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#D39448" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#D39448" stopOpacity="0" />
+          </linearGradient>
+          <filter id="spark-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="2.4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <path
+          d="M0 36 C 16 35, 26 31, 36 30 S 54 26, 64 24 S 82 29, 92 26 S 110 16, 122 14 S 140 20, 152 16 S 170 8, 182 6 S 204 4, 220 4 L220 44 L0 44 Z"
+          fill="url(#spark-fill)"
+        />
+        <path
+          d="M0 36 C 16 35, 26 31, 36 30 S 54 26, 64 24 S 82 29, 92 26 S 110 16, 122 14 S 140 20, 152 16 S 170 8, 182 6 S 204 4, 220 4"
+          stroke="url(#spark-line)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <circle cx="220" cy="4" r="3" fill="#F0C987" filter="url(#spark-glow)" />
+      </svg>
+    </div>
   );
 }
 
@@ -289,7 +303,7 @@ export function DashboardPage({
             )}
           </div>
 
-          <div className="rounded-xl surface-panel p-4 relative overflow-hidden">
+          <div className="rounded-xl surface-panel p-4">
             <PanelHeader title={workspacePackage ? `${workspacePackage.planName} plan` : "Plan"} onViewAll={onOpenSettings} cta="View plan" />
             {usage && workspacePackage ? (
               <>
