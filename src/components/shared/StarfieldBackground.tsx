@@ -7,6 +7,7 @@ interface Star {
   duration: number;
   delay: number;
   peak: number;
+  glow: boolean;
 }
 
 // A calm, cinematic night-sky backdrop — used behind the app's hero moments
@@ -28,15 +29,21 @@ export function StarfieldBackground({ starCount = 70 }: { starCount?: number }) 
 
   const stars = useMemo<Star[]>(() => {
     // Deterministic per mount, not per render — a plain seeded-ish spread is
-    // enough here, there's no need for a video-grid-style seeded RNG.
-    return Array.from({ length: starCount }).map(() => ({
-      left: Math.random() * 100,
-      top: Math.random() * 100,
-      size: 1 + Math.random() * 1.6,
-      duration: 3 + Math.random() * 5,
-      delay: Math.random() * 8,
-      peak: 0.45 + Math.random() * 0.5,
-    }));
+    // enough here, there's no need for a video-grid-style seeded RNG. Most
+    // stars stay tiny and faint (fine sky texture); a small minority are
+    // slightly larger "hero" points with a soft bloom, for a little depth.
+    return Array.from({ length: starCount }).map(() => {
+      const isAccent = Math.random() < 0.12;
+      return {
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        size: isAccent ? 1.6 + Math.random() * 0.9 : 0.6 + Math.random() * 0.7,
+        duration: 3.5 + Math.random() * 5.5,
+        delay: Math.random() * 9,
+        peak: isAccent ? 0.75 + Math.random() * 0.25 : 0.35 + Math.random() * 0.35,
+        glow: isAccent,
+      };
+    });
   }, [starCount]);
 
   return (
@@ -52,6 +59,7 @@ export function StarfieldBackground({ starCount = 70 }: { starCount?: number }) 
             height: s.size,
             animationDuration: `${s.duration}s`,
             animationDelay: `${s.delay}s`,
+            boxShadow: s.glow ? "0 0 4px 1px rgba(255,244,222,0.5)" : undefined,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ["--star-peak" as any]: s.peak,
           }}

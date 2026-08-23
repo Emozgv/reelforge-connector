@@ -27,23 +27,23 @@ const NAV_GROUPS: { label: string; items: { id: Page; label: string; icon: React
   {
     label: "Workspace",
     items: [
-      { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={15} strokeWidth={1.75} /> },
-      { id: "hub", label: "Creativity Hub", icon: <Sparkles size={15} strokeWidth={1.75} /> },
+      { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} strokeWidth={1.75} /> },
+      { id: "hub", label: "Creativity Hub", icon: <Sparkles size={16} strokeWidth={1.75} /> },
     ],
   },
   {
     label: "Content",
     items: [
-      { id: "collections", label: "Collections", icon: <FolderHeart size={15} strokeWidth={1.75} /> },
-      { id: "production", label: "Production", icon: <Clapperboard size={15} strokeWidth={1.75} /> },
-      { id: "library", label: "Library", icon: <Library size={15} strokeWidth={1.75} /> },
+      { id: "collections", label: "Collections", icon: <FolderHeart size={16} strokeWidth={1.75} /> },
+      { id: "production", label: "Production", icon: <Clapperboard size={16} strokeWidth={1.75} /> },
+      { id: "library", label: "Library", icon: <Library size={16} strokeWidth={1.75} /> },
     ],
   },
   {
     label: "Management",
     items: [
-      { id: "creators", label: "Creators", icon: <Users size={15} strokeWidth={1.75} /> },
-      { id: "settings", label: "Settings", icon: <Settings size={15} strokeWidth={1.75} /> },
+      { id: "creators", label: "Creators", icon: <Users size={16} strokeWidth={1.75} /> },
+      { id: "settings", label: "Settings", icon: <Settings size={16} strokeWidth={1.75} /> },
     ],
   },
 ];
@@ -81,11 +81,11 @@ export function Sidebar({
   }
 
   return (
-    <aside className="relative z-20 w-[212px] xl:w-[236px] 2xl:w-[260px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
-      <div className="h-14 xl:h-16 flex items-center justify-between px-4 xl:px-5 border-b border-white/[0.06]">
-        <div className="flex items-center gap-2 xl:gap-2.5">
+    <aside className="relative z-20 w-[240px] xl:w-[264px] 2xl:w-[288px] shrink-0 h-full border-r border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur-xl flex flex-col">
+      <div className="h-16 xl:h-[72px] flex items-center justify-between px-5 xl:px-6 border-b border-white/[0.06]">
+        <div className="flex items-center gap-2.5 xl:gap-3">
           <div
-            className="w-[22px] h-5 xl:w-[26px] xl:h-6 shrink-0"
+            className="w-[26px] h-6 xl:w-[30px] xl:h-7 shrink-0"
             style={{
               WebkitMaskImage: "url(/rf-mark.png)",
               maskImage: "url(/rf-mark.png)",
@@ -98,16 +98,16 @@ export function Sidebar({
               background: "linear-gradient(135deg, #e8c896, #c99a5f)",
             }}
           />
-          <span className="font-brand text-[14.5px] xl:text-[16px] text-neutral-100">ReelForge</span>
+          <span className="font-brand text-[16.5px] xl:text-[18px] text-neutral-100">ReelForge</span>
         </div>
 
         <div className="relative">
           <button
             onClick={() => setNotifOpen((v) => !v)}
-            className="relative w-7 h-7 rounded-md flex items-center justify-center text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05] transition-colors duration-150"
+            className="relative w-8 h-8 rounded-md flex items-center justify-center text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05] transition-colors duration-150"
           >
-            <Bell size={14} strokeWidth={1.75} />
-            {unread && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#d7a463]" />}
+            <Bell size={16} strokeWidth={1.75} />
+            {unread && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#d7a463]" />}
           </button>
           {notifOpen && (
             <div
@@ -149,13 +149,13 @@ export function Sidebar({
         </div>
       </div>
 
-      <nav className="flex-1 px-2.5 xl:px-3.5 py-3 xl:py-4 overflow-y-auto">
+      <nav className="flex-1 px-3 xl:px-4 py-4 xl:py-5 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => (
-          <div key={group.label} className={gi > 0 ? "mt-4" : ""}>
-            <p className="px-2.5 xl:px-3 mb-1 text-[10px] tracking-[0.08em] uppercase text-neutral-600 font-medium">
+          <div key={group.label} className={gi > 0 ? "mt-5" : ""}>
+            <p className="px-3 mb-1.5 text-[10.5px] tracking-[0.1em] uppercase text-neutral-600 font-medium">
               {group.label}
             </p>
-            <div className="space-y-px xl:space-y-0.5">
+            <div className="space-y-1">
               {group.items.map((item) => {
                 const active = item.id === page;
                 return (
@@ -166,9 +166,9 @@ export function Sidebar({
                       onNavigate(item.id);
                     }}
                     className={[
-                      "relative w-full flex items-center gap-2.5 xl:gap-3 px-2.5 xl:px-3 py-[7px] xl:py-2 rounded-md text-[12.5px] xl:text-[13.5px] transition-colors duration-150 border",
+                      "relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] xl:text-[14.5px] transition-colors duration-150 border",
                       active
-                        ? "text-neutral-100 bg-[#c99a5f]/[0.09] border-[#c99a5f]/30"
+                        ? "text-neutral-100 bg-[#c99a5f]/[0.1] border-[#c99a5f]/30"
                         : "text-neutral-400 border-transparent hover:text-neutral-100 hover:bg-white/[0.035]",
                     ].join(" ")}
                   >
@@ -182,16 +182,16 @@ export function Sidebar({
         ))}
       </nav>
 
-      <div className="p-2.5 xl:p-3.5 border-t border-white/[0.06]">
-        <div className="group flex items-center gap-2.5 xl:gap-3 px-2 xl:px-2.5 py-2 xl:py-2.5 rounded-md hover:bg-white/[0.035] transition-colors duration-150">
-          <div className="w-6 h-6 xl:w-7 xl:h-7 rounded-full bg-[#c99a5f] flex items-center justify-center text-[10.5px] xl:text-[11px] font-medium text-[#0a0a0c] shrink-0">
+      <div className="p-3.5 xl:p-4 border-t border-white/[0.06]">
+        <div className="group flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-lg hover:bg-white/[0.035] transition-colors duration-150">
+          <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-full bg-gradient-to-br from-[#e8c896] to-[#c99a5f] flex items-center justify-center text-[11.5px] xl:text-[12px] font-medium text-[#0a0a0c] shrink-0">
             {initials}
           </div>
           <div className="flex flex-col leading-tight min-w-0">
-            <span className="text-[12px] xl:text-[12.5px] text-neutral-200 truncate">
+            <span className="text-[13px] xl:text-[13.5px] text-neutral-200 truncate">
               {displayName || workspaceName || "Client workspace"}
             </span>
-            <span className="text-[10.5px] xl:text-[11px] text-neutral-500 truncate">
+            <span className="text-[11px] xl:text-[11.5px] text-neutral-500 truncate">
               {userEmail ?? "Emre"}
             </span>
           </div>
@@ -199,9 +199,9 @@ export function Sidebar({
             <button
               onClick={onSignOut}
               title="Sign out"
-              className="ml-auto shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-200 hover:bg-white/[0.06] transition-all duration-150"
+              className="ml-auto shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-200 hover:bg-white/[0.06] transition-all duration-150"
             >
-              <LogOut size={13} />
+              <LogOut size={14} />
             </button>
           )}
         </div>

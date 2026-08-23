@@ -15,28 +15,37 @@ function greeting(): string {
   return "Good evening";
 }
 
-// Distant mountain silhouette + warm horizon glow — the hero's supporting
-// backdrop layer, built from flat shapes rather than an image asset so it
-// stays crisp at any size and matches the app's existing gradient language.
+// Soft, atmospheric horizon — warm haze + gently rolling silhouette built
+// entirely from blurred radial shapes (no hard edges, no literal mountain
+// peaks) so it reads as depth and mood rather than a drawn landscape.
 function HeroHorizon() {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[230px] overflow-hidden">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] overflow-hidden">
       <div
         className="absolute inset-0"
-        style={{ background: "radial-gradient(760px 240px at 84% 100%, rgba(224,164,79,0.30), transparent 70%)" }}
+        style={{ background: "radial-gradient(1000px 340px at 82% 108%, rgba(224,164,79,0.32), transparent 68%)" }}
       />
       <div
-        className="absolute bottom-0 right-[-6%] w-[74%] h-[150px] opacity-80"
+        className="absolute bottom-[-70px] right-[-8%] w-[90%] h-[230px]"
         style={{
-          background: "linear-gradient(180deg, #0d0c0f 0%, #100c08 100%)",
-          clipPath: "polygon(0% 100%, 12% 46%, 32% 68%, 52% 24%, 76% 58%, 100% 32%, 100% 100%)",
+          background: "radial-gradient(closest-side, #100d10, transparent 78%)",
+          filter: "blur(34px)",
+          opacity: 0.75,
         }}
       />
       <div
-        className="absolute bottom-0 right-[-9%] w-[64%] h-[110px]"
+        className="absolute bottom-[-46px] right-[4%] w-[56%] h-[165px]"
         style={{
-          background: "#08070a",
-          clipPath: "polygon(0% 100%, 18% 58%, 44% 18%, 61% 46%, 83% 12%, 100% 42%, 100% 100%)",
+          background: "radial-gradient(closest-side, #0a080a, transparent 80%)",
+          filter: "blur(22px)",
+          opacity: 0.85,
+        }}
+      />
+      <div
+        className="absolute bottom-[-30px] right-[24%] w-[34%] h-[110px]"
+        style={{
+          background: "radial-gradient(closest-side, #060506, transparent 82%)",
+          filter: "blur(14px)",
         }}
       />
     </div>
@@ -145,12 +154,16 @@ export function DashboardPage({
   return (
     <div className="h-full overflow-y-auto">
       {/* hero — dominant, full-bleed focus band, shared visual language with the Creativity Hub */}
-      <div className="relative overflow-hidden px-8 xl:px-12 pt-12 pb-10 min-h-[380px] bg-[#08080a]">
-        <StarfieldBackground starCount={90} />
+      <div className="relative overflow-hidden px-8 xl:px-12 pt-14 pb-12 min-h-[440px] bg-[#07070a]">
+        <StarfieldBackground starCount={130} />
         <HeroHorizon />
         <div
           className="pointer-events-none absolute inset-0"
-          style={{ background: "radial-gradient(820px 420px at 14% -25%, rgba(224,164,79,0.14), transparent 62%)" }}
+          style={{ background: "radial-gradient(820px 420px at 14% -25%, rgba(224,164,79,0.13), transparent 62%)" }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: "radial-gradient(1100px 640px at 50% 0%, transparent 55%, rgba(0,0,0,0.4) 100%)" }}
         />
         <div className="relative z-10 max-w-[1160px] mx-auto flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
