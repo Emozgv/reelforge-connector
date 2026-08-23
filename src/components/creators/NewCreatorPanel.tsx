@@ -65,7 +65,7 @@ export function NewCreatorPanel({
                   if (e.key === "Enter") handleCreate();
                 }}
                 placeholder="e.g. Morgan Lee"
-                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus:border-[#d7a463]/40"
+                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
               />
             </div>
 
@@ -78,7 +78,7 @@ export function NewCreatorPanel({
                   if (e.key === "Enter") handleCreate();
                 }}
                 placeholder="@morganlee"
-                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus:border-[#d7a463]/40"
+                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
               />
             </div>
 
@@ -93,7 +93,7 @@ export function NewCreatorPanel({
             <button
               disabled={!name.trim() || submitting}
               onClick={handleCreate}
-              className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors"
+              className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
             >
               {submitting && <Loader2 size={14} className="animate-spin" />}
               {submitting ? "Creating..." : "Create Creator"}

@@ -63,7 +63,7 @@ export function NewCollectionPanel({
                   if (e.key === "Enter") handleCreate();
                 }}
                 placeholder="e.g. October Concepts"
-                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus:border-[#d7a463]/40"
+                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
               />
             </div>
 
@@ -95,7 +95,7 @@ export function NewCollectionPanel({
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
                 placeholder="Direction for this collection..."
-                className="mt-1.5 w-full resize-none rounded-lg surface-field px-3 py-2 text-[12px] text-neutral-300 placeholder:text-neutral-600 outline-none focus:border-[#d7a463]/40"
+                className="mt-1.5 w-full resize-none rounded-lg surface-field px-3 py-2 text-[12px] text-neutral-300 placeholder:text-neutral-600 outline-none focus-glow"
               />
             </div>
           </div>
@@ -104,7 +104,7 @@ export function NewCollectionPanel({
             <button
               disabled={!name.trim()}
               onClick={handleCreate}
-              className="w-full h-10 rounded-lg bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors"
+              className="w-full h-10 rounded-lg bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
             >
               Create Collection
             </button>

@@ -1,3 +1,4 @@
+import { FolderHeart } from "lucide-react";
 import type { CollectionConcept, ConceptStatus } from "../../types";
 import { ConceptCard } from "./ConceptCard";
 
@@ -17,6 +18,7 @@ export function ConceptGrid({
   if (concepts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-20">
+        <FolderHeart size={20} className="text-neutral-700 mb-2.5" />
         <p className="text-[13.5px] text-neutral-300">No concepts saved yet.</p>
         <p className="text-[12px] text-neutral-600 mt-1.5">
           Save Reels for this creator from the Creativity Hub to add them here.

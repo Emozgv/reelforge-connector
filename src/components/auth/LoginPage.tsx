@@ -63,7 +63,7 @@ export function LoginPage({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus:border-[#c99a5f]/40 transition-colors"
+                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
               />
             </div>
 
@@ -75,7 +75,7 @@ export function LoginPage({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus:border-[#c99a5f]/40 transition-colors"
+                className="mt-1.5 w-full h-10 rounded-lg surface-field px-3 text-[13px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
               />
             </div>
 
@@ -88,7 +88,7 @@ export function LoginPage({
             <button
               type="submit"
               disabled={submitting || !email.trim() || !password}
-              className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#c99a5f] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#ddb87e] transition-colors"
+              className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#c99a5f] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#ddb87e] transition-colors press-feedback"
             >
               {submitting && <Loader2 size={14} className="animate-spin" />}
               {submitting ? "Signing in..." : "Sign in"}

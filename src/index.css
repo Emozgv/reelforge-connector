@@ -100,6 +100,24 @@ body {
   box-shadow: 0 0 0 1px rgba(215, 164, 99, 0.35), 0 0 24px rgba(215, 164, 99, 0.12);
 }
 
+/* one consistent focus treatment for every text input/textarea in the app —
+   calm border tint + a soft outer glow, never a hard browser outline */
+.focus-glow {
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.focus-glow:focus {
+  border-color: rgba(215, 164, 99, 0.45);
+  box-shadow: 0 0 0 3px rgba(215, 164, 99, 0.1);
+}
+
+/* subtle, premium tactile feedback for primary actions — never a bounce */
+.press-feedback {
+  transition: background-color 150ms ease-out, transform 100ms ease-out, opacity 150ms ease-out;
+}
+.press-feedback:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 /* base is light/white — the bronze/gold is a narrow band that slowly sweeps
    through it, not a permanent gold tint on the whole word */
 .text-gradient-warm {

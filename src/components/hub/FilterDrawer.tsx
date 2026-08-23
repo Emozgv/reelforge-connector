@@ -271,7 +271,7 @@ export function FilterDrawer({
           </button>
           <button
             onClick={apply}
-            className="h-9 px-5 rounded-full bg-[#d7a463] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors duration-150"
+            className="h-9 px-5 rounded-full bg-[#d7a463] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#e2b57c] transition-colors duration-150 press-feedback"
           >
             Apply Filters
           </button>

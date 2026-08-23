@@ -167,7 +167,7 @@ export function CollectionWorkspace({
               key={f}
               onClick={() => setConceptFilter(f)}
               className={[
-                "text-[12px] px-2.5 py-1 rounded-md transition-colors duration-150",
+                "text-[12px] px-3 py-1.5 rounded-full transition-colors duration-150",
                 conceptFilter === f
                   ? "bg-white/[0.08] text-neutral-100"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]",
@@ -196,7 +196,7 @@ export function CollectionWorkspace({
                 value={notes}
                 onChange={(e) => handleNotesChange(e.target.value)}
                 rows={5}
-                className="mt-2 w-full resize-none rounded-md surface-field p-2.5 text-[12.5px] leading-relaxed text-neutral-300 placeholder:text-neutral-600 outline-none focus:border-[#c99a5f]/35 transition-colors duration-150"
+                className="mt-2 w-full resize-none rounded-md surface-field p-2.5 text-[12.5px] leading-relaxed text-neutral-300 placeholder:text-neutral-600 outline-none focus-glow"
                 placeholder="Add direction, references, or constraints for the production team..."
               />
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import type { CreatorsStore } from "../../state/useCreatorsStore";
 import { CreatorCard } from "./CreatorCard";
@@ -11,12 +11,17 @@ export function CreatorsPage({
   creatorsStore,
   collectionsStore,
   onOpenCollection,
+  openCreatorId,
+  onOpenCreatorIdChange,
 }: {
   creatorsStore: CreatorsStore;
   collectionsStore: CollectionsStore;
   onOpenCollection: (collectionId: string) => void;
+  openCreatorId: string | null;
+  onOpenCreatorIdChange: (id: string | null) => void;
 }) {
-  const [activeCreatorId, setActiveCreatorId] = useState<string | null>(null);
+  const activeCreatorId = openCreatorId;
+  const setActiveCreatorId = onOpenCreatorIdChange;
   const [createOpen, setCreateOpen] = useState(false);
 
   const activeCreator = creatorsStore.creators.find((c) => c.id === activeCreatorId) ?? null;
@@ -52,7 +57,7 @@ export function CreatorsPage({
 
           <button
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 shrink-0"
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors duration-150 shrink-0 press-feedback"
           >
             <Plus size={14} />
             New Creator
@@ -67,6 +72,7 @@ export function CreatorsPage({
 
         {!creatorsStore.error && creatorsStore.creators.length === 0 && (
           <div className="mt-6 rounded-xl surface-panel py-16 text-center">
+            <Users size={20} className="mx-auto text-neutral-700 mb-2.5" />
             <p className="text-[13px] text-neutral-400">No creators yet.</p>
             <p className="text-[12px] text-neutral-600 mt-1">Add your first Creator to get started.</p>
           </div>

@@ -1,6 +1,8 @@
-import { Library as LibraryIcon } from "lucide-react";
+import { useState } from "react";
+import { Library as LibraryIcon, RotateCcw } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { DriveGlyph } from "../collections/DriveGlyph";
+import { RegenerationPanel } from "./RegenerationPanel";
 
 interface DeliveredBatch {
   submissionId: string;
@@ -18,11 +20,15 @@ export function LibraryPage({
   creators,
   collections,
   onOpenCollection,
+  onRequestRegeneration,
 }: {
   creators: Creator[];
   collections: Collection[];
   onOpenCollection: (collectionId: string) => void;
+  onRequestRegeneration: (collectionId: string, submissionIndex: number, reason: string, note: string) => void;
 }) {
+  const [regenTarget, setRegenTarget] = useState<DeliveredBatch | null>(null);
+
   const batches: DeliveredBatch[] = collections
     .flatMap((c) =>
       c.submissions
@@ -63,57 +69,81 @@ export function LibraryPage({
 
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {batches.map((b) => (
-            <button
+            <div
               key={b.submissionId}
-              onClick={() => onOpenCollection(b.collectionId)}
-              className="text-left rounded-xl border border-white/[0.07] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.025] transition-colors duration-150 overflow-hidden"
+              className="group rounded-xl border border-white/[0.07] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.025] transition-colors duration-150 overflow-hidden"
             >
-              <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
-                {Array.from({ length: 4 }).map((_, i) =>
-                  b.thumbGradients[i] ? (
-                    <div key={i} style={{ background: b.thumbGradients[i] }} />
-                  ) : (
-                    <div key={i} className="bg-white/[0.03]" />
-                  )
-                )}
-              </div>
-              <div className="p-3.5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  {b.creator && (
-                    <div
-                      className="w-4.5 h-4.5 rounded-full shrink-0 ring-1 ring-white/15 overflow-hidden"
-                      style={{ width: 18, height: 18, ...(b.creator.profileImage ? {} : { background: b.creator.avatarColor }) }}
-                    >
-                      {b.creator.profileImage && (
-                        <img src={b.creator.profileImage} alt={b.creator.name} className="w-full h-full object-cover" />
-                      )}
-                    </div>
+              <button onClick={() => onOpenCollection(b.collectionId)} className="block w-full text-left">
+                <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
+                  {Array.from({ length: 4 }).map((_, i) =>
+                    b.thumbGradients[i] ? (
+                      <div key={i} style={{ background: b.thumbGradients[i] }} />
+                    ) : (
+                      <div key={i} className="bg-white/[0.03]" />
+                    )
                   )}
-                  <span className="text-[11.5px] text-neutral-400 truncate">{b.creator?.name ?? "Unknown creator"}</span>
                 </div>
-                <h3 className="text-[13.5px] font-medium text-neutral-100 truncate">
-                  {b.collectionName} <span className="text-neutral-600 font-normal">· #{b.index}</span>
-                </h3>
-                <p className="mt-0.5 text-[11px] text-neutral-500">
-                  {b.conceptCount} concept{b.conceptCount === 1 ? "" : "s"} · {b.sentAt}
-                </p>
-                {b.deliveryUrl && (
-                  <a
-                    href={b.deliveryUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="mt-2.5 inline-flex items-center gap-1.5 text-[11.5px] text-neutral-300 hover:text-[#e8c896] transition-colors duration-150"
+              </button>
+              <div className="p-3.5">
+                <button onClick={() => onOpenCollection(b.collectionId)} className="block w-full text-left">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {b.creator && (
+                      <div
+                        className="rounded-full shrink-0 ring-1 ring-white/15 overflow-hidden"
+                        style={{ width: 18, height: 18, ...(b.creator.profileImage ? {} : { background: b.creator.avatarColor }) }}
+                      >
+                        {b.creator.profileImage && (
+                          <img src={b.creator.profileImage} alt={b.creator.name} className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                    )}
+                    <span className="text-[11.5px] text-neutral-400 truncate">{b.creator?.name ?? "Unknown creator"}</span>
+                  </div>
+                  <h3 className="text-[13.5px] font-medium text-neutral-100 truncate">
+                    {b.collectionName} <span className="text-neutral-600 font-normal">· #{b.index}</span>
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-neutral-500">
+                    {b.conceptCount} concept{b.conceptCount === 1 ? "" : "s"} · {b.sentAt}
+                  </p>
+                </button>
+
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  {b.deliveryUrl ? (
+                    <a
+                      href={b.deliveryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[11.5px] text-neutral-300 hover:text-[#e8c896] transition-colors duration-150"
+                    >
+                      <DriveGlyph size={13} />
+                      Open in Drive
+                    </a>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    onClick={() => setRegenTarget(b)}
+                    className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-[#e8c896] opacity-0 group-hover:opacity-100 transition-all duration-150"
                   >
-                    <DriveGlyph size={13} />
-                    Open in Drive
-                  </a>
-                )}
+                    <RotateCcw size={11} />
+                    Regenerate
+                  </button>
+                </div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>
+
+      <RegenerationPanel
+        open={!!regenTarget}
+        collectionName={regenTarget?.collectionName ?? ""}
+        submissionIndex={regenTarget?.index ?? 0}
+        onClose={() => setRegenTarget(null)}
+        onConfirm={(reason, note) => {
+          if (regenTarget) onRequestRegeneration(regenTarget.collectionId, regenTarget.index, reason, note);
+        }}
+      />
     </div>
   );
 }

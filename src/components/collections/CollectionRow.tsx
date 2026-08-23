@@ -73,7 +73,7 @@ export function CollectionRow({
               }
             }}
             onBlur={commitRename}
-            className="w-full h-6 rounded surface-field px-1.5 text-[13px] text-neutral-100 outline-none focus:border-[#c99a5f]/40"
+            className="w-full h-6 rounded surface-field px-1.5 text-[13px] text-neutral-100 outline-none focus-glow"
           />
         ) : (
           <h3 className="text-[13px] font-medium text-neutral-100 truncate">{collection.name}</h3>

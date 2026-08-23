@@ -102,7 +102,7 @@ export function SendToReelForgePanel({
                   </button>
                   <button
                     onClick={send}
-                    className="flex-1 h-9 rounded-md flex items-center justify-center gap-1.5 bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors"
+                    className="flex-1 h-9 rounded-md flex items-center justify-center gap-1.5 bg-[#c99a5f] text-[#0a0a0c] text-[12.5px] font-medium hover:bg-[#ddb87e] transition-colors press-feedback"
                   >
                     <Send size={12} />
                     Send Anyway
@@ -141,7 +141,7 @@ export function SendToReelForgePanel({
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
                   placeholder="Anything specific for this batch..."
-                  className="mt-1.5 w-full resize-none rounded-lg surface-field px-3 py-2 text-[12px] text-neutral-300 placeholder:text-neutral-600 outline-none focus:border-[#d7a463]/40 transition-colors"
+                  className="mt-1.5 w-full resize-none rounded-lg surface-field px-3 py-2 text-[12px] text-neutral-300 placeholder:text-neutral-600 outline-none focus-glow"
                 />
               </div>
 
@@ -149,7 +149,7 @@ export function SendToReelForgePanel({
                 <button
                   disabled={totalCount === 0}
                   onClick={handlePrimaryClick}
-                  className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors"
+                  className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#d7a463] text-[#0a0a0c] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
                 >
                   <Send size={13} />
                   Confirm &amp; Send

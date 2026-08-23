@@ -14,9 +14,9 @@ export function CreatorFilterBar({
       <button
         onClick={() => onSelect("all")}
         className={[
-          "h-8 px-3 rounded-md text-[12.5px] transition-colors duration-150",
+          "h-8 px-3 rounded-full text-[12.5px] transition-colors duration-150",
           activeId === "all"
-            ? "bg-white/[0.07] text-neutral-100"
+            ? "bg-white/[0.08] text-neutral-100"
             : "text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.04]",
         ].join(" ")}
       >
@@ -27,13 +27,18 @@ export function CreatorFilterBar({
           key={c.id}
           onClick={() => onSelect(c.id)}
           className={[
-            "flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-md text-[12.5px] transition-colors duration-150",
+            "flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-full text-[12.5px] transition-colors duration-150",
             activeId === c.id
-              ? "bg-white/[0.07] text-neutral-100"
+              ? "bg-white/[0.08] text-neutral-100"
               : "text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.04]",
           ].join(" ")}
         >
-          <span className="w-4 h-4 rounded-full shrink-0" style={{ background: c.avatarColor }} />
+          <span
+            className="w-4 h-4 rounded-full shrink-0 overflow-hidden"
+            style={c.profileImage ? undefined : { background: c.avatarColor }}
+          >
+            {c.profileImage && <img src={c.profileImage} alt={c.name} className="w-full h-full object-cover" />}
+          </span>
           {c.name}
         </button>
       ))}

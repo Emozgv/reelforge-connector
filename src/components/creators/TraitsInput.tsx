@@ -58,7 +58,7 @@ export function TraitsInput({
                   if (e.key === "Enter") commitEdit(i);
                   if (e.key === "Escape") setEditingIndex(null);
                 }}
-                className="h-7 w-28 rounded-full surface-field px-2.5 text-[12px] text-neutral-100 outline-none focus:border-[#c99a5f]/40"
+                className="h-7 w-28 rounded-full surface-field px-2.5 text-[12px] text-neutral-100 outline-none focus-glow"
               />
             ) : (
               <span
@@ -96,7 +96,7 @@ export function TraitsInput({
         }}
         onBlur={commitDraft}
         placeholder={placeholder}
-        className="w-full h-9 rounded-lg surface-field px-3 text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus:border-[#c99a5f]/40 transition-colors"
+        className="w-full h-9 rounded-lg surface-field px-3 text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
       />
     </div>
   );

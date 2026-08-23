@@ -1,3 +1,4 @@
+import { SearchX } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import { VideoCard } from "./VideoCard";
 
@@ -24,6 +25,7 @@ export function VideoGrid({
           spacious ? "py-28" : "py-20",
         ].join(" ")}
       >
+        <SearchX size={20} className="text-neutral-700 mb-2.5" />
         <p className={spacious ? "text-[14.5px] font-serif text-neutral-300" : "text-[13.5px] text-neutral-300"}>
           {emptyTitle}
         </p>

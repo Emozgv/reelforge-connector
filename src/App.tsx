@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Sidebar, type Page } from "./components/layout/Sidebar";
+import { DashboardPage } from "./components/dashboard/DashboardPage";
 import { CreativityHubPage } from "./components/hub/CreativityHubPage";
 import { CollectionsPage } from "./components/collections/CollectionsPage";
 import { CreatorsPage } from "./components/creators/CreatorsPage";
@@ -13,20 +14,28 @@ import { useCollectionsStore } from "./state/useCollectionsStore";
 import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
 import { useWorkspace } from "./state/useWorkspace";
+import { useActivityFeed } from "./state/useActivityFeed";
 
 function App() {
-  const [page, setPage] = useState<Page>("hub");
+  const [page, setPage] = useState<Page>("dashboard");
   const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
+  const [openCreatorId, setOpenCreatorId] = useState<string | null>(null);
 
   function navigateToCollection(collectionId: string) {
     setOpenCollectionId(collectionId);
     setPage("collections");
   }
 
+  function navigateToCreator(creatorId: string) {
+    setOpenCreatorId(creatorId);
+    setPage("creators");
+  }
+
   const { user, loading: authLoading, signIn, signOut } = useAuthSession();
   const { workspace, loading: workspaceLoading } = useWorkspace(user?.id);
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
+  const activity = useActivityFeed(workspace?.id);
 
   if (authLoading) {
     return <FullScreenLoader />;
@@ -65,8 +74,21 @@ function App() {
         userEmail={user.email}
         workspaceName={workspace.name}
         onSignOut={signOut}
+        activity={activity}
+        onOpenCollection={navigateToCollection}
       />
       <div key={page} className="relative z-10 flex-1 min-w-0 h-full animate-fade-in">
+        {page === "dashboard" && (
+          <DashboardPage
+            userName={user.email}
+            creators={creatorsStore.creators}
+            collections={collectionsStore.collections}
+            activity={activity}
+            onOpenHub={() => setPage("hub")}
+            onOpenCreator={navigateToCreator}
+            onOpenCollection={navigateToCollection}
+          />
+        )}
         {page === "hub" && (
           <CreativityHubPage
             creators={creatorsStore.creators}
@@ -88,6 +110,8 @@ function App() {
             creatorsStore={creatorsStore}
             collectionsStore={collectionsStore}
             onOpenCollection={navigateToCollection}
+            openCreatorId={openCreatorId}
+            onOpenCreatorIdChange={setOpenCreatorId}
           />
         )}
         {page === "production" && (
@@ -102,6 +126,7 @@ function App() {
             creators={creatorsStore.creators}
             collections={collectionsStore.collections}
             onOpenCollection={navigateToCollection}
+            onRequestRegeneration={collectionsStore.requestRegeneration}
           />
         )}
         {page === "settings" && (

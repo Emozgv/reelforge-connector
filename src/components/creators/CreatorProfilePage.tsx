@@ -248,7 +248,7 @@ export function CreatorProfilePage({
                   onChange={(e) => creatorsStore.updateCreativeDirection(creator.id, e.target.value)}
                   rows={4}
                   placeholder="e.g. Works best with simple POV concepts and soft lifestyle content..."
-                  className="mt-1.5 w-full resize-none rounded-md surface-field p-2.5 text-[12.5px] leading-relaxed text-neutral-300 placeholder:text-neutral-600 outline-none focus:border-[#c99a5f]/35 transition-colors duration-150"
+                  className="mt-1.5 w-full resize-none rounded-md surface-field p-2.5 text-[12.5px] leading-relaxed text-neutral-300 placeholder:text-neutral-600 outline-none focus-glow"
                 />
               </div>
 

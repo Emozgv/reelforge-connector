@@ -109,7 +109,7 @@ export function ConceptCard({
             }}
             rows={2}
             placeholder='e.g. "black dress", "German talking version"'
-            className="mt-1.5 w-full resize-none rounded-md bg-black/55 backdrop-blur-sm border border-white/15 px-2 py-1.5 text-[10.5px] text-neutral-100 placeholder:text-neutral-500 outline-none focus:border-[#ddb87e]/50"
+            className="mt-1.5 w-full resize-none rounded-md bg-black/55 backdrop-blur-sm border border-white/15 px-2 py-1.5 text-[10.5px] text-neutral-100 placeholder:text-neutral-500 outline-none focus-glow"
           />
         ) : concept.notes ? (
           <button

@@ -376,6 +376,17 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     void logActivity(collectionId, "submission_created", `Submission #${row.index} sent to ReelForge`, row.id);
   }
 
+  // Logs a real, visible activity event — there's no dedicated regeneration
+  // table/workflow yet (that's real backend work for ReelForge Internal to
+  // pick up and action), but the request itself is genuine, not a fake UI
+  // action, and shows up in both the collection's history and the global feed.
+  function requestRegeneration(collectionId: string, submissionIndex: number, reason: string, note: string) {
+    const message = note
+      ? `Regeneration requested for Submission #${submissionIndex} — ${reason}: "${note}"`
+      : `Regeneration requested for Submission #${submissionIndex} — ${reason}`;
+    void logActivity(collectionId, "regeneration_requested", message);
+  }
+
   function updateNotes(collectionId: string, notes: string) {
     // Autosaves as the user types — intentionally not logged to Activity.
     void applyMetaUpdate(collectionId, { notes }, { notes });
@@ -462,6 +473,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     removeVideoFromCollection,
     setConceptStatus,
     updateConceptNotes,
+    requestRegeneration,
     sendSubmission,
     updateNotes,
     updateStatus,
