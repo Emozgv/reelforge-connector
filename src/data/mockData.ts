@@ -11,6 +11,11 @@ const gradients = [
   "linear-gradient(160deg,#2c3a3a,#1a2222)",
 ];
 
+// Shared fallback for any ReelVideo with neither a real thumbnailUrl nor a
+// mock thumbGradient (e.g. a real ingested reel whose thumbnail failed to
+// load) — one flat placeholder, never a fabricated per-video gradient.
+export const DEFAULT_THUMB_GRADIENT = "linear-gradient(160deg,#2a2a2e,#18181b)";
+
 const usernames = [
   "goldenhour.mia", "wldflwr.kt", "studio.reyna", "b.softlight",
   "sunnydayz.al", "coastline.jules", "afterglow.tay", "prettyblnd.ash",

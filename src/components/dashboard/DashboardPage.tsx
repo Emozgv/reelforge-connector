@@ -343,10 +343,19 @@ export function DashboardPage({
                       onClick={() => onOpenCollection(c.id)}
                       className="text-left rounded-lg overflow-hidden border border-white/[0.06] hover:border-white/[0.14] transition-colors duration-150"
                     >
-                      <div
-                        className="h-16 w-full"
-                        style={{ background: preview?.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }}
-                      />
+                      {preview?.video.thumbnailUrl ? (
+                        <img
+                          src={preview.video.thumbnailUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-16 w-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="h-16 w-full"
+                          style={{ background: preview?.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }}
+                        />
+                      )}
                       <div className="p-2">
                         <p className="text-[11.5px] text-neutral-200 truncate">{c.name}</p>
                         <p className="text-[10px] text-neutral-600 mt-0.5">{c.concepts.length} concepts</p>

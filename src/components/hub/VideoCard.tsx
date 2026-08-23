@@ -1,5 +1,6 @@
 import { Bookmark, Sparkles, FolderPlus, ExternalLink, Play, Eye } from "lucide-react";
 import type { ReelVideo } from "../../types";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { PlatformIcon } from "./PlatformIcon";
 
 export function VideoCard({
@@ -13,10 +14,19 @@ export function VideoCard({
 }) {
   return (
     <div className="group relative aspect-[9/16] w-full rounded-2xl overflow-hidden border border-white/[0.08] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-[#D39448]/35 hover:shadow-[0_18px_40px_-12px_rgba(0,0,0,0.6)] cursor-pointer">
-      <div
-        className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-        style={{ background: video.thumbGradient }}
-      />
+      {video.thumbnailUrl ? (
+        <img
+          src={video.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+        />
+      ) : (
+        <div
+          className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+          style={{ background: video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }}
+        />
+      )}
 
       <div
         className="absolute inset-0 opacity-[0.06] mix-blend-overlay"
@@ -124,7 +134,7 @@ export function VideoCard({
               {tag}
             </span>
           ))}
-          {video.creatorFit >= 80 && (
+          {video.creatorFit !== undefined && video.creatorFit >= 80 && (
             <span
               title="Estimated fit — not a guarantee"
               className="ml-auto text-[10px] text-[#D39448]/90 tabular-nums shrink-0"

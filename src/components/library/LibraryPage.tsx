@@ -3,6 +3,7 @@ import { Check, Heart, Library as LibraryIcon } from "lucide-react";
 import type { Collection, Creator, RegenerationReason } from "../../types";
 import { DriveGlyph } from "../collections/DriveGlyph";
 import { FinishedBatchView } from "./FinishedBatchView";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
 interface DeliveredBatch {
   submissionId: string;
@@ -56,7 +57,7 @@ export function LibraryPage({
           thumbGradients: c.concepts
             .filter((concept) => s.conceptIds.includes(concept.video.id))
             .slice(0, 4)
-            .map((concept) => concept.video.thumbGradient),
+            .map((concept) => concept.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT),
           creator: creators.find((cr) => cr.id === c.creatorId),
           favorited: s.favorited,
           approvedAt: s.approvedAt,

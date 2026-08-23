@@ -52,27 +52,37 @@ export interface ReelVideo {
   id: string;
   platform: Platform;
   username: string;
-  // Mock source link for prototype/testing — real Instagram/TikTok ingestion
-  // is a later phase. Used as the dedup key when saving into a Collection.
+  // Real permalink for ingested reels; still the dedup key when saving into a Collection.
   sourceUrl: string;
+  // Real preview image for ingested reels. Mock/legacy items have no image and
+  // fall back to thumbGradient instead.
+  thumbnailUrl?: string;
   views: string;
   viewsRaw: number;
   tags: string[];
   saved: boolean;
   used: boolean;
-  thumbGradient: string;
+  // Present for mock/legacy items (a CSS gradient placeholder). Real ingested
+  // reels use thumbnailUrl instead — components should fall back to a shared
+  // default gradient when both are absent, never fabricate one per video.
+  thumbGradient?: string;
   duration: string;
   durationSec: number;
-  talking: boolean;
-  aiReady: boolean;
-  aiScore: number;
-  difficulty: Difficulty;
-  setting: Setting;
-  contentStyle: ContentStyle;
-  creatorFit: number;
-  trending: boolean;
-  postedDaysAgo: number;
-  language: Language;
+  // Everything below is AI-derived or curation metadata that doesn't exist yet
+  // for a freshly-ingested real reel — undefined means "not analyzed yet", not
+  // "false"/"zero". Filtering on these treats undefined as "unknown, excluded
+  // from a specific filter value" rather than guessing. Only mock data and,
+  // later, real AI tagging (V2/V3) populate these.
+  talking?: boolean;
+  aiReady?: boolean;
+  aiScore?: number;
+  difficulty?: Difficulty;
+  setting?: Setting;
+  contentStyle?: ContentStyle;
+  creatorFit?: number;
+  trending?: boolean;
+  postedDaysAgo?: number;
+  language?: Language;
 }
 
 // The long-lived creative folder's workflow stage. Draft -> Sent happens

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Shuffle, Bookmark, SlidersHorizontal } from "lucide-react";
-import { generateMockVideos } from "../../data/mockData";
+import { Search, Shuffle, Bookmark, SlidersHorizontal, AlertCircle } from "lucide-react";
+import { searchReels } from "../../lib/searchReels";
 import type { Creator, ReelVideo } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { CreatorSelector } from "./CreatorSelector";
@@ -36,9 +36,11 @@ export function CreativityHubPage({
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
-  const [seed, setSeed] = useState(1);
-  const [videos, setVideos] = useState<ReelVideo[]>(() => generateMockVideos(1));
+  const [videos, setVideos] = useState<ReelVideo[]>([]);
   const [spinning, setSpinning] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [lastQuery, setLastQuery] = useState("");
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
@@ -61,22 +63,19 @@ export function CreativityHubPage({
   const filtered = useMemo(() => {
     let list = videos.filter((v) => {
       if (filters.platform !== "all" && v.platform !== filters.platform) return false;
-      if (query.trim()) {
-        const q = query.toLowerCase();
-        const haystack = `${v.username} ${v.tags.join(" ")}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
       if (filters.length === "0-5" && !(v.durationSec <= 5)) return false;
       if (filters.length === "6-9" && !(v.durationSec >= 6 && v.durationSec <= 9)) return false;
       if (filters.length === "10-12" && !(v.durationSec >= 10 && v.durationSec <= 12)) return false;
-      if (filters.talking === "talking" && !v.talking) return false;
-      if (filters.talking === "nontalking" && v.talking) return false;
+      // Undefined (not analyzed yet) is "unknown" — it matches neither side
+      // of a talking/non-talking filter, rather than defaulting to one.
+      if (filters.talking === "talking" && v.talking !== true) return false;
+      if (filters.talking === "nontalking" && v.talking !== false) return false;
       if (filters.aiFriendly && !v.aiReady) return false;
       if (filters.difficulty !== "any" && v.difficulty !== filters.difficulty) return false;
       if (filters.setting !== "any" && v.setting !== filters.setting) return false;
       if (filters.contentStyle !== "any" && v.contentStyle !== filters.contentStyle) return false;
-      if (filters.creatorFit === "high" && v.creatorFit < 80) return false;
-      if (filters.creatorFit === "medium" && v.creatorFit < 50) return false;
+      if (filters.creatorFit === "high" && !(v.creatorFit !== undefined && v.creatorFit >= 80)) return false;
+      if (filters.creatorFit === "medium" && !(v.creatorFit !== undefined && v.creatorFit >= 50)) return false;
       if (filters.used === "used" && !v.used) return false;
       if (filters.used === "unused" && v.used) return false;
       if (filters.savedState === "saved" && !v.saved) return false;
@@ -89,20 +88,34 @@ export function CreativityHubPage({
     });
 
     if (filters.sort === "recent") {
-      list = [...list].sort((a, b) => a.postedDaysAgo - b.postedDaysAgo);
+      list = [...list].sort((a, b) => (a.postedDaysAgo ?? Infinity) - (b.postedDaysAgo ?? Infinity));
     } else if (filters.sort === "trending") {
-      list = [...list].sort((a, b) => Number(b.trending) - Number(a.trending) || b.viewsRaw - a.viewsRaw);
+      list = [...list].sort((a, b) => Number(!!b.trending) - Number(!!a.trending) || b.viewsRaw - a.viewsRaw);
     }
 
     return list;
-  }, [videos, query, filters]);
+  }, [videos, filters]);
+
+  async function runSearch(q: string) {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    if (filters.platform === "instagram") {
+      setSearchError("Instagram search isn't connected yet — try TikTok or All for now.");
+      return;
+    }
+    setSearching(true);
+    setSearchError(null);
+    setLastQuery(trimmed);
+    const { results, error } = await searchReels("tiktok", trimmed);
+    setVideos(results);
+    setSearchError(error ?? null);
+    setSearching(false);
+  }
 
   function handleRefresh() {
+    if (!lastQuery) return;
     setSpinning(true);
-    const nextSeed = seed + 1;
-    setSeed(nextSeed);
-    setVideos(generateMockVideos(nextSeed));
-    setTimeout(() => setSpinning(false), 500);
+    void runSearch(lastQuery).finally(() => setSpinning(false));
   }
 
   function markSaved(id: string) {
@@ -179,9 +192,12 @@ export function CreativityHubPage({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void runSearch(query);
+                }}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
-                placeholder='Search concepts, e.g. "cute blonde girl"'
+                placeholder='Search concepts, e.g. "cute blonde girl" — press Enter'
                 className="w-full h-[54px] pl-12 pr-4 bg-transparent text-[15px] text-neutral-100 placeholder:text-neutral-500 outline-none"
               />
             </div>
@@ -191,7 +207,10 @@ export function CreativityHubPage({
             {NICHE_CHIPS.map((chip, i) => (
               <button
                 key={chip}
-                onClick={() => setQuery(chip.split(" ")[0])}
+                onClick={() => {
+                  setQuery(chip);
+                  void runSearch(chip);
+                }}
                 className="animate-chip-drift text-[12px] px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:text-[#D39448] hover:border-[#D39448]/30 hover:bg-[#D39448]/[0.06] transition-colors"
                 style={{
                   animationDelay: `${i * 420}ms`,
@@ -245,7 +264,9 @@ export function CreativityHubPage({
 
             <button
               onClick={handleRefresh}
-              className="flex items-center gap-2 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300"
+              disabled={!lastQuery || searching}
+              title={lastQuery ? "Fetch a fresh batch for the same search" : "Search something first"}
+              className="flex items-center gap-2 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <Shuffle size={14} className={spinning ? "animate-spin" : ""} />
               Refresh
@@ -266,11 +287,32 @@ export function CreativityHubPage({
           </div>
         </div>
 
+        {searchError && (
+          <div className="mb-5 flex items-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/[0.06] px-4 py-3 text-[12.5px] text-rose-200/90">
+            <AlertCircle size={14} className="shrink-0" />
+            {searchError}
+          </div>
+        )}
+
         <VideoGrid
           videos={filtered}
           onSaveClick={handleSaveClick}
           onAddToCollection={setSavePanelVideo}
           spacious
+          emptyTitle={
+            searching
+              ? "Searching…"
+              : lastQuery
+                ? "No results for that search."
+                : "Search a niche above to discover real reels."
+          }
+          emptyHint={
+            searching
+              ? "Pulling fresh results from TikTok."
+              : lastQuery
+                ? "Try a different keyword, or press Refresh for a new batch."
+                : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
+          }
         />
 
         <div className="h-10" />

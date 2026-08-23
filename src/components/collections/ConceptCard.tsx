@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Send, Eye, MessageSquarePlus } from "lucide-react";
 import type { CollectionConcept, ConceptStatus } from "../../types";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { PlatformIcon } from "../hub/PlatformIcon";
 
 const STATUS_STYLES: Record<ConceptStatus, string> = {
@@ -41,7 +42,11 @@ export function ConceptCard({
 
   return (
     <div className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] transition-all duration-200 ease-out hover:border-white/[0.16] hover:shadow-[0_10px_24px_-10px_rgba(0,0,0,0.55)]">
-      <div className="absolute inset-0" style={{ background: video.thumbGradient }} />
+      {video.thumbnailUrl ? (
+        <img src={video.thumbnailUrl} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+      ) : (
+        <div className="absolute inset-0" style={{ background: video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/25" />
 
       {/* top row: platform, submitted indicator, duration */}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, Check, Zap, Plus, FolderHeart, ChevronDown } from "lucide-react";
 import type { Collection, Creator, ReelVideo } from "../../types";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
 export function SavePanel({
   open,
@@ -131,8 +132,12 @@ export function SavePanel({
 
               <div className="px-5 pt-4 flex items-center gap-3">
                 <div
-                  className="w-9 h-14 rounded-md shrink-0 border border-white/10"
-                  style={{ background: video.thumbGradient }}
+                  className="w-9 h-14 rounded-md shrink-0 border border-white/10 bg-cover bg-center"
+                  style={
+                    video.thumbnailUrl
+                      ? { backgroundImage: `url(${video.thumbnailUrl})` }
+                      : { background: video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }
+                  }
                 />
                 <div className="min-w-0">
                   <p className="text-[12.5px] text-neutral-200 truncate">@{video.username}</p>

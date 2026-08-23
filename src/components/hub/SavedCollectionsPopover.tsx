@@ -2,6 +2,7 @@ import { X, FolderHeart, ArrowUpRight } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { COLLECTION_STATUS_STYLES } from "../collections/CollectionRow";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
 export function SavedCollectionsPopover({
   open,
@@ -73,7 +74,11 @@ export function SavedCollectionsPopover({
                 <div className="w-9 h-9 rounded-md overflow-hidden shrink-0 grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30">
                   {Array.from({ length: 4 }).map((_, i) =>
                     c.concepts[i] ? (
-                      <div key={i} style={{ background: c.concepts[i].video.thumbGradient }} />
+                      c.concepts[i].video.thumbnailUrl ? (
+                        <img key={i} src={c.concepts[i].video.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+                      ) : (
+                        <div key={i} style={{ background: c.concepts[i].video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
+                      )
                     ) : (
                       <div key={i} className="bg-white/[0.03]" />
                     )

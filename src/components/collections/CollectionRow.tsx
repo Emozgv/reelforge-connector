@@ -3,6 +3,7 @@ import { MoreHorizontal, ArrowUpRight } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
 
 export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
@@ -67,7 +68,11 @@ export function CollectionRow({
       <div className="w-11 h-11 rounded-md overflow-hidden shrink-0 grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30">
         {Array.from({ length: 4 }).map((_, i) =>
           preview[i] ? (
-            <div key={i} style={{ background: preview[i].video.thumbGradient }} />
+            preview[i].video.thumbnailUrl ? (
+              <img key={i} src={preview[i].video.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+            ) : (
+              <div key={i} style={{ background: preview[i].video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
+            )
           ) : (
             <div key={i} className="bg-white/[0.03]" />
           )
