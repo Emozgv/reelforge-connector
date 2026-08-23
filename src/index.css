@@ -185,7 +185,11 @@ html[data-tab-hidden="true"] .shimmer-divider,
 html[data-tab-hidden="true"] .text-gradient-warm,
 html[data-tab-hidden="true"] .rail-track,
 html[data-tab-hidden="true"] .star-twinkle,
-html[data-tab-hidden="true"] .shooting-star-instance {
+html[data-tab-hidden="true"] .shooting-star-instance,
+html[data-tab-hidden="true"] .starfield-drift,
+html[data-tab-hidden="true"] .dust-particle,
+html[data-tab-hidden="true"] .hero-photo-layer,
+html[data-tab-hidden="true"] .hero-glow-breathe {
   animation-play-state: paused !important;
 }
 @keyframes headline-drift {
@@ -275,4 +279,75 @@ html[data-tab-hidden="true"] .shooting-star-instance {
     opacity: 0;
     transform: translate(var(--shoot-dx, 260px), var(--shoot-dy, 90px)) rotate(var(--shoot-rotate, 16deg));
   }
+}
+
+/* the star layer drifts on its own, much slower, independent axis from the
+   photo behind it — two layers moving at different rates is what reads as
+   depth, without needing separate sky/mountain assets to fake it with. */
+.starfield-drift {
+  position: absolute;
+  inset: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .starfield-drift {
+    animation: starfield-parallax-drift 95s ease-in-out infinite;
+  }
+}
+@keyframes starfield-parallax-drift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-6px, 4px); }
+}
+
+/* a handful of near-invisible motes rising through the frame — the only
+   layer with genuine, continuous (if glacial) motion, so the eye has
+   something to slowly catch even when no star is twinkling or falling. */
+.dust-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background: #f4ecdd;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dust-particle {
+    animation: dust-drift linear infinite;
+  }
+}
+@keyframes dust-drift {
+  0% { transform: translate(0, 0); opacity: 0; }
+  12% { opacity: var(--dust-peak, 0.1); }
+  88% { opacity: var(--dust-peak, 0.1); }
+  100% {
+    transform: translate(var(--dust-dx, 10px), calc(-1 * var(--dust-distance, 50px)));
+    opacity: 0;
+  }
+}
+
+/* an extremely slow, small-amplitude "Ken Burns" drift on the hero photo —
+   scaled up just enough that the pan/zoom never reveals an edge. Meant to
+   be almost subliminal, not a visible zoom. */
+.hero-photo-layer {
+  position: absolute;
+  inset: -3%;
+  background-size: cover;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-photo-layer {
+    animation: hero-photo-drift 52s ease-in-out infinite;
+  }
+}
+@keyframes hero-photo-drift {
+  0%, 100% { transform: scale(1.05) translate(0, 0); }
+  50% { transform: scale(1.08) translate(-1%, -0.6%); }
+}
+
+/* the warm horizon glow slowly breathes — a quiet pulse, not a strobe */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-glow-breathe {
+    animation: glow-breathe 11s ease-in-out infinite;
+  }
+}
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }

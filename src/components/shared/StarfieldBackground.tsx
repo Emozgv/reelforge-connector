@@ -10,6 +10,17 @@ interface Star {
   glow: boolean;
 }
 
+interface Dust {
+  left: number;
+  top: number;
+  size: number;
+  duration: number;
+  delay: number;
+  dx: number;
+  distance: number;
+  peak: number;
+}
+
 interface ShootingStar {
   id: number;
   top: number;
@@ -50,7 +61,7 @@ function makeShootingStar(overrides?: Partial<Pick<ShootingStar, "top" | "left" 
 // rather than one fixed path repeating on a fixed interval. Everything is
 // cheap CSS opacity/transform, paused with other ambient animations when the
 // tab is hidden (see index.css).
-export function StarfieldBackground({ starCount = 70 }: { starCount?: number }) {
+export function StarfieldBackground({ starCount = 70, dustCount = 0 }: { starCount?: number; dustCount?: number }) {
   const [shootingStars, setShootingStars] = useState<ShootingStar[]>([]);
   const cleanupTimeouts = useRef<number[]>([]);
 
@@ -115,30 +126,67 @@ export function StarfieldBackground({ starCount = 70 }: { starCount?: number }) 
         left: Math.random() * 100,
         top: Math.random() * 100,
         size: isAccent ? 1.6 + Math.random() * 0.9 : 0.6 + Math.random() * 0.7,
-        duration: 3.5 + Math.random() * 5.5,
-        delay: Math.random() * 9,
-        peak: isAccent ? 0.75 + Math.random() * 0.25 : 0.35 + Math.random() * 0.35,
+        duration: 3 + Math.random() * 8,
+        delay: Math.random() * 12,
+        peak: isAccent ? 0.7 + Math.random() * 0.3 : 0.3 + Math.random() * 0.4,
         glow: isAccent,
       };
     });
   }, [starCount]);
 
+  const dust = useMemo<Dust[]>(() => {
+    // Very faint, very slow — the one layer with continuous motion, so the
+    // scene never fully sits still even between twinkles and shooting stars.
+    return Array.from({ length: dustCount }).map(() => ({
+      left: Math.random() * 100,
+      top: 15 + Math.random() * 75,
+      size: 0.8 + Math.random() * 0.8,
+      duration: 42 + Math.random() * 30,
+      delay: -Math.random() * 60,
+      dx: Math.random() * 30 - 15,
+      distance: 35 + Math.random() * 35,
+      peak: 0.05 + Math.random() * 0.09,
+    }));
+  }, [dustCount]);
+
   return (
     <div className="starfield pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-      {stars.map((s, i) => (
+      <div className="starfield-drift">
+        {stars.map((s, i) => (
+          <span
+            key={i}
+            className="star-twinkle absolute rounded-full bg-white"
+            style={{
+              left: `${s.left}%`,
+              top: `${s.top}%`,
+              width: s.size,
+              height: s.size,
+              animationDuration: `${s.duration}s`,
+              animationDelay: `${s.delay}s`,
+              boxShadow: s.glow ? "0 0 4px 1px rgba(255,244,222,0.5)" : undefined,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ["--star-peak" as any]: s.peak,
+            }}
+          />
+        ))}
+      </div>
+      {dust.map((d, i) => (
         <span
           key={i}
-          className="star-twinkle absolute rounded-full bg-white"
+          className="dust-particle"
           style={{
-            left: `${s.left}%`,
-            top: `${s.top}%`,
-            width: s.size,
-            height: s.size,
-            animationDuration: `${s.duration}s`,
-            animationDelay: `${s.delay}s`,
-            boxShadow: s.glow ? "0 0 4px 1px rgba(255,244,222,0.5)" : undefined,
+            left: `${d.left}%`,
+            top: `${d.top}%`,
+            width: d.size,
+            height: d.size,
+            animationDuration: `${d.duration}s`,
+            animationDelay: `${d.delay}s`,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ["--star-peak" as any]: s.peak,
+            ["--dust-peak" as any]: d.peak,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ["--dust-dx" as any]: `${d.dx}px`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ["--dust-distance" as any]: `${d.distance}px`,
           }}
         />
       ))}
