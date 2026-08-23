@@ -21,7 +21,7 @@ function greeting(): string {
 // normal document flow with its own height, not overlaid on other content.
 function GrowthSparkline() {
   return (
-    <div className="mt-3 h-12">
+    <div className="mt-auto pt-2 h-9">
       <svg viewBox="0 0 220 44" className="w-full h-full" preserveAspectRatio="none">
         <defs>
           <linearGradient id="spark-line" x1="0" y1="0" x2="220" y2="0">
@@ -271,7 +271,7 @@ export function DashboardPage({
           <StatChip icon={<CheckCircle2 size={16} />} label="Delivered" sublabel="completed" value={finishedCount} />
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-5 items-start">
+        <div className="mt-6 grid grid-cols-2 gap-5 items-stretch">
           <div className="rounded-xl surface-panel p-4">
             <PanelHeader title="Creators" onViewAll={onOpenCreators} />
             {creators.length === 0 ? (
@@ -303,7 +303,7 @@ export function DashboardPage({
             )}
           </div>
 
-          <div className="rounded-xl surface-panel p-4">
+          <div className="rounded-xl surface-panel p-4 flex flex-col">
             <PanelHeader title={workspacePackage ? `${workspacePackage.planName} plan` : "Plan"} onViewAll={onOpenSettings} cta="View plan" />
             {usage && workspacePackage ? (
               <>
