@@ -10,9 +10,11 @@ import { NewCreatorPanel } from "./NewCreatorPanel";
 export function CreatorsPage({
   creatorsStore,
   collectionsStore,
+  onOpenCollection,
 }: {
   creatorsStore: CreatorsStore;
   collectionsStore: CollectionsStore;
+  onOpenCollection: (collectionId: string) => void;
 }) {
   const [activeCreatorId, setActiveCreatorId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -26,6 +28,8 @@ export function CreatorsPage({
         collections={collectionsStore.collections}
         creatorsStore={creatorsStore}
         onBack={() => setActiveCreatorId(null)}
+        onOpenCollection={onOpenCollection}
+        onCreateCollection={collectionsStore.createCollection}
       />
     );
   }

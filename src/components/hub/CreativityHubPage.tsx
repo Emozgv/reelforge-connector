@@ -24,10 +24,12 @@ export function CreativityHubPage({
   creators,
   creatorsError,
   collectionsStore,
+  onGoToCollections,
 }: {
   creators: Creator[];
   creatorsError?: string | null;
   collectionsStore: CollectionsStore;
+  onGoToCollections: () => void;
 }) {
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [query, setQuery] = useState("");
@@ -45,7 +47,11 @@ export function CreativityHubPage({
     }
   }, [creators, selectedCreator]);
 
-  const savedCount = videos.filter((v) => v.saved).length;
+  // Real persisted count for the selected creator — how many concepts across
+  // all their collections, not just the mock feed's local "saved" flag.
+  const savedCount = collectionsStore.collections
+    .filter((c) => c.creatorId === selectedCreator?.id)
+    .reduce((sum, c) => sum + c.concepts.length, 0);
   const activeFilterCount = countActiveFilters(filters);
 
   const filtered = useMemo(() => {
@@ -222,10 +228,14 @@ export function CreativityHubPage({
           </div>
 
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 h-11 px-4 rounded-full glass-panel text-[13px] text-neutral-300">
+            <button
+              onClick={onGoToCollections}
+              title="See everything saved for this creator"
+              className="flex items-center gap-1.5 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300"
+            >
               <Bookmark size={13} className="text-[#d7a463]" />
               <span className="tabular-nums text-neutral-100">{savedCount}</span> saved
-            </div>
+            </button>
 
             <button
               onClick={handleRefresh}

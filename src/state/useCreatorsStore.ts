@@ -99,6 +99,29 @@ export function useCreatorsStore(workspaceId: string | undefined) {
     void applyUpdate(creatorId, { preferredSetting }, { preferred_setting: preferredSetting });
   }
 
+  async function uploadProfileImage(creatorId: string, file: File): Promise<{ error: string | null }> {
+    if (!workspaceId) return { error: "No active workspace." };
+
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${workspaceId}/${creatorId}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("client-os-creator-avatars")
+      .upload(path, file, { upsert: true, cacheControl: "3600" });
+
+    if (uploadError) {
+      return { error: uploadError.message };
+    }
+
+    const { data: publicUrlData } = supabase.storage.from("client-os-creator-avatars").getPublicUrl(path);
+    // Cache-bust so the new image shows immediately even though the path is
+    // stable (upsert overwrites the same object on re-upload).
+    const url = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+
+    await applyUpdate(creatorId, { profileImage: url }, { profile_image_url: url });
+    return { error: null };
+  }
+
   async function createCreator(name: string, handle: string): Promise<{ error: string | null }> {
     if (!workspaceId) return { error: "No active workspace." };
 
@@ -129,6 +152,7 @@ export function useCreatorsStore(workspaceId: string | undefined) {
     updateAvoidedStyles,
     updatePreferredTalking,
     updatePreferredSetting,
+    uploadProfileImage,
     createCreator,
   };
 }

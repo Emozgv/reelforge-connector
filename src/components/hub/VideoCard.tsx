@@ -29,16 +29,26 @@ export function VideoCard({
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/30" />
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/25" />
 
-      {/* top row: platform, duration, optional AI score — subtle, always visible */}
-      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between">
-        <div className="w-6 h-6 rounded-full bg-black/45 backdrop-blur-md flex items-center justify-center border border-white/10">
+      {/* top row: platform, saved indicator, duration, optional AI score — subtle, always visible */}
+      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5">
+        <div className="w-6 h-6 rounded-full bg-black/45 backdrop-blur-md flex items-center justify-center border border-white/10 shrink-0">
           <PlatformIcon platform={video.platform} size={11.5} />
         </div>
-        <span className="flex items-center gap-1 text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
-          {video.aiReady && <span className="text-[#e8c896]">AI {video.aiScore}</span>}
-          {video.aiReady && <span className="text-white/30">·</span>}
-          {video.duration}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {video.saved && (
+            <div
+              title="Saved"
+              className="shrink-0 w-6 h-6 rounded-full bg-[#d7a463] flex items-center justify-center group-hover:opacity-0 transition-opacity duration-200"
+            >
+              <Bookmark size={11} fill="currentColor" className="text-[#0a0a0c]" strokeWidth={2} />
+            </div>
+          )}
+          <span className="shrink-0 flex items-center gap-1 text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
+            {video.aiReady && <span className="text-[#e8c896]">AI {video.aiScore}</span>}
+            {video.aiReady && <span className="text-white/30">·</span>}
+            {video.duration}
+          </span>
+        </div>
       </div>
 
       {/* center play affordance */}
@@ -90,13 +100,6 @@ export function VideoCard({
           <ExternalLink size={12.5} strokeWidth={2} />
         </button>
       </div>
-
-      {/* persistent saved indicator (visible without hover) */}
-      {video.saved && (
-        <div className="absolute top-2.5 right-2.5 group-hover:opacity-0 transition-opacity duration-200 w-6 h-6 rounded-full bg-[#d7a463] flex items-center justify-center">
-          <Bookmark size={11} fill="currentColor" className="text-[#0a0a0c]" strokeWidth={2} />
-        </div>
-      )}
 
       {/* bottom content — identity, views, and used-state always visible; tags + fit on hover */}
       <div className="absolute bottom-0 left-0 right-0 p-3">

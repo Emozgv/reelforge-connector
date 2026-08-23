@@ -13,6 +13,12 @@ import { useWorkspace } from "./state/useWorkspace";
 
 function App() {
   const [page, setPage] = useState<Page>("hub");
+  const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
+
+  function navigateToCollection(collectionId: string) {
+    setOpenCollectionId(collectionId);
+    setPage("collections");
+  }
 
   const { user, loading: authLoading, signIn, signOut } = useAuthSession();
   const { workspace, loading: workspaceLoading } = useWorkspace(user?.id);
@@ -63,13 +69,23 @@ function App() {
             creators={creatorsStore.creators}
             creatorsError={creatorsStore.error}
             collectionsStore={collectionsStore}
+            onGoToCollections={() => setPage("collections")}
           />
         )}
         {page === "collections" && (
-          <CollectionsPage creators={creatorsStore.creators} collectionsStore={collectionsStore} />
+          <CollectionsPage
+            creators={creatorsStore.creators}
+            collectionsStore={collectionsStore}
+            openCollectionId={openCollectionId}
+            onOpenCollectionIdChange={setOpenCollectionId}
+          />
         )}
         {page === "creators" && (
-          <CreatorsPage creatorsStore={creatorsStore} collectionsStore={collectionsStore} />
+          <CreatorsPage
+            creatorsStore={creatorsStore}
+            collectionsStore={collectionsStore}
+            onOpenCollection={navigateToCollection}
+          />
         )}
       </div>
     </div>

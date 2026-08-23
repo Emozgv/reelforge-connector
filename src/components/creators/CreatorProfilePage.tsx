@@ -1,9 +1,11 @@
-import { ArrowLeft, PackageCheck, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowLeft, Camera, PackageCheck, Plus, Sparkles } from "lucide-react";
 import type { Collection, Creator, Setting } from "../../types";
 import type { CreatorsStore } from "../../state/useCreatorsStore";
 import { CONTENT_STYLES } from "../../data/mockData";
 import { COLLECTION_STATUS_STYLES } from "../collections/CollectionRow";
 import { DriveGlyph } from "../collections/DriveGlyph";
+import { NewCollectionPanel } from "../collections/NewCollectionPanel";
 import { computeCreatorStats } from "./creatorStats";
 import { TraitsInput } from "./TraitsInput";
 
@@ -39,13 +41,29 @@ export function CreatorProfilePage({
   collections,
   creatorsStore,
   onBack,
+  onOpenCollection,
+  onCreateCollection,
 }: {
   creator: Creator;
   collections: Collection[];
   creatorsStore: CreatorsStore;
   onBack: () => void;
+  onOpenCollection: (collectionId: string) => void;
+  onCreateCollection: (name: string, creatorId: string, note: string) => void;
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const stats = computeCreatorStats(creator.id, collections);
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingPhoto(true);
+    await creatorsStore.uploadProfileImage(creator.id, file);
+    setUploadingPhoto(false);
+  }
   const ownCollections = collections.filter((c) => c.creatorId === creator.id);
   const allSubmissions = ownCollections
     .flatMap((c) => c.submissions.map((s) => ({ ...s, collectionName: c.name })))
@@ -78,12 +96,26 @@ export function CreatorProfilePage({
         </button>
 
         <div className="flex items-center gap-3.5 pb-4 mb-5 border-b border-white/[0.06]">
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-[16px] font-medium text-[#0a0a0c] shrink-0 ring-1 ring-white/15"
-            style={{ background: creator.avatarColor }}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Change profile photo"
+            className="group relative w-14 h-14 rounded-full flex items-center justify-center text-[16px] font-medium text-[#0a0a0c] shrink-0 ring-1 ring-white/15 overflow-hidden"
+            style={creator.profileImage ? undefined : { background: creator.avatarColor }}
           >
-            {initials}
-          </div>
+            {creator.profileImage ? (
+              <img src={creator.profileImage} alt={creator.name} className="absolute inset-0 w-full h-full object-cover" />
+            ) : (
+              initials
+            )}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              {uploadingPhoto ? (
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              ) : (
+                <Camera size={16} className="text-white" />
+              )}
+            </div>
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
           <div>
             <h1 className="text-[20px] font-serif font-medium text-neutral-50">{creator.name}</h1>
             <p className="text-[12.5px] text-neutral-500">{creator.handle}</p>
@@ -103,13 +135,26 @@ export function CreatorProfilePage({
         <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
           <div className="space-y-6">
             <div>
-              <h2 className="text-[13px] font-medium text-neutral-200 mb-2">Collections</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-[13px] font-medium text-neutral-200">Collections</h2>
+                <button
+                  onClick={() => setCreateOpen(true)}
+                  className="flex items-center gap-1 text-[11.5px] text-neutral-400 hover:text-[#e8c896] transition-colors duration-150"
+                >
+                  <Plus size={12} />
+                  New Collection
+                </button>
+              </div>
               <div className="rounded-xl surface-panel divide-y divide-white/[0.05] overflow-hidden">
                 {ownCollections.length === 0 && (
                   <p className="px-3.5 py-4 text-[12px] text-neutral-500">No collections yet.</p>
                 )}
                 {ownCollections.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                  <button
+                    key={c.id}
+                    onClick={() => onOpenCollection(c.id)}
+                    className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-white/[0.03] transition-colors duration-150"
+                  >
                     <span className="text-[12.5px] text-neutral-200 truncate">{c.name}</span>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="text-[11px] text-neutral-500">{c.concepts.length} concepts</span>
@@ -122,7 +167,7 @@ export function CreatorProfilePage({
                         {c.status}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -279,6 +324,14 @@ export function CreatorProfilePage({
           </div>
         </div>
       </div>
+
+      <NewCollectionPanel
+        open={createOpen}
+        creators={[creator]}
+        defaultCreatorId={creator.id}
+        onClose={() => setCreateOpen(false)}
+        onCreate={(name, creatorId, note) => onCreateCollection(name, creatorId, note)}
+      />
     </div>
   );
 }

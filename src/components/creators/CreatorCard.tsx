@@ -24,10 +24,14 @@ export function CreatorCard({
     >
       <div className="flex items-center gap-3">
         <div
-          className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium text-[#0a0a0c] shrink-0 ring-1 ring-white/15"
-          style={{ background: creator.avatarColor }}
+          className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium text-[#0a0a0c] shrink-0 ring-1 ring-white/15 overflow-hidden"
+          style={creator.profileImage ? undefined : { background: creator.avatarColor }}
         >
-          {initials}
+          {creator.profileImage ? (
+            <img src={creator.profileImage} alt={creator.name} className="w-full h-full object-cover" />
+          ) : (
+            initials
+          )}
         </div>
         <div className="min-w-0">
           <h3 className="text-[14px] font-medium text-neutral-100 truncate">{creator.name}</h3>

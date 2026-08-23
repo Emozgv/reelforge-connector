@@ -10,14 +10,21 @@ import { NewCollectionPanel } from "./NewCollectionPanel";
 export function CollectionsPage({
   creators,
   collectionsStore,
+  openCollectionId,
+  onOpenCollectionIdChange,
 }: {
   creators: Creator[];
   collectionsStore: CollectionsStore;
+  // Controlled from App so other pages (e.g. a creator's profile) can deep-link
+  // straight into a specific collection's workspace.
+  openCollectionId: string | null;
+  onOpenCollectionIdChange: (id: string | null) => void;
 }) {
   const { collections, renameCollection, duplicateCollection, deleteCollection } = collectionsStore;
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
-  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const activeCollectionId = openCollectionId;
+  const setActiveCollectionId = onOpenCollectionIdChange;
 
   const groups = useMemo(() => {
     const relevantCreators =
@@ -106,7 +113,7 @@ export function CollectionsPage({
                   {items.length} collection{items.length === 1 ? "" : "s"}
                 </span>
               </div>
-              <div className="rounded-xl surface-panel divide-y divide-white/[0.05] overflow-hidden">
+              <div className="rounded-xl surface-panel divide-y divide-white/[0.05] [&>*:first-child]:rounded-t-xl [&>*:last-child]:rounded-b-xl">
                 {items.map((c) => (
                   <CollectionRow
                     key={c.id}
