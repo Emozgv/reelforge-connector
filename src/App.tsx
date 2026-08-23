@@ -63,13 +63,13 @@ function App() {
         workspaceName={workspace.name}
         onSignOut={signOut}
       />
-      <div className="relative z-10 flex-1 min-w-0 h-full">
+      <div key={page} className="relative z-10 flex-1 min-w-0 h-full animate-fade-in">
         {page === "hub" && (
           <CreativityHubPage
             creators={creatorsStore.creators}
             creatorsError={creatorsStore.error}
             collectionsStore={collectionsStore}
-            onGoToCollections={() => setPage("collections")}
+            onOpenCollection={navigateToCollection}
           />
         )}
         {page === "collections" && (

@@ -7,6 +7,7 @@ import { CreatorSelector } from "./CreatorSelector";
 import { FilterDrawer } from "./FilterDrawer";
 import { HeroReelRails } from "./HeroReelRail";
 import { RotatingMicrocopy } from "./RotatingMicrocopy";
+import { SavedCollectionsPopover } from "./SavedCollectionsPopover";
 import { SavePanel } from "./SavePanel";
 import { VideoGrid } from "./VideoGrid";
 import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTypes";
@@ -24,12 +25,12 @@ export function CreativityHubPage({
   creators,
   creatorsError,
   collectionsStore,
-  onGoToCollections,
+  onOpenCollection,
 }: {
   creators: Creator[];
   creatorsError?: string | null;
   collectionsStore: CollectionsStore;
-  onGoToCollections: () => void;
+  onOpenCollection: (collectionId: string) => void;
 }) {
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [query, setQuery] = useState("");
@@ -40,6 +41,7 @@ export function CreativityHubPage({
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
+  const [savedPopoverOpen, setSavedPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) {
@@ -229,7 +231,7 @@ export function CreativityHubPage({
 
           <div className="flex items-center gap-2.5">
             <button
-              onClick={onGoToCollections}
+              onClick={() => setSavedPopoverOpen(true)}
               title="See everything saved for this creator"
               className="flex items-center gap-1.5 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300"
             >
@@ -308,6 +310,14 @@ export function CreativityHubPage({
           const targetCreatorId = creatorOverrideId ?? selectedCreator.id;
           void collectionsStore.createCollection(name, targetCreatorId, "", savePanelVideo, note);
         }}
+      />
+
+      <SavedCollectionsPopover
+        open={savedPopoverOpen}
+        creator={selectedCreator}
+        collections={collectionsStore.collections}
+        onClose={() => setSavedPopoverOpen(false)}
+        onOpenCollection={onOpenCollection}
       />
     </div>
   );
