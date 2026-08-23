@@ -122,6 +122,8 @@ function App() {
             onOpenCreator={navigateToCreator}
             onOpenCollection={navigateToCollection}
             onOpenCollections={() => setPage("collections")}
+            onOpenCreators={() => setPage("creators")}
+            onOpenSettings={() => setPage("settings")}
           />
         )}
         {page === "hub" && (
