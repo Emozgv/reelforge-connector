@@ -86,7 +86,13 @@ export function CollectionRow({
           <div className="flex items-center gap-1.5">
             <h3 className="text-[13px] font-medium text-neutral-100 truncate">{collection.name}</h3>
             {delivered && (
-              <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+              <div
+                className={[
+                  "relative shrink-0 transition-opacity duration-150",
+                  nextOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                ].join(" ")}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <button
                   onClick={() => setNextOpen((v) => !v)}
                   title={`Start "${suggestedName}"`}

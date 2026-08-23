@@ -119,7 +119,7 @@ export function CollectionWorkspace({
 
         <div className="flex items-center justify-between gap-6 flex-wrap pb-3 border-b border-white/[0.06]">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="group flex items-center gap-2">
               <h1 className="text-[19px] font-serif font-medium text-neutral-50">{collection.name}</h1>
 
               <div className="relative">
@@ -160,7 +160,12 @@ export function CollectionWorkspace({
               </div>
 
               {delivered && (
-                <div className="relative">
+                <div
+                  className={[
+                    "relative transition-opacity duration-150",
+                    nextOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                  ].join(" ")}
+                >
                   <button
                     onClick={() => setNextOpen((v) => !v)}
                     title={`Start "${suggestedName}"`}
