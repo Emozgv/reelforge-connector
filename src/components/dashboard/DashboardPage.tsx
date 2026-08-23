@@ -17,20 +17,26 @@ function greeting(): string {
 
 // A purely decorative curve — never tied to real usage numbers, it's the
 // same visual flourish for every workspace. The real number lives in the
-// progress bar next to it.
+// progress bar next to it. Kept short and low in the panel on purpose so it
+// never reaches up into the "N regenerations / N creator setups" text above it.
 function GrowthSparkline() {
   return (
-    <svg viewBox="0 0 220 46" fill="none" className="absolute right-0 bottom-0 w-[62%] h-[46px] opacity-70">
+    <svg
+      viewBox="0 0 220 26"
+      fill="none"
+      className="absolute right-0 bottom-1 w-[56%] h-[22px] opacity-45 pointer-events-none"
+      preserveAspectRatio="none"
+    >
       <path
-        d="M0 36 C 14 34, 22 30, 32 32 S 48 40, 58 38 S 72 20, 84 22 S 100 34, 112 30 S 128 12, 142 16 S 158 26, 170 22 S 188 6, 200 10 S 214 4, 220 3"
+        d="M0 20 C 14 19, 22 16, 32 17 S 48 22, 58 21 S 72 13, 84 14 S 100 19, 112 17 S 128 9, 142 11 S 158 15, 170 13 S 188 6, 200 8 S 214 5, 220 4"
         stroke="url(#spark-grad)"
         strokeWidth="1.5"
         strokeLinecap="round"
       />
       <defs>
         <linearGradient id="spark-grad" x1="0" y1="0" x2="220" y2="0">
-          <stop offset="0%" stopColor="#D39448" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#D39448" stopOpacity="0.95" />
+          <stop offset="0%" stopColor="#D39448" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#D39448" stopOpacity="0.9" />
         </linearGradient>
       </defs>
     </svg>
