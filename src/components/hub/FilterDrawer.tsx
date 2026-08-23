@@ -246,6 +246,14 @@ export function FilterDrawer({
               ))}
             </Section>
 
+            <Section label="Language">
+              {(["any", "English", "Spanish", "German", "Non-verbal"] as const).map((v) => (
+                <Chip key={v} active={draft.language === v} onClick={() => set("language", v)}>
+                  {v === "any" ? "Any" : v}
+                </Chip>
+              ))}
+            </Section>
+
             <Section label="Recent / Trending">
               {(
                 [

@@ -5,6 +5,8 @@ export type Setting = "Indoor" | "Outdoor";
 // Content Style is an evolving product concept — this list is intentionally a small,
 // easy-to-extend mock set (see CONTENT_STYLES in data/mockData.ts).
 export type ContentStyle = "POV" | "Talking" | "Lifestyle" | "Selfie" | "Mirror" | "Storytime" | "Fitness" | "Golf";
+// Spoken language of the clip — mock only, real detection is a later ingestion-phase concern.
+export type Language = "English" | "Spanish" | "German" | "Non-verbal";
 
 // "Tell ReelForge what fits this Creator" — plain-language creative preferences.
 // This is what will later feed AI Score / Creator Fit / semantic search ranking,
@@ -51,6 +53,7 @@ export interface ReelVideo {
   creatorFit: number;
   trending: boolean;
   postedDaysAgo: number;
+  language: Language;
 }
 
 // The long-lived creative folder's workflow stage. Production progress lives on

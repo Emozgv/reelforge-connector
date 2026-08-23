@@ -101,7 +101,7 @@ export function VideoCard({
         </button>
       </div>
 
-      {/* bottom content — identity, views, and used-state always visible; tags + fit on hover */}
+      {/* bottom content — identity, views, used-state, tags, and fit are all always visible now */}
       <div className="absolute bottom-0 left-0 right-0 p-3">
         <div className="flex items-center justify-between gap-1.5">
           <span className="text-[12.5px] text-white font-medium truncate">@{video.username}</span>
@@ -118,8 +118,8 @@ export function VideoCard({
           </div>
         )}
 
-        <div className="mt-1.5 flex items-center gap-2 h-4 overflow-hidden opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          {video.tags.slice(0, 2).map((tag) => (
+        <div className="mt-1.5 flex items-center gap-2 h-4 overflow-hidden">
+          {video.tags.slice(0, 3).map((tag) => (
             <span key={tag} className="text-[10px] text-white/60">
               {tag}
             </span>

@@ -1,4 +1,4 @@
-import type { ContentStyle, Difficulty, Platform, Setting } from "../../types";
+import type { ContentStyle, Difficulty, Language, Platform, Setting } from "../../types";
 
 export interface HubFilters {
   length: "any" | "0-5" | "6-9" | "10-12";
@@ -13,6 +13,7 @@ export interface HubFilters {
   platform: "all" | Platform;
   views: "any" | "10k" | "50k" | "100k";
   sort: "relevant" | "recent" | "trending";
+  language: "any" | Language;
 }
 
 export const DEFAULT_FILTERS: HubFilters = {
@@ -28,6 +29,7 @@ export const DEFAULT_FILTERS: HubFilters = {
   platform: "all",
   views: "any",
   sort: "relevant",
+  language: "any",
 };
 
 export function countActiveFilters(f: HubFilters): number {
@@ -44,5 +46,6 @@ export function countActiveFilters(f: HubFilters): number {
   if (f.platform !== "all") n++;
   if (f.views !== "any") n++;
   if (f.sort !== "relevant") n++;
+  if (f.language !== "any") n++;
   return n;
 }

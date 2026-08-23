@@ -80,6 +80,7 @@ export function CreativityHubPage({
       if (filters.used === "unused" && v.used) return false;
       if (filters.savedState === "saved" && !v.saved) return false;
       if (filters.savedState === "unsaved" && v.saved) return false;
+      if (filters.language !== "any" && v.language !== filters.language) return false;
       if (filters.views === "10k" && v.viewsRaw < 10000) return false;
       if (filters.views === "50k" && v.viewsRaw < 50000) return false;
       if (filters.views === "100k" && v.viewsRaw < 100000) return false;

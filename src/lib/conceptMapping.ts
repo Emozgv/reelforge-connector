@@ -1,4 +1,4 @@
-import type { CollectionConcept, ConceptStatus, ContentStyle, Difficulty, Platform, ReelVideo, Setting } from "../types";
+import type { CollectionConcept, ConceptStatus, ContentStyle, Difficulty, Language, Platform, ReelVideo, Setting } from "../types";
 import { formatTimestampFromIso } from "./dateFormat";
 
 // Shape of a row from client_os.concepts (snake_case, as returned by PostgREST).
@@ -35,6 +35,7 @@ interface ConceptAiMetadata {
   aiReady?: boolean;
   trending?: boolean;
   postedDaysAgo?: number;
+  language?: Language;
 }
 
 function formatViews(raw: number): string {
@@ -67,6 +68,7 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
     duration: formatDuration(durationSec),
     durationSec,
     talking: meta.talking ?? false,
+    language: meta.language ?? "English",
     aiReady: meta.aiReady ?? false,
     aiScore: row.ai_score ?? 0,
     difficulty: row.difficulty ?? "Easy",

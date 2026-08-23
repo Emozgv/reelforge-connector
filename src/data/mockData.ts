@@ -1,4 +1,4 @@
-import type { ReelVideo, Difficulty, Setting, ContentStyle } from "../types";
+import type { ReelVideo, Difficulty, Setting, ContentStyle, Language } from "../types";
 
 const gradients = [
   "linear-gradient(160deg,#3a3140,#221d29)",
@@ -23,17 +23,22 @@ const tagPool = [
   ["Golf", "Outdoor", "Cute"],
   ["Gym", "Fitness", "POV"],
   ["Blonde", "Selfie"],
-  ["Beach", "Summer"],
+  ["Beach", "Summer", "Outdoor"],
   ["Talking", "GRWM"],
   ["POV", "Aesthetic"],
   ["Cute", "Cafe"],
-  ["Golf", "Talking"],
+  ["Golf", "Talking", "Outdoor"],
   ["Gym", "Motivation"],
   ["Blonde", "Golden Hour"],
+  ["Meme", "Talking", "Controversial"],
+  ["Outdoor", "Storytime", "Controversial"],
+  ["Meme", "POV"],
+  ["Controversial", "Talking"],
 ];
 
 const difficulties: Difficulty[] = ["Easy", "Medium", "Hard"];
 const settings: Setting[] = ["Indoor", "Outdoor"];
+const languages: Language[] = ["English", "Spanish", "German", "Non-verbal"];
 
 // Small, intentionally mock content-style set — expected to grow. Add new values
 // here and to the ContentStyle union in types.ts; every consumer (filters, cards)
@@ -71,6 +76,8 @@ export function generateMockVideos(seed = 1): ReelVideo[] {
     const tags = tagPool[(i + seed) % tagPool.length];
     const platform = platforms[(i + seed) % 2];
     const id = `v-${seed}-${i}`;
+    const talking = tags.includes("Talking");
+    const language = talking ? languages[(i + seed * 2) % 3] : "Non-verbal";
     return {
       id,
       platform,
@@ -87,7 +94,8 @@ export function generateMockVideos(seed = 1): ReelVideo[] {
       thumbGradient: gradients[(i + seed) % gradients.length],
       duration: `0:${durationSec.toString().padStart(2, "0")}`,
       durationSec,
-      talking: tags.includes("Talking"),
+      talking,
+      language,
       aiReady: (i + seed * 3) % 3 === 0,
       aiScore: 52 + ((i * 9 + seed * 4) % 47),
       difficulty: difficulties[(i + seed) % difficulties.length],
