@@ -1,5 +1,15 @@
 import { useState } from "react";
 import { Sidebar, type Page } from "./components/layout/Sidebar";
+
+const PAGE_LABELS: Record<Page, string> = {
+  dashboard: "Dashboard",
+  hub: "Creativity Hub",
+  collections: "All collections",
+  creators: "Creators",
+  production: "Production",
+  library: "Library",
+  settings: "Settings",
+};
 import { DashboardPage } from "./components/dashboard/DashboardPage";
 import { CreativityHubPage } from "./components/hub/CreativityHubPage";
 import { CollectionsPage } from "./components/collections/CollectionsPage";
@@ -23,10 +33,27 @@ function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
   const [openCreatorId, setOpenCreatorId] = useState<string | null>(null);
+  // Which page a Collection was opened from, so "Back" returns you there
+  // (e.g. opened from Library -> Back goes to Library, not the flat list).
+  const [collectionOrigin, setCollectionOrigin] = useState<Page>("collections");
 
   function navigateToCollection(collectionId: string) {
+    setCollectionOrigin(page);
     setOpenCollectionId(collectionId);
     setPage("collections");
+  }
+
+  // The one true "leave the collection workspace" action — respects wherever
+  // it was opened from. Internal navigation within Collections (switching
+  // tabs, opening a different row) uses setOpenCollectionId directly instead,
+  // which intentionally leaves the origin untouched.
+  function closeCollectionWorkspace() {
+    setOpenCollectionId(null);
+    if (collectionOrigin !== "collections") {
+      const origin = collectionOrigin;
+      setCollectionOrigin("collections");
+      setPage(origin);
+    }
   }
 
   function navigateToCreator(creatorId: string) {
@@ -110,6 +137,8 @@ function App() {
             collectionsStore={collectionsStore}
             openCollectionId={openCollectionId}
             onOpenCollectionIdChange={setOpenCollectionId}
+            onCloseCollection={closeCollectionWorkspace}
+            backLabel={PAGE_LABELS[collectionOrigin]}
           />
         )}
         {page === "creators" && (

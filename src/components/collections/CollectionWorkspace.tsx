@@ -30,6 +30,7 @@ export function CollectionWorkspace({
   saveError,
   siblingCollections,
   onBack,
+  backLabel,
   onUpdateNotes,
   onUpdateStatus,
   onRemoveVideo,
@@ -44,6 +45,7 @@ export function CollectionWorkspace({
   saveError?: string | null;
   siblingCollections: { id: string; name: string }[];
   onBack: () => void;
+  backLabel: string;
   onUpdateNotes: (notes: string) => void;
   onUpdateStatus: (status: CollectionStatus) => void;
   onRemoveVideo: (videoId: string) => void;
@@ -110,7 +112,7 @@ export function CollectionWorkspace({
           className="flex items-center gap-1.5 text-[12px] text-neutral-500 hover:text-neutral-200 transition-colors duration-150 mb-4"
         >
           <ArrowLeft size={13} />
-          All collections
+          {backLabel}
         </button>
 
         {saveError && (

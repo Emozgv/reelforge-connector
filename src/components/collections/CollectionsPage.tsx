@@ -12,6 +12,8 @@ export function CollectionsPage({
   collectionsStore,
   openCollectionId,
   onOpenCollectionIdChange,
+  onCloseCollection,
+  backLabel,
 }: {
   creators: Creator[];
   collectionsStore: CollectionsStore;
@@ -19,6 +21,11 @@ export function CollectionsPage({
   // straight into a specific collection's workspace.
   openCollectionId: string | null;
   onOpenCollectionIdChange: (id: string | null) => void;
+  // Leaving the workspace entirely (the "Back" button) — respects wherever the
+  // Collection was opened from, unlike onOpenCollectionIdChange(null) which is
+  // used for in-page navigation (switching tabs, opening a different row).
+  onCloseCollection: () => void;
+  backLabel: string;
 }) {
   const { collections, renameCollection, duplicateCollection, deleteCollection } = collectionsStore;
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
@@ -48,7 +55,11 @@ export function CollectionsPage({
         collection={activeCollection}
         creators={creators}
         saveError={collectionsStore.saveError}
-        onBack={() => setActiveCollectionId(null)}
+        onBack={() => {
+          collectionsStore.clearSaveError();
+          onCloseCollection();
+        }}
+        backLabel={backLabel}
         onUpdateNotes={(notes) => collectionsStore.updateNotes(activeCollection.id, notes)}
         onUpdateStatus={(status) => collectionsStore.updateStatus(activeCollection.id, status)}
         onRemoveVideo={(videoId) => collectionsStore.removeVideoFromCollection(activeCollection.id, videoId)}
