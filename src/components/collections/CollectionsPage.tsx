@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FolderHeart, Plus } from "lucide-react";
+import { FolderHeart, Plus, Archive, ArchiveRestore } from "lucide-react";
 import type { Creator } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { groupCollectionsByFamily } from "../../lib/collectionNaming";
@@ -31,6 +31,9 @@ export function CollectionsPage({
   const { collections, renameCollection, duplicateCollection, deleteCollection } = collectionsStore;
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  // Archiving is a whole-family action (see collectionsStore.archiveCollectionFamily),
+  // so this is a simple binary view split, not a per-row filter.
+  const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   const activeCollectionId = openCollectionId;
   const setActiveCollectionId = (id: string | null) => {
     collectionsStore.clearSaveError();
@@ -40,15 +43,16 @@ export function CollectionsPage({
   const groups = useMemo(() => {
     const relevantCreators =
       activeCreatorId === "all" ? creators : creators.filter((c) => c.id === activeCreatorId);
+    const visible = collections.filter((c) => (viewMode === "archived" ? !!c.archivedAt : !c.archivedAt));
     return relevantCreators
       .map((creator) => ({
         creator,
         // One entry per numbered family ("Aesthetic Reels" + "Aesthetic Reels 2"
         // is one folder, not two independent rows) — oldest -> newest within.
-        families: groupCollectionsByFamily(collections.filter((c) => c.creatorId === creator.id)),
+        families: groupCollectionsByFamily(visible.filter((c) => c.creatorId === creator.id)),
       }))
       .filter((g) => g.families.length > 0);
-  }, [collections, activeCreatorId]);
+  }, [collections, activeCreatorId, viewMode]);
 
   const activeCollection = collections.find((c) => c.id === activeCollectionId) ?? null;
 
@@ -76,15 +80,16 @@ export function CollectionsPage({
         siblingCollections={collections
           .filter((c) => c.creatorId === activeCollection.creatorId && c.id !== activeCollection.id)
           .map((c) => ({ id: c.id, name: c.name, status: c.status }))}
-        onStartNext={async (name) => {
-          const result = await collectionsStore.createCollection(name, activeCollection.creatorId, "");
-          if (result.id) setActiveCollectionId(result.id);
-        }}
-        onClone={async (name) => {
-          const result = await duplicateCollection(activeCollection.id, name);
+        onStartNext={async () => {
+          const result = await collectionsStore.createNextVersion(activeCollection.id);
           if (result.id) setActiveCollectionId(result.id);
         }}
         onSwitchCollection={(id) => setActiveCollectionId(id)}
+        onRestore={
+          activeCollection.archivedAt
+            ? () => void collectionsStore.restoreCollectionFamily(activeCollection.id)
+            : undefined
+        }
       />
     );
   }
@@ -98,20 +103,45 @@ export function CollectionsPage({
               Collections
             </span>
             <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">
-              Every creator's creative folders
+              {viewMode === "archived" ? "Archived collections" : "Every creator's creative folders"}
             </h1>
             <p className="mt-1 text-[12.5px] text-neutral-500 max-w-lg">
-              Saved concepts organized per creator, ready to brief into production.
+              {viewMode === "archived"
+                ? "Restore a Collection to bring it — and every version of it — back to the active list."
+                : "Saved concepts organized per creator, ready to brief into production."}
             </p>
           </div>
 
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 shrink-0 press-feedback"
-          >
-            <Plus size={14} />
-            New Collection
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {viewMode === "active" ? (
+              <button
+                onClick={() => setViewMode("archived")}
+                title="View archived collections"
+                className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg surface-field text-neutral-300 text-[12.5px] font-medium hover:bg-white/[0.06] transition-colors duration-150 press-feedback"
+              >
+                <Archive size={14} />
+                Archive
+              </button>
+            ) : (
+              <button
+                onClick={() => setViewMode("active")}
+                className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg surface-field text-neutral-300 text-[12.5px] font-medium hover:bg-white/[0.06] transition-colors duration-150 press-feedback"
+              >
+                <ArchiveRestore size={14} />
+                Active Collections
+              </button>
+            )}
+
+            {viewMode === "active" && (
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 press-feedback"
+              >
+                <Plus size={14} />
+                New Collection
+              </button>
+            )}
+          </div>
         </div>
 
         {collectionsStore.error && (
@@ -151,19 +181,18 @@ export function CollectionsPage({
                       family={family}
                       current={current}
                       creators={creators}
+                      archived={viewMode === "archived"}
                       onOpen={() => setActiveCollectionId(current.id)}
                       onSwitch={(id) => setActiveCollectionId(id)}
                       onRename={(name) => renameCollection(current.id, name)}
                       onDuplicate={() => duplicateCollection(current.id)}
                       onDelete={() => deleteCollection(current.id)}
-                      onStartNext={async (name) => {
-                        const result = await collectionsStore.createCollection(name, current.creatorId, "");
+                      onStartNext={async () => {
+                        const result = await collectionsStore.createNextVersion(current.id);
                         if (result.id) setActiveCollectionId(result.id);
                       }}
-                      onClone={async (name) => {
-                        const result = await duplicateCollection(current.id, name);
-                        if (result.id) setActiveCollectionId(result.id);
-                      }}
+                      onArchive={() => void collectionsStore.archiveCollectionFamily(current.id)}
+                      onRestore={() => void collectionsStore.restoreCollectionFamily(current.id)}
                     />
                   );
                 })}
@@ -173,11 +202,23 @@ export function CollectionsPage({
 
           {groups.length === 0 && (
             <div className="rounded-xl surface-panel py-16 text-center">
-              <FolderHeart size={20} className="mx-auto text-neutral-700 mb-2.5" />
-              <p className="text-[13px] text-neutral-400">No collections yet.</p>
-              <p className="text-[12px] text-neutral-600 mt-1">
-                Create one, or save a Reel from the Creativity Hub.
-              </p>
+              {viewMode === "archived" ? (
+                <>
+                  <Archive size={20} className="mx-auto text-neutral-700 mb-2.5" />
+                  <p className="text-[13px] text-neutral-400">No archived collections.</p>
+                  <p className="text-[12px] text-neutral-600 mt-1">
+                    Archiving a Collection moves it — and every version of it — here.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <FolderHeart size={20} className="mx-auto text-neutral-700 mb-2.5" />
+                  <p className="text-[13px] text-neutral-400">No collections yet.</p>
+                  <p className="text-[12px] text-neutral-600 mt-1">
+                    Create one, or save a Reel from the Creativity Hub.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

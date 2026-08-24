@@ -232,4 +232,8 @@ export interface Collection {
   // rather than storing a precomputed string like "2 hours ago".
   updatedAt: string;
   history: CollectionHistoryEntry[];
+  // Present only once archived. Archiving is always a whole-family action
+  // (every version shares the same archived state together) — never set on
+  // just one version of a family while its siblings stay active.
+  archivedAt?: string;
 }

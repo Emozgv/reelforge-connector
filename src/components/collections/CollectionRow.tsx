@@ -16,13 +16,15 @@ export function CollectionRow({
   family,
   current,
   creators,
+  archived = false,
   onOpen,
   onSwitch,
   onRename,
   onDuplicate,
   onDelete,
   onStartNext,
-  onClone,
+  onArchive,
+  onRestore,
 }: {
   // Every version in this folder, oldest -> newest. `current` is always
   // family[family.length - 1] — the row shows/manages that version, older
@@ -30,13 +32,19 @@ export function CollectionRow({
   family: Collection[];
   current: Collection;
   creators: Creator[];
+  // Archiving is a whole-family action, so every version here shares the
+  // same archived state — this is never true for just one version.
+  archived?: boolean;
   onOpen: () => void;
   onSwitch: (id: string) => void;
   onRename: (name: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onStartNext: (name: string) => void;
-  onClone: (name: string) => void;
+  // The next version's name is always computed fresh by the store at the
+  // moment of creation — this component only supplies a display preview.
+  onStartNext: () => void;
+  onArchive?: () => void;
+  onRestore?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -46,10 +54,11 @@ export function CollectionRow({
   const total = current.concepts.length;
   const used = current.concepts.filter((c) => c.status === "Used").length;
   const available = total - used;
-  const suggestedName = nextCollectionName(
-    current.name,
-    family.filter((f) => f.id !== current.id).map((f) => f.name)
-  );
+  // Display preview only — the actual name is always recomputed fresh by the
+  // store at creation time (see createNextVersion). Must include `current`
+  // itself in the taken-names set: current already occupies its own slot
+  // (e.g. "Foo 2"), so excluding it would suggest that same slot again.
+  const suggestedName = nextCollectionName(current.name, family.map((f) => f.name));
 
   function commitRename() {
     const trimmed = draftName.trim();
@@ -96,14 +105,13 @@ export function CollectionRow({
             onBlur={commitRename}
             className="w-full h-6 rounded surface-field px-1.5 text-[13px] text-neutral-100 outline-none focus-glow"
           />
-        ) : isVersionableCollection(current.name) ? (
+        ) : !archived && isVersionableCollection(current.name) ? (
           <CollectionVersionMenu
             family={family}
             currentId={current.id}
             nextName={suggestedName}
             onSwitch={onSwitch}
-            onCreateNext={() => onStartNext(suggestedName)}
-            onClone={() => onClone(suggestedName)}
+            onCreateNext={onStartNext}
           >
             <h3 className="text-[13px] font-medium text-neutral-100 truncate">
               {current.name}
@@ -113,7 +121,12 @@ export function CollectionRow({
             </h3>
           </CollectionVersionMenu>
         ) : (
-          <h3 className="text-[13px] font-medium text-neutral-100 truncate">{current.name}</h3>
+          <h3 className="text-[13px] font-medium text-neutral-100 truncate">
+            {current.name}
+            {family.length > 1 && (
+              <span className="ml-1.5 text-[10.5px] font-normal text-neutral-600">{family.length} versions</span>
+            )}
+          </h3>
         )}
         <p className="text-[11px] text-neutral-500 mt-0.5">
           {total} concepts · {used} used · {available} available
@@ -156,35 +169,58 @@ export function CollectionRow({
         {menuOpen && (
           <div
             onMouseLeave={() => setMenuOpen(false)}
-            className="absolute right-0 top-8 z-20 w-36 rounded-lg surface-panel-strong p-1 animate-fade-in"
+            className="absolute right-0 top-8 z-20 w-40 rounded-lg surface-panel-strong p-1 animate-fade-in"
           >
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                setRenaming(true);
-              }}
-              className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
-            >
-              Rename
-            </button>
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                onDuplicate();
-              }}
-              className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
-            >
-              Duplicate
-            </button>
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                onDelete();
-              }}
-              className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-red-400/80 hover:bg-white/[0.06] transition-colors"
-            >
-              Delete
-            </button>
+            {archived ? (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRestore?.();
+                }}
+                className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-[#D39448] hover:bg-white/[0.06] transition-colors"
+              >
+                Restore
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setRenaming(true);
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                >
+                  Rename
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDuplicate();
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                >
+                  Duplicate
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onArchive?.();
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                >
+                  Archive{family.length > 1 ? " all versions" : ""}
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete();
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-red-400/80 hover:bg-white/[0.06] transition-colors"
+                >
+                  Delete
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

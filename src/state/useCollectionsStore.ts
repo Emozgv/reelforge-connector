@@ -10,6 +10,7 @@ import {
   type RegenerationRequestRow,
 } from "../lib/regenerationMapping";
 import { formatTimestamp } from "../lib/dateFormat";
+import { collectionBaseName, collectionFamily, nextCollectionName } from "../lib/collectionNaming";
 import type { Collection, CollectionStatus, ConceptStatus, ReelVideo, RegenerationReason } from "../types";
 
 function isUniqueViolation(error: { code?: string } | null): boolean {
@@ -34,6 +35,10 @@ export function useCollectionsStore(workspaceId: string | undefined) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const collectionsRef = useRef<Collection[]>([]);
   collectionsRef.current = collections;
+  // Families currently mid-creation of their next version — guards against
+  // two "New version" clicks (or any other double-fire) both reading the same
+  // not-yet-updated collections list and computing the same next number.
+  const pendingVersionKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!workspaceId) {
@@ -280,6 +285,34 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     setCollections((prev) => [created, ...prev]);
     void logActivity(meta.id, "collection_created", "Collection created");
     return { id: created.id, error: null };
+  }
+
+  // Creates the next numbered version of a Collection's family — the name is
+  // always computed here, from the freshest known collections list, at the
+  // exact moment of creation. Never accepts a name from the caller, so a
+  // stale suggestion computed earlier at render time can never be what
+  // actually gets inserted. Guarded against concurrent calls for the same
+  // family so two rapid clicks can't both land on e.g. "Foo 3".
+  async function createNextVersion(collectionId: string): Promise<{ id: string | null; error: string | null }> {
+    const source = collectionsRef.current.find((c) => c.id === collectionId);
+    if (!source) return { id: null, error: "Collection not found." };
+
+    const key = `${source.creatorId}::${collectionBaseName(source.name)}`;
+    if (pendingVersionKeysRef.current.has(key)) {
+      return { id: null, error: null }; // a next-version request for this family is already in flight
+    }
+    pendingVersionKeysRef.current.add(key);
+
+    try {
+      const family = collectionFamily(
+        source.name,
+        collectionsRef.current.filter((c) => c.creatorId === source.creatorId)
+      );
+      const name = nextCollectionName(source.name, family.map((f) => f.name));
+      return await createCollection(name, source.creatorId, "");
+    } finally {
+      pendingVersionKeysRef.current.delete(key);
+    }
   }
 
   // A Concept already referenced by a real Submission (client_os.submission_concepts)
@@ -632,6 +665,64 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     }
   }
 
+  // Archiving/restoring is always a whole-family action — every version of
+  // "Foo", "Foo 2", "Foo 3", ... moves together, never just the one the
+  // client happened to click on. Both resolve the family fresh from
+  // collectionsRef.current, same as createNextVersion, rather than trusting
+  // a list handed in from render time.
+  async function archiveCollectionFamily(collectionId: string) {
+    const source = collectionsRef.current.find((c) => c.id === collectionId);
+    if (!source) return;
+    const family = collectionFamily(
+      source.name,
+      collectionsRef.current.filter((c) => c.creatorId === source.creatorId)
+    );
+    const ids = family.map((f) => f.id);
+    const archivedAtIso = new Date().toISOString();
+
+    const previous = collectionsRef.current;
+    setCollections((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, archivedAt: archivedAtIso } : c)));
+
+    const { error: updateError } = await supabase
+      .schema("client_os")
+      .from("collections")
+      .update({ archived_at: archivedAtIso })
+      .in("id", ids);
+
+    if (updateError) {
+      setCollections(previous);
+      setSaveError("Couldn't archive that collection — please try again.");
+      return;
+    }
+    void logActivity(collectionId, "collection_status_changed", `Archived "${collectionBaseName(source.name)}"`);
+  }
+
+  async function restoreCollectionFamily(collectionId: string) {
+    const source = collectionsRef.current.find((c) => c.id === collectionId);
+    if (!source) return;
+    const family = collectionFamily(
+      source.name,
+      collectionsRef.current.filter((c) => c.creatorId === source.creatorId)
+    );
+    const ids = family.map((f) => f.id);
+
+    const previous = collectionsRef.current;
+    setCollections((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, archivedAt: undefined } : c)));
+
+    const { error: updateError } = await supabase
+      .schema("client_os")
+      .from("collections")
+      .update({ archived_at: null })
+      .in("id", ids);
+
+    if (updateError) {
+      setCollections(previous);
+      setSaveError("Couldn't restore that collection — please try again.");
+      return;
+    }
+    void logActivity(collectionId, "collection_status_changed", `Restored "${collectionBaseName(source.name)}"`);
+  }
+
   function clearSaveError() {
     setSaveError(null);
   }
@@ -644,6 +735,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     clearSaveError,
     addVideoToCollection,
     createCollection,
+    createNextVersion,
     removeVideoFromCollection,
     setConceptStatus,
     updateConceptNotes,
@@ -657,6 +749,8 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     renameCollection,
     duplicateCollection,
     deleteCollection,
+    archiveCollectionFamily,
+    restoreCollectionFamily,
   };
 }
 

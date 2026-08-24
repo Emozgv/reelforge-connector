@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Check, Copy, Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import type { CollectionStatus } from "../../types";
 import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
 
@@ -10,17 +10,16 @@ export interface VersionEntry {
 }
 
 // One main folder, several numbered versions nested under it — hovering the
-// title reveals every version plus actions to start a fresh next version or
-// clone the current one. This is a general Collection behavior: every
-// Collection in the app gets this menu, not a one-off for a specific one —
-// the only thing that varies is which versions happen to exist so far.
+// title reveals every version plus an action to start a fresh next version.
+// This is a general Collection behavior: every Collection in the app gets
+// this menu, not a one-off for a specific one — the only thing that varies
+// is which versions happen to exist so far.
 export function CollectionVersionMenu({
   family,
   currentId,
   nextName,
   onSwitch,
   onCreateNext,
-  onClone,
   children,
 }: {
   family: VersionEntry[];
@@ -28,7 +27,6 @@ export function CollectionVersionMenu({
   nextName: string;
   onSwitch: (id: string) => void;
   onCreateNext: () => void;
-  onClone: () => void;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -81,16 +79,6 @@ export function CollectionVersionMenu({
             >
               <Plus size={11} />
               New version — "{nextName}"
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onClone();
-              }}
-              className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
-            >
-              <Copy size={11} />
-              Clone as "{nextName}"
             </button>
           </span>
         </span>

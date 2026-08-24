@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox } from "lucide-react";
+import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox, ArchiveRestore } from "lucide-react";
 import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { collectionFamily, isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
@@ -39,8 +39,8 @@ export function CollectionWorkspace({
   onSetConceptNotes,
   onSendSubmission,
   onStartNext,
-  onClone,
   onSwitchCollection,
+  onRestore,
 }: {
   collection: Collection;
   creators: Creator[];
@@ -54,10 +54,15 @@ export function CollectionWorkspace({
   onSetConceptStatus: (videoId: string, status: ConceptStatus) => void;
   onSetConceptNotes: (videoId: string, notes: string) => void;
   onSendSubmission: (note: string) => void;
-  onStartNext: (name: string) => void;
-  onClone: (name: string) => void;
+  // The next version's name is always computed fresh by the store at the
+  // moment of creation — this component only supplies a display preview.
+  onStartNext: () => void;
   onSwitchCollection: (id: string) => void;
+  // Present only when viewing this Collection from the Archive — restores
+  // the whole family (every version) back to the active list together.
+  onRestore?: () => void;
 }) {
+  const archived = !!collection.archivedAt;
   const [notes, setNotes] = useState(collection.notes);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
@@ -69,7 +74,12 @@ export function CollectionWorkspace({
     { id: collection.id, name: collection.name, status: collection.status },
     ...siblingCollections,
   ]);
-  const suggestedName = nextCollectionName(collection.name, siblingCollections.map((s) => s.name));
+  // Display preview only — the actual name is always recomputed fresh by the
+  // store at creation time (see createNextVersion). Must include `family`'s
+  // full set (which already includes this collection itself): the current
+  // version already occupies its own slot (e.g. "Foo 2"), so a names list
+  // that excluded it would suggest that same slot again.
+  const suggestedName = nextCollectionName(collection.name, family.map((f) => f.name));
 
   useEffect(() => {
     return () => clearTimeout(notesSaveTimeout.current);
@@ -126,17 +136,34 @@ export function CollectionWorkspace({
           </p>
         )}
 
+        {archived && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg surface-field px-3.5 py-2.5">
+            <p className="text-[12px] text-neutral-400">
+              This Collection is archived
+              {family.length > 1 ? " — restoring brings back every version." : "."}
+            </p>
+            {onRestore && (
+              <button
+                onClick={onRestore}
+                className="shrink-0 flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-[#D39448]/15 text-[#D39448] text-[11.5px] font-medium hover:bg-[#D39448]/25 transition-colors"
+              >
+                <ArchiveRestore size={12} />
+                Restore
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-6 flex-wrap pb-3 border-b border-white/[0.06]">
           <div>
             <div className="flex items-center gap-2">
-              {isVersionableCollection(collection.name) ? (
+              {!archived && isVersionableCollection(collection.name) ? (
                 <CollectionVersionMenu
                   family={family}
                   currentId={collection.id}
                   nextName={suggestedName}
                   onSwitch={onSwitchCollection}
-                  onCreateNext={() => onStartNext(suggestedName)}
-                  onClone={() => onClone(suggestedName)}
+                  onCreateNext={onStartNext}
                 >
                   <h1 className="text-[19px] font-serif font-medium text-neutral-50 cursor-default">
                     {collection.name}
@@ -148,7 +175,14 @@ export function CollectionWorkspace({
                   </h1>
                 </CollectionVersionMenu>
               ) : (
-                <h1 className="text-[19px] font-serif font-medium text-neutral-50">{collection.name}</h1>
+                <h1 className="text-[19px] font-serif font-medium text-neutral-50">
+                  {collection.name}
+                  {family.length > 1 && (
+                    <span className="ml-2 text-[11px] font-sans font-normal text-neutral-600">
+                      {family.length} versions
+                    </span>
+                  )}
+                </h1>
               )}
 
               <div className="relative">
