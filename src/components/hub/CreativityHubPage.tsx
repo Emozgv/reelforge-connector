@@ -40,7 +40,10 @@ export function CreativityHubPage({
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [videos, setVideos] = useState<ReelVideo[]>([]);
-  const [spinning, setSpinning] = useState(false);
+  // Kept fully independent per button — sharing one flag made both icons
+  // spin no matter which button was actually clicked.
+  const [refreshSpinning, setRefreshSpinning] = useState(false);
+  const [shuffleSpinning, setShuffleSpinning] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [platformNotice, setPlatformNotice] = useState<string | null>(null);
@@ -236,45 +239,47 @@ export function CreativityHubPage({
   // which needs to actually retry the failed fetch, not reset the Hub.
   function retryLastAction() {
     if (!lastAction) return;
-    setSpinning(true);
-    const rerun = lastAction.kind === "search" ? runSearch(lastAction.value) : runProfileLookup(lastAction.value);
-    void rerun.finally(() => setSpinning(false));
+    void (lastAction.kind === "search" ? runSearch(lastAction.value) : runProfileLookup(lastAction.value));
   }
 
-  // Reload: re-fetches whatever's currently active WITHOUT changing the
-  // topic/query — same search keyword back to its first page, or the same
-  // profile's first page again. From home (nothing loaded) there's nothing
-  // to reload.
-  function handleReload() {
-    if (lastAction?.kind === "search") {
-      setSpinning(true);
-      setDetailVideoId(null);
-      void runSearch(lastAction.value).finally(() => setSpinning(false));
-      return;
-    }
-    if (lastAction?.kind === "profile") {
-      setSpinning(true);
-      setDetailVideoId(null);
-      void runProfileLookup(lastAction.value).finally(() => setSpinning(false));
-      return;
-    }
+  // Refresh: unconditionally resets the Hub back to its default home
+  // state — clears the active keyword/profile and every result, regardless
+  // of what's currently open. It never re-fetches a batch of the same topic
+  // (that's Shuffle's job, entirely separate below).
+  function handleRefresh() {
+    setRefreshSpinning(true);
+    setLastAction(null);
+    setVideos([]);
+    setSearchError(false);
+    setPlatformNotice(null);
+    setQuery("");
+    setProfileHandle("");
+    setProfile(null);
+    setProfileSecUid(null);
+    setProfileCursor(null);
+    setProfileHasMore(false);
+    setSearchCursor(null);
+    setSearchHasMore(false);
+    setDetailVideoId(null);
+    window.setTimeout(() => setRefreshSpinning(false), 280);
   }
 
-  // Shuffle: intentionally swaps in a DIFFERENT batch for whatever's active —
-  // the next cursor page of the same search keyword or the same profile,
-  // never the identical results twice in a row. From home (no active
-  // search) it shuffles in a fresh random niche instead.
+  // Shuffle: keeps the active keyword/profile exactly as-is and swaps in a
+  // DIFFERENT batch for it — the next cursor page of the same search
+  // keyword or the same profile, never the identical results twice in a
+  // row, and never resetting the Hub (that's Refresh's job, above). From
+  // home (no active search) it shuffles in a fresh random niche instead.
   function handleShuffle() {
     if (lastAction?.kind === "search") {
-      setSpinning(true);
+      setShuffleSpinning(true);
       setDetailVideoId(null);
       void runSearch(lastAction.value, searchHasMore ? (searchCursor ?? undefined) : undefined).finally(() =>
-        setSpinning(false)
+        setShuffleSpinning(false)
       );
       return;
     }
     if (lastAction?.kind === "profile") {
-      setSpinning(true);
+      setShuffleSpinning(true);
       setDetailVideoId(null);
       if (profileSecUid && profileHasMore && profileCursor) {
         void (async () => {
@@ -293,19 +298,19 @@ export function CreativityHubPage({
             setProfileHasMore(!!hasMore);
           }
           setSearching(false);
-          setSpinning(false);
+          setShuffleSpinning(false);
         })();
       } else {
         // Pagination exhausted (or no cursor yet) — the only "fresh" batch
         // left is the same profile's first page again.
-        void runProfileLookup(lastAction.value).finally(() => setSpinning(false));
+        void runProfileLookup(lastAction.value).finally(() => setShuffleSpinning(false));
       }
       return;
     }
     const next = NICHE_CHIPS[Math.floor(Math.random() * NICHE_CHIPS.length)];
     setQuery(next);
-    setSpinning(true);
-    void runSearch(next).finally(() => setSpinning(false));
+    setShuffleSpinning(true);
+    void runSearch(next).finally(() => setShuffleSpinning(false));
   }
 
   function markSaved(id: string) {
@@ -500,12 +505,12 @@ export function CreativityHubPage({
             </button>
 
             <button
-              onClick={handleReload}
-              disabled={searching || !lastAction}
-              title="Reload — same search, same topic"
+              onClick={handleRefresh}
+              disabled={searching}
+              title="Refresh — back to the Hub home"
               className="flex items-center justify-center w-11 h-11 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <RefreshCw size={15} className={spinning ? "animate-spin" : ""} />
+              <RefreshCw size={15} className={refreshSpinning ? "animate-spin" : ""} />
             </button>
 
             <button
@@ -514,7 +519,7 @@ export function CreativityHubPage({
               title={lastAction ? "Shuffle — fresh batch, same topic" : "Shuffle in a fresh niche"}
               className="flex items-center justify-center w-11 h-11 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <Shuffle size={15} className={spinning ? "animate-spin" : ""} />
+              <Shuffle size={15} className={shuffleSpinning ? "animate-spin" : ""} />
             </button>
 
             <button

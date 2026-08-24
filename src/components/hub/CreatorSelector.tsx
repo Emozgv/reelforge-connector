@@ -34,7 +34,7 @@ export function CreatorSelector({
       {open && (
         <div
           onMouseLeave={() => setOpen(false)}
-          className="absolute left-0 top-[52px] z-20 w-64 rounded-2xl glass-panel bg-[#141416]/95 shadow-2xl p-1.5 animate-fade-in"
+          className="absolute left-0 top-[52px] z-20 w-64 rounded-2xl surface-panel-strong p-1.5 animate-fade-in"
         >
           {creators.map((c) => (
             <button
