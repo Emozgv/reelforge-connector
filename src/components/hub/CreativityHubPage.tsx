@@ -23,42 +23,53 @@ import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTy
 // the real creator content (confirmed by inspecting live results before
 // writing this list). A phrase that names an actual creator-format hook
 // ("get ready with me", "boyfriend does my makeup") searches far more
-// narrowly and came back dramatically more relevant in the same testing —
-// so the chips lean toward named formats over single generic nouns,
-// spanning the categories an OFM team actually adapts: POV/hooks, lifestyle,
-// beauty, fitness, dating/couple dynamics, talking content, fashion, travel,
-// golf, and everyday relatable moments. Six are shown at a time, randomly
+// narrowly and came back dramatically more relevant in the same testing.
+//
+// The litmus test for anything on this list: would an OFM agency actually
+// save this as an idea because it could be RECREATED as entertaining
+// creator content? A demographic/aesthetic label ("cute blonde girl",
+// "beach aesthetic", "golden hour") or a bare lifestyle topic ("life
+// update", "travel diary", "apartment tour") fails that test — there's no
+// hook or scene to adapt, just a vibe or a category. A format, POV,
+// reaction, prank, confession, ranking, or story beat passes it, because
+// it's a repeatable bit any creator (a woman, a man, a couple, friends) can
+// actually shoot. So the chips lean entirely on named, adaptable formats
+// across the angles an OFM team actually works in: hooks/POVs, beauty,
+// fitness, dating/couple dynamics, talking/confession content, fashion,
+// and relatable situational comedy. Six are shown at a time, randomly
 // sampled from this pool on load and on Refresh, so the entry points
 // themselves feel fresh across visits instead of the same six forever.
 const NICHE_CHIP_POOL = [
-  "Cute blonde girl",
-  "Golf lifestyle",
-  "Gym POV",
-  "Talking storytime",
-  "Beach aesthetic",
-  "Golden hour",
   "Get ready with me",
   "Boyfriend does my makeup",
   "Couple morning routine",
-  "Date night outfit",
-  "A day in my life",
-  "Skincare routine",
-  "Makeup transformation",
-  "Outfit try-on haul",
-  "Home workout POV",
-  "Pilates girlie",
-  "Apartment tour",
-  "Cozy night in",
-  "Travel diary",
-  "Airport outfit",
   "Storytime confession",
   "Rant to camera",
-  "Life update",
-  "Closet cleanout",
-  "Sunday reset",
-  "Grocery run outfit",
   "Boyfriend prank",
   "First date POV",
+  "Home workout POV",
+  "Makeup transformation",
+  "Outfit try-on haul",
+  "A day in my life",
+  "Talking storytime",
+  "Rating my exes",
+  "POV: red flag or not",
+  "Reacting to old photos",
+  "Guess my age challenge",
+  "Would you rather with my partner",
+  "Ranking my green flags",
+  "Partner reacts to my ex",
+  "Telling my most embarrassing story",
+  "POV: the text that changed everything",
+  "Couple does a task swap",
+  "Rating strangers' outfits, no judgment",
+  "Confessing my most toxic trait",
+  "Recreating our first date",
+  "POV: coworker walks in",
+  "Worst date storytime",
+  "Golf trick shot fails",
+  "Girl math explained",
+  "Couple reveals who's more toxic",
 ];
 
 function pickRandomChips(pool: string[], count: number): string[] {
