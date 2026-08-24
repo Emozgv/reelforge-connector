@@ -703,6 +703,13 @@ export function CreativityHubPage({
               onOpenDetail={(video) => setDetailVideoId(video.id)}
               spacious
               loading={searching}
+              loadingLabel={
+                shuffleSpinning
+                  ? "Shuffling in a fresh batch…"
+                  : lastAction?.kind === "profile"
+                    ? `Loading @${lastAction.value.replace(/^@/, "")}'s reels…`
+                    : "ReelForge is researching your next batch…"
+              }
               emptyTitle={
                 searching
                   ? lastAction?.kind === "profile"
