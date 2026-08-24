@@ -1,4 +1,4 @@
-import { SearchX } from "lucide-react";
+import { Search, SearchX } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import { VideoCard } from "./VideoCard";
 
@@ -8,6 +8,7 @@ export function VideoGrid({
   onAddToCollection,
   onOpenDetail,
   spacious = false,
+  loading = false,
   emptyTitle = "No results match your search.",
   emptyHint = "Try a different keyword or platform.",
 }: {
@@ -16,6 +17,10 @@ export function VideoGrid({
   onAddToCollection?: (video: ReelVideo) => void;
   onOpenDetail?: (video: ReelVideo) => void;
   spacious?: boolean;
+  // True while a fetch is in flight — swaps the empty-state icon from
+  // "no results" (a magnifying glass with an X) to a plain searching icon,
+  // since a search that's still running isn't a dead end.
+  loading?: boolean;
   emptyTitle?: string;
   emptyHint?: string;
 }) {
@@ -27,7 +32,11 @@ export function VideoGrid({
           spacious ? "py-28" : "py-20",
         ].join(" ")}
       >
-        <SearchX size={20} className="text-neutral-700 mb-2.5" />
+        {loading ? (
+          <Search size={20} className="text-neutral-700 mb-2.5 animate-pulse" />
+        ) : (
+          <SearchX size={20} className="text-neutral-700 mb-2.5" />
+        )}
         <p className={spacious ? "text-[14.5px] font-serif text-neutral-300" : "text-[13.5px] text-neutral-300"}>
           {emptyTitle}
         </p>

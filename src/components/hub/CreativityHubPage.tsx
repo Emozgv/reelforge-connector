@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Shuffle, RefreshCw, Bookmark, SlidersHorizontal, Info, CloudOff, ChevronDown, Loader2 } from "lucide-react";
 import { searchReels, fetchProfileReels, fetchMoreProfileReels } from "../../lib/searchReels";
 import type { Creator, Platform, ReelProfileInfo, ReelVideo } from "../../types";
@@ -24,6 +24,17 @@ const NICHE_CHIPS = [
   "Beach aesthetic",
   "Golden hour",
 ];
+
+// The grid's intended size for one keyword-search batch — kept as one named
+// constant so the freshness/backfill logic below and the request itself
+// (searchReels always asks for 24) can't silently drift apart.
+const DISCOVERY_BATCH_SIZE = 24;
+// How many extra server round-trips runSearch is allowed to make, beyond
+// the first, to backfill past videos this session has already shown for the
+// same platform+keyword — bounded so a heavily-repeated search/Shuffle can't
+// chain into a long wait; a smaller-than-24 batch is an acceptable, honest
+// outcome once this cap is hit rather than forcing more requests.
+const MAX_FRESHNESS_ROUNDS = 2;
 
 export function CreativityHubPage({
   creators,
@@ -63,13 +74,18 @@ export function CreativityHubPage({
   // that just has zero reels, which stays false with an empty `videos`.
   const [profileReelsUnavailable, setProfileReelsUnavailable] = useState(false);
   const [searchCursor, setSearchCursor] = useState<string | null>(null);
-  const [searchHasMore, setSearchHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
   const [savedPopoverOpen, setSavedPopoverOpen] = useState(false);
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
+  // Ids already shown this session, per "platform:query" key — lets a fresh
+  // search or Shuffle on the same keyword silently skip past videos the user
+  // has already seen instead of re-showing them, without needing any server-
+  // side session state. Cleared only on Refresh (see handleRefresh below);
+  // switching keywords or platforms just starts a new, empty key.
+  const seenIdsRef = useRef<Map<string, Set<string>>>(new Map());
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) {
@@ -127,8 +143,10 @@ export function CreativityHubPage({
   const detailIndex = filtered.findIndex((v) => v.id === detailVideoId);
   const detailVideo = detailIndex >= 0 ? filtered[detailIndex] : null;
 
-  // Shared by both research modes — one gives real videos or a provider
+  // Shared by profile-based research — one gives real videos or a provider
   // error, the caller decides what "success" means for its own UI copy.
+  // Keyword search has its own fetch loop (runSearch, below) since it also
+  // needs freshness backfill that profile lookup doesn't.
   async function loadVideos(
     fetcher: () => Promise<{
       results: ReelVideo[];
@@ -139,11 +157,11 @@ export function CreativityHubPage({
       hasMore?: boolean;
       reelsUnavailable?: boolean;
     }>,
-    opts?: { isProfile?: boolean; isSearch?: boolean }
+    opts: { isProfile: true }
   ) {
     setSearching(true);
     setSearchError(false);
-    if (opts?.isProfile) setProfileReelsUnavailable(false);
+    if (opts.isProfile) setProfileReelsUnavailable(false);
     const res = await fetcher();
     // Every failure from a real call today is the provider, not us — show one
     // calm, on-brand message rather than the raw provider error text, so an
@@ -153,38 +171,46 @@ export function CreativityHubPage({
       console.error("[search-reels] provider error:", res.error);
       setSearchError(true);
       setVideos([]);
-      if (opts?.isProfile) {
-        setProfile(null);
-        setProfileSecUid(null);
-        setProfileCursor(null);
-        setProfileHasMore(false);
-      }
-      if (opts?.isSearch) {
-        setSearchCursor(null);
-        setSearchHasMore(false);
-      }
+      setProfile(null);
+      setProfileSecUid(null);
+      setProfileCursor(null);
+      setProfileHasMore(false);
     } else {
       setSearchError(false);
       setVideos(res.results);
-      if (opts?.isProfile) {
-        setProfile(res.profile ?? null);
-        setProfileSecUid(res.secUid ?? null);
-        setProfileCursor(res.cursor ?? null);
-        setProfileHasMore(!!res.hasMore);
-        setProfileReelsUnavailable(!!res.reelsUnavailable);
-      }
-      if (opts?.isSearch) {
-        setSearchCursor(res.cursor ?? null);
-        setSearchHasMore(!!res.hasMore);
-      }
+      setProfile(res.profile ?? null);
+      setProfileSecUid(res.secUid ?? null);
+      setProfileCursor(res.cursor ?? null);
+      setProfileHasMore(!!res.hasMore);
+      setProfileReelsUnavailable(!!res.reelsUnavailable);
     }
     setSearching(false);
   }
 
-  // `cursorOverride` is only passed by Refresh, to advance to a fresh batch
-  // of the same keyword instead of re-fetching page 1. `platformOverride` is
-  // only passed by the platform pill's own click handler — reading straight
-  // off the just-clicked value avoids a stale-state race with setFilters.
+  function seenIdsFor(key: string): Set<string> {
+    let set = seenIdsRef.current.get(key);
+    if (!set) {
+      set = new Set();
+      seenIdsRef.current.set(key, set);
+    }
+    return set;
+  }
+
+  // Keyword search's own fetch loop — separate from loadVideos because it
+  // needs to do more than one thing a single fetch can't: skip videos this
+  // session has already shown for the same platform+keyword (so a repeated
+  // search or a Shuffle never just re-shows the same batch) and, if that
+  // skip leaves the batch short, transparently pull another page to
+  // backfill it, up to MAX_FRESHNESS_ROUNDS — capped so a heavily-repeated
+  // search can't chain into a long wait; landing short of a full batch once
+  // that cap is hit is an honest outcome, not a bug to paper over.
+  //
+  // `cursorOverride` lets Shuffle continue from the last known page instead
+  // of restarting at page 1 (though restarting is also safe now — the seen-
+  // id filter transparently skips anything already shown either way).
+  // `platformOverride` is only passed by the platform pill's own click
+  // handler — reading straight off the just-clicked value avoids a stale-
+  // state race with setFilters.
   async function runSearch(q: string, cursorOverride?: string, platformOverride?: "all" | Platform) {
     const trimmed = q.trim();
     if (!trimmed) return;
@@ -195,7 +221,49 @@ export function CreativityHubPage({
     setProfileSecUid(null);
     setProfileCursor(null);
     setProfileHasMore(false);
-    await loadVideos(() => searchReels(platform, trimmed, cursorOverride), { isSearch: true });
+
+    setSearching(true);
+    setSearchError(false);
+
+    const seen = seenIdsFor(`${platform}:${trimmed.toLowerCase()}`);
+    const collected: ReelVideo[] = [];
+    const collectedIds = new Set<string>();
+    let cursor = cursorOverride;
+    let hasMore = true;
+    let hadError = false;
+
+    for (
+      let round = 0;
+      round < MAX_FRESHNESS_ROUNDS && collected.length < DISCOVERY_BATCH_SIZE && hasMore;
+      round++
+    ) {
+      const res = await searchReels(platform, trimmed, cursor);
+      if (res.error) {
+        console.error("[search-reels] provider error:", res.error);
+        hadError = true;
+        break;
+      }
+      for (const v of res.results) {
+        if (collected.length >= DISCOVERY_BATCH_SIZE) break;
+        if (seen.has(v.id) || collectedIds.has(v.id)) continue;
+        collectedIds.add(v.id);
+        collected.push(v);
+      }
+      cursor = res.cursor;
+      hasMore = !!res.hasMore;
+    }
+
+    if (hadError && collected.length === 0) {
+      setSearchError(true);
+      setVideos([]);
+      setSearchCursor(null);
+    } else {
+      setSearchError(false);
+      for (const v of collected) seen.add(v.id);
+      setVideos(collected);
+      setSearchCursor(cursor ?? null);
+    }
+    setSearching(false);
   }
 
   // Profile-based research: a public creator's own recent reels, independent
@@ -266,8 +334,10 @@ export function CreativityHubPage({
     setProfileHasMore(false);
     setProfileReelsUnavailable(false);
     setSearchCursor(null);
-    setSearchHasMore(false);
     setDetailVideoId(null);
+    // Back to a genuinely blank slate — forget which videos have already
+    // been shown this session, so it's not "remembered" across a Refresh.
+    seenIdsRef.current.clear();
     window.setTimeout(() => setRefreshSpinning(false), 280);
   }
 
@@ -280,9 +350,11 @@ export function CreativityHubPage({
     if (lastAction?.kind === "search") {
       setShuffleSpinning(true);
       setDetailVideoId(null);
-      void runSearch(lastAction.value, searchHasMore ? (searchCursor ?? undefined) : undefined).finally(() =>
-        setShuffleSpinning(false)
-      );
+      // Continuing from the last cursor when we have one skips straight to
+      // unseen territory faster, but even a page-1 restart (no cursor) is
+      // safe now — runSearch's own seen-id filter skips anything already
+      // shown either way, so this never just re-shows the same batch.
+      void runSearch(lastAction.value, searchCursor ?? undefined).finally(() => setShuffleSpinning(false));
       return;
     }
     if (lastAction?.kind === "profile") {
@@ -585,6 +657,7 @@ export function CreativityHubPage({
               onAddToCollection={setSavePanelVideo}
               onOpenDetail={(video) => setDetailVideoId(video.id)}
               spacious
+              loading={searching}
               emptyTitle={
                 searching
                   ? lastAction?.kind === "profile"
@@ -598,7 +671,7 @@ export function CreativityHubPage({
               }
               emptyHint={
                 searching
-                  ? "Pulling fresh results."
+                  ? "Good research can take a few seconds — hang tight."
                   : profileReelsUnavailable
                     ? "Our provider couldn't retrieve its reels right now — try again shortly."
                     : lastAction?.kind === "profile"
