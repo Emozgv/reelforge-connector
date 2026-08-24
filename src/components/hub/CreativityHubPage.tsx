@@ -30,11 +30,15 @@ export function CreativityHubPage({
   creatorsError,
   collectionsStore,
   onOpenCollection,
+  active = true,
 }: {
   creators: Creator[];
   creatorsError?: string | null;
   collectionsStore: CollectionsStore;
   onOpenCollection: (collectionId: string) => void;
+  // False while this page is kept mounted but hidden behind another route —
+  // only used to pause any playing reel video, never to reset state.
+  active?: boolean;
 }) {
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [query, setQuery] = useState("");
@@ -683,6 +687,7 @@ export function CreativityHubPage({
         }}
         hasPrev={detailIndex > 0}
         hasNext={detailIndex >= 0 && detailIndex < filtered.length - 1}
+        active={active}
       />
     </div>
   );

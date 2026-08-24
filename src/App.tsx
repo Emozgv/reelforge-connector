@@ -110,78 +110,90 @@ function App() {
         activity={activity}
         onOpenCollection={navigateToCollection}
       />
-      <div key={page} className="relative z-10 flex-1 min-w-0 h-full animate-fade-in">
-        {page === "dashboard" && (
-          <DashboardPage
-            userName={displayName}
-            creators={creatorsStore.creators}
-            collections={collectionsStore.collections}
-            activity={activity}
-            workspacePackage={workspacePackage}
-            onOpenHub={() => setPage("hub")}
-            onOpenCreator={navigateToCreator}
-            onOpenCollection={navigateToCollection}
-            onOpenCollections={() => setPage("collections")}
-            onOpenCreators={() => setPage("creators")}
-            onOpenSettings={() => setPage("settings")}
-          />
-        )}
-        {page === "hub" && (
+      <div className="relative z-10 flex-1 min-w-0 h-full">
+        {/* Kept mounted (just hidden) rather than conditionally rendered like
+            every other page below — the Hub's whole point is that stepping
+            away to Dashboard/Collections/etc and coming back should feel
+            uninterrupted: same keyword/profile, same loaded batch, same
+            scroll position, same open reel modal. Unmounting it on every
+            navigation would throw all of that away and force a refetch. */}
+        <div className={page === "hub" ? "h-full animate-fade-in" : "hidden"}>
           <CreativityHubPage
             creators={creatorsStore.creators}
             creatorsError={creatorsStore.error}
             collectionsStore={collectionsStore}
             onOpenCollection={navigateToCollection}
+            active={page === "hub"}
           />
-        )}
-        {page === "collections" && (
-          <CollectionsPage
-            creators={creatorsStore.creators}
-            collectionsStore={collectionsStore}
-            openCollectionId={openCollectionId}
-            onOpenCollectionIdChange={setOpenCollectionId}
-            onCloseCollection={closeCollectionWorkspace}
-            backLabel={PAGE_LABELS[collectionOrigin]}
-          />
-        )}
-        {page === "creators" && (
-          <CreatorsPage
-            creatorsStore={creatorsStore}
-            collectionsStore={collectionsStore}
-            onOpenCollection={navigateToCollection}
-            openCreatorId={openCreatorId}
-            onOpenCreatorIdChange={setOpenCreatorId}
-          />
-        )}
-        {page === "production" && (
-          <ProductionPage
-            creators={creatorsStore.creators}
-            collections={collectionsStore.collections}
-            onOpenCollection={navigateToCollection}
-          />
-        )}
-        {page === "library" && (
-          <LibraryPage
-            creators={creatorsStore.creators}
-            collections={collectionsStore.collections}
-            onRequestRegeneration={collectionsStore.requestRegeneration}
-            onToggleFavorite={collectionsStore.toggleFavoriteSubmission}
-            onApprove={collectionsStore.approveSubmission}
-            onUploadFinishedVideo={collectionsStore.uploadFinishedVideo}
-          />
-        )}
-        {page === "settings" && (
-          <SettingsPage
-            userEmail={user.email}
-            workspaceName={workspace.name}
-            role={workspace.role}
-            displayName={workspace.displayName}
-            onUpdateDisplayName={updateDisplayName}
-            onSignOut={signOut}
-            workspacePackage={workspacePackage}
-            collections={collectionsStore.collections}
-            creators={creatorsStore.creators}
-          />
+        </div>
+
+        {page !== "hub" && (
+          <div key={page} className="h-full animate-fade-in">
+            {page === "dashboard" && (
+              <DashboardPage
+                userName={displayName}
+                creators={creatorsStore.creators}
+                collections={collectionsStore.collections}
+                activity={activity}
+                workspacePackage={workspacePackage}
+                onOpenHub={() => setPage("hub")}
+                onOpenCreator={navigateToCreator}
+                onOpenCollection={navigateToCollection}
+                onOpenCollections={() => setPage("collections")}
+                onOpenCreators={() => setPage("creators")}
+                onOpenSettings={() => setPage("settings")}
+              />
+            )}
+            {page === "collections" && (
+              <CollectionsPage
+                creators={creatorsStore.creators}
+                collectionsStore={collectionsStore}
+                openCollectionId={openCollectionId}
+                onOpenCollectionIdChange={setOpenCollectionId}
+                onCloseCollection={closeCollectionWorkspace}
+                backLabel={PAGE_LABELS[collectionOrigin]}
+              />
+            )}
+            {page === "creators" && (
+              <CreatorsPage
+                creatorsStore={creatorsStore}
+                collectionsStore={collectionsStore}
+                onOpenCollection={navigateToCollection}
+                openCreatorId={openCreatorId}
+                onOpenCreatorIdChange={setOpenCreatorId}
+              />
+            )}
+            {page === "production" && (
+              <ProductionPage
+                creators={creatorsStore.creators}
+                collections={collectionsStore.collections}
+                onOpenCollection={navigateToCollection}
+              />
+            )}
+            {page === "library" && (
+              <LibraryPage
+                creators={creatorsStore.creators}
+                collections={collectionsStore.collections}
+                onRequestRegeneration={collectionsStore.requestRegeneration}
+                onToggleFavorite={collectionsStore.toggleFavoriteSubmission}
+                onApprove={collectionsStore.approveSubmission}
+                onUploadFinishedVideo={collectionsStore.uploadFinishedVideo}
+              />
+            )}
+            {page === "settings" && (
+              <SettingsPage
+                userEmail={user.email}
+                workspaceName={workspace.name}
+                role={workspace.role}
+                displayName={workspace.displayName}
+                onUpdateDisplayName={updateDisplayName}
+                onSignOut={signOut}
+                workspacePackage={workspacePackage}
+                collections={collectionsStore.collections}
+                creators={creatorsStore.creators}
+              />
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   X,
   ExternalLink,
@@ -57,6 +57,7 @@ export function ReelDetailModal({
   onNext,
   hasPrev = false,
   hasNext = false,
+  active = true,
 }: {
   video: ReelVideo | null;
   open: boolean;
@@ -71,15 +72,25 @@ export function ReelDetailModal({
   onNext?: () => void;
   hasPrev?: boolean;
   hasNext?: boolean;
+  // False when the Hub itself is hidden behind another page (state is kept
+  // alive, not unmounted, so this modal would otherwise keep playing video
+  // — with audio — off-screen). Pauses playback rather than closing the
+  // modal, so it's exactly as the user left it when they come back.
+  active?: boolean;
 }) {
   const [videoError, setVideoError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (open) setVideoError(false);
   }, [open, video?.id]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) videoRef.current?.pause();
+  }, [active]);
+
+  useEffect(() => {
+    if (!open || !active) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowLeft" && hasPrev) onPrev?.();
@@ -87,7 +98,7 @@ export function ReelDetailModal({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose, onPrev, onNext, hasPrev, hasNext]);
+  }, [open, active, onClose, onPrev, onNext, hasPrev, hasNext]);
 
   if (!open || !video) return null;
 
@@ -137,6 +148,7 @@ export function ReelDetailModal({
             {video.videoUrl && !videoError ? (
               <video
                 key={video.id}
+                ref={videoRef}
                 src={video.videoUrl}
                 poster={video.thumbnailUrl}
                 controls
