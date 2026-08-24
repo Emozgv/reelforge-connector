@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { Building2, Check, CreditCard, LogOut, Users as UsersIcon } from "lucide-react";
-import type { Collection, Creator, WorkspacePackage } from "../../types";
-import { computeUsageStats } from "../../lib/usageStats";
 
 export function SettingsPage({
   userEmail,
@@ -10,9 +8,7 @@ export function SettingsPage({
   displayName,
   onUpdateDisplayName,
   onSignOut,
-  workspacePackage,
-  collections,
-  creators,
+  onOpenBilling,
 }: {
   userEmail?: string;
   workspaceName?: string;
@@ -20,9 +16,7 @@ export function SettingsPage({
   displayName?: string | null;
   onUpdateDisplayName: (name: string) => Promise<{ error: string | null }>;
   onSignOut: () => void;
-  workspacePackage: WorkspacePackage | null;
-  collections: Collection[];
-  creators: Creator[];
+  onOpenBilling: () => void;
 }) {
   const [nameInput, setNameInput] = useState(displayName ?? "");
   const [saving, setSaving] = useState(false);
@@ -31,7 +25,6 @@ export function SettingsPage({
 
   const shownName = displayName || userEmail;
   const dirty = nameInput.trim() !== (displayName ?? "").trim();
-  const usage = workspacePackage ? computeUsageStats(workspacePackage, collections, creators) : null;
 
   async function handleSave() {
     setSaving(true);
@@ -99,39 +92,20 @@ export function SettingsPage({
           </button>
         </div>
 
-        {usage && workspacePackage && (
-          <>
-            <h2 className="mt-8 text-[13px] font-medium text-neutral-200 flex items-center gap-2">
-              <CreditCard size={14} className="text-[#D39448]" />
-              {workspacePackage.planName} plan
-            </h2>
-            <div className="mt-3 rounded-xl surface-panel p-4 grid grid-cols-3 gap-4">
-              <div>
-                <span className="text-[10px] tracking-wide uppercase text-neutral-500">Reels</span>
-                <p className="mt-1 text-[16px] font-serif text-neutral-100 tabular-nums">
-                  {usage.reelsUsed} <span className="text-[12px] text-neutral-500 font-sans">/ {usage.reelsTotal}</span>
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] tracking-wide uppercase text-neutral-500">Regenerations</span>
-                <p className="mt-1 text-[16px] font-serif text-neutral-100 tabular-nums">
-                  {usage.regenerationsUsed}{" "}
-                  <span className="text-[12px] text-neutral-500 font-sans">/ {usage.regenerationsTotal}</span>
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] tracking-wide uppercase text-neutral-500">Creator setups</span>
-                <p className="mt-1 text-[16px] font-serif text-neutral-100 tabular-nums">
-                  {usage.creatorSetupsUsed}{" "}
-                  <span className="text-[12px] text-neutral-500 font-sans">/ {usage.creatorSetupsTotal}</span>
-                </p>
-              </div>
-              <p className="col-span-3 mt-1 text-[11px] text-neutral-600">
-                Billing cycle started {new Date(workspacePackage.billingCycleStart).toLocaleDateString("en-US", { month: "long", day: "numeric" })}.
-              </p>
-            </div>
-          </>
-        )}
+        <h2 className="mt-8 text-[13px] font-medium text-neutral-200 flex items-center gap-2">
+          <CreditCard size={14} className="text-[#D39448]" />
+          Billing
+        </h2>
+        <button
+          onClick={onOpenBilling}
+          className="mt-3 w-full text-left rounded-xl surface-panel p-4 hover:bg-white/[0.03] transition-colors duration-150 flex items-center justify-between gap-3"
+        >
+          <div>
+            <p className="text-[12.5px] text-neutral-200">Plans, per-creator usage, and regenerations</p>
+            <p className="mt-0.5 text-[11px] text-neutral-500">Every ReelForge plan is per creator — manage them all in Billing.</p>
+          </div>
+          <span className="shrink-0 text-[11.5px] font-medium text-[#D39448]">Open →</span>
+        </button>
 
         <h2 className="mt-8 text-[13px] font-medium text-neutral-200">Coming soon</h2>
         <p className="mt-1 text-[12px] text-neutral-600 max-w-md">

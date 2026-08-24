@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, ImagePlus, PackageCheck, Plus, Sparkles, X } from "lucide-react";
-import type { Collection, Creator, Language, Setting } from "../../types";
+import { ArrowLeft, Camera, Check, CreditCard, ImagePlus, PackageCheck, Plus, Sparkles, X } from "lucide-react";
+import type { Collection, Creator, CreatorPackage, Language, Setting } from "../../types";
 import type { CreatorsStore } from "../../state/useCreatorsStore";
 import { CONTENT_STYLES } from "../../data/mockData";
 import { creatorSetupStatus } from "../../lib/creatorMapping";
+import { computeCreatorUsageStats } from "../../lib/creatorUsageStats";
+import { planBadgeLabel, planBadgeStyle, planPriceLabel } from "../../lib/planDisplay";
 import { COLLECTION_STATUS_STYLES } from "../collections/CollectionRow";
 import { DriveGlyph } from "../collections/DriveGlyph";
 import { NewCollectionPanel } from "../collections/NewCollectionPanel";
@@ -95,6 +97,8 @@ export function CreatorProfilePage({
   creator,
   collections,
   creatorsStore,
+  plan,
+  onOpenBilling,
   onBack,
   onOpenCollection,
   onCreateCollection,
@@ -102,6 +106,8 @@ export function CreatorProfilePage({
   creator: Creator;
   collections: Collection[];
   creatorsStore: CreatorsStore;
+  plan: CreatorPackage | undefined;
+  onOpenBilling: () => void;
   onBack: () => void;
   onOpenCollection: (collectionId: string) => void;
   onCreateCollection: (name: string, creatorId: string, note: string) => void;
@@ -446,6 +452,66 @@ export function CreatorProfilePage({
 
           {/* Creative Profile / AI Preferences */}
           <div className="space-y-3">
+            <div className="rounded-lg surface-panel p-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <CreditCard size={13} className="text-[#D39448]" />
+                  <h2 className="text-[13px] font-medium text-neutral-100">Plan</h2>
+                </div>
+                <button
+                  onClick={onOpenBilling}
+                  className="text-[11px] text-neutral-500 hover:text-[#D39448] transition-colors duration-150"
+                >
+                  Billing
+                </button>
+              </div>
+
+              <span className={["mt-2.5 inline-block text-[11px] font-medium px-2 py-[3px] rounded-full", planBadgeStyle(plan)].join(" ")}>
+                {planBadgeLabel(plan)}
+              </span>
+
+              {plan ? (
+                (() => {
+                  const usage = computeCreatorUsageStats(plan, collections);
+                  const pct = plan.planTier === "Enterprise" ? 0 : Math.min(100, (usage.reelsUsed / usage.reelsTotal) * 100);
+                  return (
+                    <div className="mt-3">
+                      <div className="flex items-baseline justify-between text-[12px]">
+                        <span className="text-neutral-300">
+                          {plan.planTier === "Enterprise" ? (
+                            "Pooled Enterprise allowance"
+                          ) : (
+                            <>
+                              <span className="text-neutral-100 font-medium tabular-nums">{usage.reelsUsed}</span>
+                              <span className="text-neutral-500"> / {usage.reelsTotal} reels</span>
+                            </>
+                          )}
+                        </span>
+                        <span className="text-neutral-500">{planPriceLabel(plan)}</span>
+                      </div>
+                      {plan.planTier !== "Enterprise" && (
+                        <div className="relative mt-1.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[#A97942] to-[#D39448]"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      )}
+                      <p className="mt-2 text-[10.5px] text-neutral-600">
+                        Cycle started{" "}
+                        {new Date(plan.billingCycleStart).toLocaleDateString("en-US", { month: "long", day: "numeric" })}
+                        {usage.paidRegenerationsUsed > 0 && ` · ${usage.paidRegenerationsUsed} paid regeneration${usage.paidRegenerationsUsed === 1 ? "" : "s"} used`}
+                      </p>
+                    </div>
+                  );
+                })()
+              ) : (
+                <p className="mt-2.5 text-[11.5px] text-neutral-500 leading-relaxed">
+                  This creator has no active ReelForge plan. Reels can't be produced for them until one is set up.
+                </p>
+              )}
+            </div>
+
             <div className="rounded-lg surface-panel p-3.5">
               <div className="flex items-center gap-1.5">
                 <Sparkles size={13} className="text-[#D39448]" />

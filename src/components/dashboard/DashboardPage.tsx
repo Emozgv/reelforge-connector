@@ -1,7 +1,6 @@
 import { Clapperboard, CheckCircle2, Clock, FolderHeart, FolderOpen, Inbox, Sparkles, Users } from "lucide-react";
-import type { Collection, Creator, WorkspacePackage } from "../../types";
+import type { Collection, Creator, CreatorPackage } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
-import { computeUsageStats } from "../../lib/usageStats";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 
@@ -121,25 +120,25 @@ export function DashboardPage({
   creators,
   collections,
   activity,
-  workspacePackage,
+  creatorPackages,
   onOpenHub,
   onOpenCreator,
   onOpenCollection,
   onOpenCollections,
   onOpenCreators,
-  onOpenSettings,
+  onOpenBilling,
 }: {
   userName?: string;
   creators: Creator[];
   collections: Collection[];
   activity: { items: ActivityFeedItem[]; loading: boolean };
-  workspacePackage: WorkspacePackage | null;
+  creatorPackages: Map<string, CreatorPackage>;
   onOpenHub: () => void;
   onOpenCreator: (creatorId: string) => void;
   onOpenCollection: (collectionId: string) => void;
   onOpenCollections: () => void;
   onOpenCreators: () => void;
-  onOpenSettings: () => void;
+  onOpenBilling: () => void;
 }) {
   const allSubmissions = collections.flatMap((c) => c.submissions.map((s) => ({ ...s, collection: c })));
   const activeSubmissions = allSubmissions.filter((s) => s.status !== "Finished");
@@ -152,7 +151,7 @@ export function DashboardPage({
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 3);
 
-  const usage = workspacePackage ? computeUsageStats(workspacePackage, collections, creators) : null;
+  const creatorsWithPlan = creators.filter((c) => creatorPackages.has(c.id)).length;
 
   const firstName = userName ? (userName.includes("@") ? userName.split("@")[0] : userName) : "";
 
@@ -304,27 +303,26 @@ export function DashboardPage({
           </div>
 
           <div className="rounded-xl surface-panel p-4 flex flex-col">
-            <PanelHeader title={workspacePackage ? `${workspacePackage.planName} plan` : "Plan"} onViewAll={onOpenSettings} cta="View plan" />
-            {usage && workspacePackage ? (
+            <PanelHeader title="Plans" onViewAll={onOpenBilling} cta="View billing" />
+            {creators.length === 0 ? (
+              <p className="text-[12px] text-neutral-500">Add a Creator to set up a plan.</p>
+            ) : (
               <>
                 <p className="text-[13px] text-neutral-200">
-                  <span className="text-[19px] font-serif text-neutral-50">{usage.reelsUsed}</span>
-                  <span className="text-neutral-500"> / {usage.reelsTotal} reels used</span>
+                  <span className="text-[19px] font-serif text-neutral-50">{creatorsWithPlan}</span>
+                  <span className="text-neutral-500"> / {creators.length} creators on an active plan</span>
                 </p>
                 <div className="relative mt-2.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-[#A97942] to-[#D39448]"
-                    style={{ width: `${Math.min(100, (usage.reelsUsed / usage.reelsTotal) * 100)}%` }}
+                    style={{ width: `${(creatorsWithPlan / creators.length) * 100}%` }}
                   />
                 </div>
                 <p className="mt-2 text-[11px] text-neutral-600 leading-relaxed">
-                  {usage.regenerationsUsed} / {usage.regenerationsTotal} regenerations ·{" "}
-                  {usage.creatorSetupsUsed} / {usage.creatorSetupsTotal} creator setups
+                  Every ReelForge plan is per creator — see what's active and current usage in Billing.
                 </p>
                 <GrowthSparkline />
               </>
-            ) : (
-              <p className="text-[12px] text-neutral-500">No active plan yet.</p>
             )}
           </div>
 

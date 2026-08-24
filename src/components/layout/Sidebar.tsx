@@ -7,6 +7,7 @@ import {
   Clapperboard,
   Library,
   Settings,
+  CreditCard,
   LogOut,
   Bell,
 } from "lucide-react";
@@ -21,7 +22,15 @@ const NOTABLE_EVENT_TYPES: ActivityEventType[] = ["submission_created", "regener
 // concept — matches the single-workspace-per-browser assumption elsewhere.
 const LAST_READ_KEY = "reelforge_notifications_last_read_at";
 
-export type Page = "dashboard" | "hub" | "collections" | "creators" | "production" | "library" | "settings";
+export type Page =
+  | "dashboard"
+  | "hub"
+  | "collections"
+  | "creators"
+  | "production"
+  | "library"
+  | "billing"
+  | "settings";
 
 const NAV_GROUPS: { label: string; items: { id: Page; label: string; icon: React.ReactNode }[] }[] = [
   {
@@ -43,6 +52,7 @@ const NAV_GROUPS: { label: string; items: { id: Page; label: string; icon: React
     label: "Management",
     items: [
       { id: "creators", label: "Creators", icon: <Users size={16} strokeWidth={1.75} /> },
+      { id: "billing", label: "Billing", icon: <CreditCard size={16} strokeWidth={1.75} /> },
       { id: "settings", label: "Settings", icon: <Settings size={16} strokeWidth={1.75} /> },
     ],
   },

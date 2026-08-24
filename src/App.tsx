@@ -8,6 +8,7 @@ const PAGE_LABELS: Record<Page, string> = {
   creators: "Creators",
   production: "Production",
   library: "Library",
+  billing: "Billing",
   settings: "Settings",
 };
 import { DashboardPage } from "./components/dashboard/DashboardPage";
@@ -16,6 +17,7 @@ import { CollectionsPage } from "./components/collections/CollectionsPage";
 import { CreatorsPage } from "./components/creators/CreatorsPage";
 import { ProductionPage } from "./components/production/ProductionPage";
 import { LibraryPage } from "./components/library/LibraryPage";
+import { BillingPage } from "./components/billing/BillingPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { FullScreenLoader } from "./components/auth/FullScreenLoader";
@@ -25,7 +27,7 @@ import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
 import { useWorkspace } from "./state/useWorkspace";
 import { useActivityFeed } from "./state/useActivityFeed";
-import { usePackage } from "./state/usePackage";
+import { useCreatorPackages } from "./state/useCreatorPackages";
 import { usePauseAnimationsWhenHidden } from "./state/usePauseAnimationsWhenHidden";
 
 function App() {
@@ -67,7 +69,7 @@ function App() {
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
   const activity = useActivityFeed(workspace?.id);
-  const { package: workspacePackage } = usePackage(workspace?.id);
+  const { packages: creatorPackages } = useCreatorPackages(workspace?.id);
 
   if (authLoading) {
     return <FullScreenLoader />;
@@ -135,13 +137,13 @@ function App() {
                 creators={creatorsStore.creators}
                 collections={collectionsStore.collections}
                 activity={activity}
-                workspacePackage={workspacePackage}
+                creatorPackages={creatorPackages}
                 onOpenHub={() => setPage("hub")}
                 onOpenCreator={navigateToCreator}
                 onOpenCollection={navigateToCollection}
                 onOpenCollections={() => setPage("collections")}
                 onOpenCreators={() => setPage("creators")}
-                onOpenSettings={() => setPage("settings")}
+                onOpenBilling={() => setPage("billing")}
               />
             )}
             {page === "collections" && (
@@ -158,7 +160,9 @@ function App() {
               <CreatorsPage
                 creatorsStore={creatorsStore}
                 collectionsStore={collectionsStore}
+                creatorPackages={creatorPackages}
                 onOpenCollection={navigateToCollection}
+                onOpenBilling={() => setPage("billing")}
                 openCreatorId={openCreatorId}
                 onOpenCreatorIdChange={setOpenCreatorId}
               />
@@ -180,6 +184,13 @@ function App() {
                 onUploadFinishedVideo={collectionsStore.uploadFinishedVideo}
               />
             )}
+            {page === "billing" && (
+              <BillingPage
+                creators={creatorsStore.creators}
+                creatorPackages={creatorPackages}
+                collections={collectionsStore.collections}
+              />
+            )}
             {page === "settings" && (
               <SettingsPage
                 userEmail={user.email}
@@ -188,9 +199,7 @@ function App() {
                 displayName={workspace.displayName}
                 onUpdateDisplayName={updateDisplayName}
                 onSignOut={signOut}
-                workspacePackage={workspacePackage}
-                collections={collectionsStore.collections}
-                creators={creatorsStore.creators}
+                onOpenBilling={() => setPage("billing")}
               />
             )}
           </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, Users } from "lucide-react";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import type { CreatorsStore } from "../../state/useCreatorsStore";
+import type { CreatorPackage } from "../../types";
 import { CreatorCard } from "./CreatorCard";
 import { computeCreatorStats } from "./creatorStats";
 import { CreatorProfilePage } from "./CreatorProfilePage";
@@ -10,13 +11,17 @@ import { CreatorSetupWizard } from "./CreatorSetupWizard";
 export function CreatorsPage({
   creatorsStore,
   collectionsStore,
+  creatorPackages,
   onOpenCollection,
+  onOpenBilling,
   openCreatorId,
   onOpenCreatorIdChange,
 }: {
   creatorsStore: CreatorsStore;
   collectionsStore: CollectionsStore;
+  creatorPackages: Map<string, CreatorPackage>;
   onOpenCollection: (collectionId: string) => void;
+  onOpenBilling: () => void;
   openCreatorId: string | null;
   onOpenCreatorIdChange: (id: string | null) => void;
 }) {
@@ -32,6 +37,8 @@ export function CreatorsPage({
         creator={activeCreator}
         collections={collectionsStore.collections}
         creatorsStore={creatorsStore}
+        plan={creatorPackages.get(activeCreator.id)}
+        onOpenBilling={onOpenBilling}
         onBack={() => setActiveCreatorId(null)}
         onOpenCollection={onOpenCollection}
         onCreateCollection={collectionsStore.createCollection}
@@ -84,6 +91,7 @@ export function CreatorsPage({
               key={creator.id}
               creator={creator}
               stats={computeCreatorStats(creator.id, collectionsStore.collections)}
+              plan={creatorPackages.get(creator.id)}
               onOpen={() => setActiveCreatorId(creator.id)}
             />
           ))}

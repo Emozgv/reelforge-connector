@@ -1,5 +1,6 @@
-import type { Creator } from "../../types";
+import type { Creator, CreatorPackage } from "../../types";
 import { creatorSetupStatus } from "../../lib/creatorMapping";
+import { planBadgeLabel, planBadgeStyle } from "../../lib/planDisplay";
 import type { CreatorStats } from "./creatorStats";
 
 const SETUP_STATUS_STYLE = {
@@ -16,10 +17,12 @@ const SETUP_STATUS_LABEL = {
 export function CreatorCard({
   creator,
   stats,
+  plan,
   onOpen,
 }: {
   creator: Creator;
   stats: CreatorStats;
+  plan: CreatorPackage | undefined;
   onOpen: () => void;
 }) {
   const setupStatus = creatorSetupStatus(creator);
@@ -57,7 +60,13 @@ export function CreatorCard({
         </span>
       </div>
 
-      <div className="mt-3.5 grid grid-cols-2 gap-y-1.5 text-[11.5px] text-neutral-400">
+      <div className="mt-3">
+        <span className={["inline-block text-[10.5px] font-medium px-2 py-[3px] rounded-full", planBadgeStyle(plan)].join(" ")}>
+          {planBadgeLabel(plan)}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-y-1.5 text-[11.5px] text-neutral-400">
         <span>{stats.collectionsCount} collection{stats.collectionsCount === 1 ? "" : "s"}</span>
         <span>{stats.totalConcepts} concepts</span>
         <span>{stats.used} used</span>
