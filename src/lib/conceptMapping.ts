@@ -54,6 +54,10 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
   const meta = (row.ai_metadata ?? {}) as ConceptAiMetadata;
   const viewsRaw = row.views_raw ?? 0;
   const durationSec = row.duration_sec ?? 0;
+  // A handful of pre-existing rows stored a literal CSS gradient string here
+  // (an older mock-data path) rather than a real image URL — keep rendering
+  // those as a gradient instead of trying to load them as an <img src>.
+  const hasRealThumbnailUrl = !!row.thumbnail_url && /^https?:\/\//.test(row.thumbnail_url);
 
   const video: ReelVideo = {
     id: row.id,
@@ -65,7 +69,10 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
     tags: row.tags ?? [],
     saved: true,
     used: row.status === "Used",
-    thumbGradient: row.thumbnail_url ?? "linear-gradient(160deg,#2c3140,#1a1d29)",
+    thumbnailUrl: hasRealThumbnailUrl ? row.thumbnail_url ?? undefined : undefined,
+    thumbGradient: hasRealThumbnailUrl
+      ? undefined
+      : row.thumbnail_url ?? "linear-gradient(160deg,#2c3140,#1a1d29)",
     duration: formatDuration(durationSec),
     durationSec,
     talking: meta.talking ?? false,
@@ -103,7 +110,7 @@ export function conceptToInsertRow(
     platform: video.platform,
     source_username: video.username,
     source_url: video.sourceUrl || null,
-    thumbnail_url: video.thumbGradient,
+    thumbnail_url: video.thumbnailUrl || null,
     views_raw: video.viewsRaw,
     duration_sec: video.durationSec,
     tags: video.tags,
