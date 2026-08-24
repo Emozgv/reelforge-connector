@@ -175,32 +175,27 @@ export function CreativityHubPage({
   }
 
   // `cursorOverride` is only passed by Refresh, to advance to a fresh batch
-  // of the same keyword via App V3's pagination instead of re-fetching page 1.
-  async function runSearch(q: string, cursorOverride?: string) {
+  // of the same keyword instead of re-fetching page 1. `platformOverride` is
+  // only passed by the platform pill's own click handler — reading straight
+  // off the just-clicked value avoids a stale-state race with setFilters.
+  async function runSearch(q: string, cursorOverride?: string, platformOverride?: "all" | Platform) {
     const trimmed = q.trim();
     if (!trimmed) return;
-    if (filters.platform === "instagram") {
-      setPlatformNotice("Instagram search isn't connected yet — try TikTok or All for now.");
-      return;
-    }
+    const platform = platformOverride ?? filters.platform;
     setPlatformNotice(null);
     setLastAction({ kind: "search", value: trimmed });
     setProfile(null);
     setProfileSecUid(null);
     setProfileCursor(null);
     setProfileHasMore(false);
-    await loadVideos(() => searchReels("tiktok", trimmed, cursorOverride), { isSearch: true });
+    await loadVideos(() => searchReels(platform, trimmed, cursorOverride), { isSearch: true });
   }
 
   // Profile-based research: a public creator's own recent reels, independent
-  // of the (currently unstable) keyword search endpoint.
+  // of the keyword search endpoint.
   async function runProfileLookup(handle: string) {
     const trimmed = handle.trim();
     if (!trimmed) return;
-    if (profilePlatform === "instagram") {
-      setPlatformNotice("Instagram profiles aren't connected yet — try TikTok for now.");
-      return;
-    }
     setPlatformNotice(null);
     setLastAction({ kind: "profile", value: trimmed });
     await loadVideos(() => fetchProfileReels(profilePlatform, trimmed), { isProfile: true });
@@ -462,7 +457,14 @@ export function CreativityHubPage({
               {(["instagram", "tiktok", "all"] as const).map((p) => (
                 <button
                   key={p}
-                  onClick={() => setFilters((f) => ({ ...f, platform: p }))}
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, platform: p }));
+                    // Only a keyword search actually queries a provider by
+                    // platform — re-run it with the freshly picked one.
+                    // Profile mode has its own separate platform dropdown,
+                    // so this pill doesn't touch it.
+                    if (lastAction?.kind === "search") void runSearch(lastAction.value, undefined, p);
+                  }}
                   className={[
                     "h-9 px-4 rounded-full text-[13px] capitalize transition-all duration-200",
                     filters.platform === p
@@ -586,7 +588,7 @@ export function CreativityHubPage({
               }
               emptyHint={
                 searching
-                  ? "Pulling fresh results from TikTok."
+                  ? "Pulling fresh results."
                   : lastAction?.kind === "profile"
                     ? "Double-check the username, or try a different public profile."
                     : lastAction

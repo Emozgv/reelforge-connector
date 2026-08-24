@@ -125,7 +125,7 @@ function ItemDetail({
     setDetailVideo(null);
     setDetailError(null);
     setDetailLoading(true);
-    void resolveReelVideo("tiktok", concept.video.sourceUrl).then(({ results, error }) => {
+    void resolveReelVideo(concept.video.platform, concept.video.sourceUrl).then(({ results, error }) => {
       if (cancelled) return;
       setDetailLoading(false);
       if (error || results.length === 0) {

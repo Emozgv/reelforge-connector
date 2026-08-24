@@ -116,7 +116,7 @@ export function CollectionWorkspace({
     setDetailVideo(null);
     setDetailError(null);
     setDetailLoading(true);
-    const { results, error } = await resolveReelVideo("tiktok", concept.video.sourceUrl);
+    const { results, error } = await resolveReelVideo(concept.video.platform, concept.video.sourceUrl);
     setDetailLoading(false);
     if (error || results.length === 0) {
       setDetailError(error ?? "Couldn't load this video.");

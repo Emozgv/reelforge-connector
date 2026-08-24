@@ -34,7 +34,7 @@ export function ProfilePlatformDropdown({
       {open && (
         <div
           onMouseLeave={() => setOpen(false)}
-          className="absolute left-0 top-8 z-20 w-40 rounded-xl glass-panel bg-[#141416]/95 shadow-2xl p-1 animate-fade-in"
+          className="absolute left-0 top-8 z-20 w-40 rounded-xl surface-panel-strong p-1 animate-fade-in"
         >
           {PLATFORMS.map((p) => (
             <button

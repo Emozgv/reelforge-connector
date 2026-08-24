@@ -54,12 +54,17 @@ async function invokeSearchReels(body: Record<string, unknown>): Promise<SearchR
   };
 }
 
-// Only "tiktok" is wired to a real source right now — the search-reels Edge
-// Function rejects anything else. Instagram follows once its TikHub
-// endpoints are confirmed (the public docs excerpt didn't expose them).
+// TikTok and Instagram are both real, plus "all" — a merged, interleaved
+// search of both providers at once, each with its own pagination cursor
+// tracked server-side inside one opaque compound cursor string.
 // `cursor` lets a Refresh on an already-active keyword search request a
-// fresh batch (App V3's next-page offset) instead of re-fetching page 1.
-export async function searchReels(platform: Platform, query: string, cursor?: string): Promise<SearchReelsResult> {
+// fresh batch (each provider's own next-page offset/token) instead of
+// re-fetching page 1.
+export async function searchReels(
+  platform: "all" | Platform,
+  query: string,
+  cursor?: string
+): Promise<SearchReelsResult> {
   return invokeSearchReels({ platform, mode: "search", query, count: 24, cursor });
 }
 
@@ -82,9 +87,8 @@ export async function fetchMoreProfileReels(
 }
 
 // Re-resolves one already-saved Collection concept into a fresh, currently
-// playable ReelVideo, by its original TikTok share URL — a saved concept
-// never has its own play_addr persisted (TikTok's signed CDN URLs expire in
-// ~24-48h, so a stored one would eventually just 404), so opening it for
+// playable ReelVideo, by its original share URL — a saved concept never has
+// its own play_addr persisted (signed CDN URLs expire), so opening it for
 // playback always asks TikHub for a live one instead.
 export async function resolveReelVideo(platform: Platform, sourceUrl: string): Promise<SearchReelsResult> {
   return invokeSearchReels({ platform, mode: "resolve", query: sourceUrl });
