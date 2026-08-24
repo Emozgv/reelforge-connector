@@ -57,8 +57,10 @@ async function invokeSearchReels(body: Record<string, unknown>): Promise<SearchR
 // Only "tiktok" is wired to a real source right now — the search-reels Edge
 // Function rejects anything else. Instagram follows once its TikHub
 // endpoints are confirmed (the public docs excerpt didn't expose them).
-export async function searchReels(platform: Platform, query: string): Promise<SearchReelsResult> {
-  return invokeSearchReels({ platform, mode: "search", query, count: 24 });
+// `cursor` lets a Refresh on an already-active keyword search request a
+// fresh batch (App V3's next-page offset) instead of re-fetching page 1.
+export async function searchReels(platform: Platform, query: string, cursor?: string): Promise<SearchReelsResult> {
+  return invokeSearchReels({ platform, mode: "search", query, count: 24, cursor });
 }
 
 // Profile-based research, page 1: fetch a public creator's own recent reels

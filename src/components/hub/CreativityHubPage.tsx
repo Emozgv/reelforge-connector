@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Shuffle, Bookmark, SlidersHorizontal, Info, CloudOff, ChevronDown, Loader2 } from "lucide-react";
+import { Search, Shuffle, RefreshCw, Bookmark, SlidersHorizontal, Info, CloudOff, ChevronDown, Loader2 } from "lucide-react";
 import { searchReels, fetchProfileReels, fetchMoreProfileReels } from "../../lib/searchReels";
 import type { Creator, Platform, ReelProfileInfo, ReelVideo } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
@@ -51,6 +51,8 @@ export function CreativityHubPage({
   const [profileSecUid, setProfileSecUid] = useState<string | null>(null);
   const [profileCursor, setProfileCursor] = useState<string | null>(null);
   const [profileHasMore, setProfileHasMore] = useState(false);
+  const [searchCursor, setSearchCursor] = useState<string | null>(null);
+  const [searchHasMore, setSearchHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -125,7 +127,7 @@ export function CreativityHubPage({
       cursor?: string;
       hasMore?: boolean;
     }>,
-    opts?: { isProfile?: boolean }
+    opts?: { isProfile?: boolean; isSearch?: boolean }
   ) {
     setSearching(true);
     setSearchError(false);
@@ -144,6 +146,10 @@ export function CreativityHubPage({
         setProfileCursor(null);
         setProfileHasMore(false);
       }
+      if (opts?.isSearch) {
+        setSearchCursor(null);
+        setSearchHasMore(false);
+      }
     } else {
       setSearchError(false);
       setVideos(res.results);
@@ -153,11 +159,17 @@ export function CreativityHubPage({
         setProfileCursor(res.cursor ?? null);
         setProfileHasMore(!!res.hasMore);
       }
+      if (opts?.isSearch) {
+        setSearchCursor(res.cursor ?? null);
+        setSearchHasMore(!!res.hasMore);
+      }
     }
     setSearching(false);
   }
 
-  async function runSearch(q: string) {
+  // `cursorOverride` is only passed by Refresh, to advance to a fresh batch
+  // of the same keyword via App V3's pagination instead of re-fetching page 1.
+  async function runSearch(q: string, cursorOverride?: string) {
     const trimmed = q.trim();
     if (!trimmed) return;
     if (filters.platform === "instagram") {
@@ -170,7 +182,7 @@ export function CreativityHubPage({
     setProfileSecUid(null);
     setProfileCursor(null);
     setProfileHasMore(false);
-    await loadVideos(() => searchReels("tiktok", trimmed));
+    await loadVideos(() => searchReels("tiktok", trimmed, cursorOverride), { isSearch: true });
   }
 
   // Profile-based research: a public creator's own recent reels, independent
@@ -229,25 +241,65 @@ export function CreativityHubPage({
     void rerun.finally(() => setSpinning(false));
   }
 
-  // The toolbar Refresh is context-aware rather than always re-fetching:
-  // with a result open it's a fast way back to the Hub's home state; from
-  // home (nothing open) it shuffles in a fresh niche instead of doing nothing.
-  // Either way it's pure client-side state — no reload, no full-page flash.
-  function handleRefresh() {
-    if (lastAction) {
+  // Reload: re-fetches whatever's currently active WITHOUT changing the
+  // topic/query — same search keyword back to its first page, or the same
+  // profile's first page again. From home (nothing loaded) there's nothing
+  // to reload.
+  function handleReload() {
+    if (lastAction?.kind === "search") {
       setSpinning(true);
-      setLastAction(null);
-      setVideos([]);
-      setSearchError(false);
-      setPlatformNotice(null);
-      setQuery("");
-      setProfileHandle("");
-      setProfile(null);
-      setProfileSecUid(null);
-      setProfileCursor(null);
-      setProfileHasMore(false);
       setDetailVideoId(null);
-      window.setTimeout(() => setSpinning(false), 280);
+      void runSearch(lastAction.value).finally(() => setSpinning(false));
+      return;
+    }
+    if (lastAction?.kind === "profile") {
+      setSpinning(true);
+      setDetailVideoId(null);
+      void runProfileLookup(lastAction.value).finally(() => setSpinning(false));
+      return;
+    }
+  }
+
+  // Shuffle: intentionally swaps in a DIFFERENT batch for whatever's active —
+  // the next cursor page of the same search keyword or the same profile,
+  // never the identical results twice in a row. From home (no active
+  // search) it shuffles in a fresh random niche instead.
+  function handleShuffle() {
+    if (lastAction?.kind === "search") {
+      setSpinning(true);
+      setDetailVideoId(null);
+      void runSearch(lastAction.value, searchHasMore ? (searchCursor ?? undefined) : undefined).finally(() =>
+        setSpinning(false)
+      );
+      return;
+    }
+    if (lastAction?.kind === "profile") {
+      setSpinning(true);
+      setDetailVideoId(null);
+      if (profileSecUid && profileHasMore && profileCursor) {
+        void (async () => {
+          setSearching(true);
+          const { results, error, cursor, hasMore } = await fetchMoreProfileReels(
+            profilePlatform,
+            profileSecUid,
+            profileCursor
+          );
+          if (error) {
+            console.error("[search-reels] provider error (shuffle):", error);
+            setSearchError(true);
+          } else {
+            setVideos(results);
+            setProfileCursor(cursor ?? null);
+            setProfileHasMore(!!hasMore);
+          }
+          setSearching(false);
+          setSpinning(false);
+        })();
+      } else {
+        // Pagination exhausted (or no cursor yet) — the only "fresh" batch
+        // left is the same profile's first page again.
+        void runProfileLookup(lastAction.value).finally(() => setSpinning(false));
+      }
       return;
     }
     const next = NICHE_CHIPS[Math.floor(Math.random() * NICHE_CHIPS.length)];
@@ -448,13 +500,21 @@ export function CreativityHubPage({
             </button>
 
             <button
-              onClick={handleRefresh}
-              disabled={searching}
-              title={lastAction ? "Back to the Hub home" : "Shuffle in a fresh niche"}
-              className="flex items-center gap-2 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
+              onClick={handleReload}
+              disabled={searching || !lastAction}
+              title="Reload — same search, same topic"
+              className="flex items-center justify-center w-11 h-11 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <Shuffle size={14} className={spinning ? "animate-spin" : ""} />
-              Refresh
+              <RefreshCw size={15} className={spinning ? "animate-spin" : ""} />
+            </button>
+
+            <button
+              onClick={handleShuffle}
+              disabled={searching}
+              title={lastAction ? "Shuffle — fresh batch, same topic" : "Shuffle in a fresh niche"}
+              className="flex items-center justify-center w-11 h-11 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <Shuffle size={15} className={spinning ? "animate-spin" : ""} />
             </button>
 
             <button
