@@ -68,7 +68,7 @@ export function CollectionsPage({
         }}
         backLabel={backLabel}
         onUpdateNotes={(notes) => collectionsStore.updateNotes(activeCollection.id, notes)}
-        onUpdateStatus={(status) => collectionsStore.updateStatus(activeCollection.id, status)}
+        onReopen={() => collectionsStore.updateStatus(activeCollection.id, "Draft")}
         onRemoveVideo={(videoId) => collectionsStore.removeVideoFromCollection(activeCollection.id, videoId)}
         onSetConceptStatus={(videoId, status) =>
           collectionsStore.setConceptStatus(activeCollection.id, videoId, status)

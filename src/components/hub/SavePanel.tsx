@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Check, Zap, Plus, FolderHeart, ChevronDown } from "lucide-react";
 import type { Collection, Creator, ReelVideo } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
+import { groupCollectionsByFamily } from "../../lib/collectionNaming";
 
 export function SavePanel({
   open,
@@ -48,7 +49,15 @@ export function SavePanel({
   const creatorName = assignee?.name ?? "";
   // Collections belong to exactly one creator, so switching who this save is
   // assigned to switches which existing collections are even valid targets.
-  const collectionsForAssignee = collections.filter((c) => c.creatorId === assigneeId);
+  // Grouped to one row per version family, always pointing at its newest
+  // version — every other entry point into a Collection (the Collections
+  // page, the Saved popover, the Hub's own Saved list) opens that same
+  // latest version by default. Listing every version as its own flat row
+  // here let a save silently land on an older version nobody would ever
+  // open again, making the saved concept effectively invisible.
+  const collectionsForAssignee = groupCollectionsByFamily(collections.filter((c) => c.creatorId === assigneeId)).map(
+    (family) => family[family.length - 1]
+  );
 
   function finish(label: string) {
     setConfirmedLabel(label);

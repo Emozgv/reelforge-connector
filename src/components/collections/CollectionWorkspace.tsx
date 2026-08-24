@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Clock, ChevronDown, PackageCheck, Inbox, ArchiveRestore } from "lucide-react";
+import { ArrowLeft, Send, Clock, RotateCcw, PackageCheck, Inbox, ArchiveRestore } from "lucide-react";
 import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { collectionFamily, isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
@@ -8,8 +8,6 @@ import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
 import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
-
-const ALL_STATUSES: CollectionStatus[] = ["Draft", "Sent", "Completed"];
 
 // ReelForge produces in batches — a submission needs enough concepts to make
 // a production run worthwhile. 10 is the floor; more is always fine.
@@ -33,7 +31,7 @@ export function CollectionWorkspace({
   onBack,
   backLabel,
   onUpdateNotes,
-  onUpdateStatus,
+  onReopen,
   onRemoveVideo,
   onSetConceptStatus,
   onSetConceptNotes,
@@ -49,7 +47,12 @@ export function CollectionWorkspace({
   onBack: () => void;
   backLabel: string;
   onUpdateNotes: (notes: string) => void;
-  onUpdateStatus: (status: CollectionStatus) => void;
+  // Status itself is never client-writable — Draft -> Sent happens
+  // automatically when a submission goes out, and Sent -> Completed only
+  // when ReelForge Internal marks the production finished. This is the one
+  // deliberate exception: reopening a Completed Collection back to Draft for
+  // a new round of work, without touching its existing submission history.
+  onReopen: () => void;
   onRemoveVideo: (videoId: string) => void;
   onSetConceptStatus: (videoId: string, status: ConceptStatus) => void;
   onSetConceptNotes: (videoId: string, notes: string) => void;
@@ -64,7 +67,6 @@ export function CollectionWorkspace({
 }) {
   const archived = !!collection.archivedAt;
   const [notes, setNotes] = useState(collection.notes);
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [conceptFilter, setConceptFilter] = useState<ConceptFilter>("all");
   const [inboxNoteId, setInboxNoteId] = useState<string | null>(null);
@@ -185,43 +187,27 @@ export function CollectionWorkspace({
                 </h1>
               )}
 
-              <div className="relative">
-                <button
-                  onClick={() => setStatusMenuOpen((v) => !v)}
-                  className={[
-                    "flex items-center gap-1 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] transition-colors",
-                    COLLECTION_STATUS_STYLES[collection.status],
-                  ].join(" ")}
-                >
-                  {collection.status}
-                  <ChevronDown size={10} />
-                </button>
-                {statusMenuOpen && (
-                  <div
-                    onMouseLeave={() => setStatusMenuOpen(false)}
-                    className="absolute left-0 top-6 z-20 w-40 rounded-lg surface-panel-strong p-1 animate-fade-in"
-                  >
-                    {ALL_STATUSES.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => {
-                          onUpdateStatus(s);
-                          setStatusMenuOpen(false);
-                        }}
-                        className={[
-                          "w-full text-left px-2.5 py-1.5 rounded-md text-[11.5px] transition-colors",
-                          s === collection.status
-                            ? "text-neutral-100 bg-white/[0.06]"
-                            : "text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200",
-                        ].join(" ")}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Read-only — Draft/Sent/Completed reflect real submission
+                  state (set automatically), never a manual client pick. */}
+              <span
+                className={[
+                  "text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]",
+                  COLLECTION_STATUS_STYLES[collection.status],
+                ].join(" ")}
+              >
+                {collection.status}
+              </span>
 
+              {!archived && collection.status === "Completed" && (
+                <button
+                  onClick={onReopen}
+                  title="Reopens this version for a new round of work — its finished production history stays intact."
+                  className="flex items-center gap-1 text-[10.5px] text-neutral-500 hover:text-[#D39448] transition-colors"
+                >
+                  <RotateCcw size={10} />
+                  Make Draft Again
+                </button>
+              )}
             </div>
 
             <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-neutral-500">
