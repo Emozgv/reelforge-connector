@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Clock, RotateCcw, PackageCheck, Inbox, ArchiveRestore } from "lucide-react";
-import type { Collection, CollectionStatus, ConceptStatus, Creator, SubmissionStatus } from "../../types";
+import { ArrowLeft, Send, Clock, RotateCcw, PackageCheck, Inbox, ArchiveRestore, Loader2 } from "lucide-react";
+import type {
+  Collection,
+  CollectionConcept,
+  CollectionStatus,
+  ConceptStatus,
+  Creator,
+  ReelVideo,
+  SubmissionStatus,
+} from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { collectionFamily, isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
+import { resolveReelVideo } from "../../lib/searchReels";
 import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
 import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
+import { ReelDetailModal } from "../hub/ReelDetailModal";
 
 // ReelForge produces in batches — a submission needs enough concepts to make
 // a production run worthwhile. 10 is the floor; more is always fine.
@@ -71,6 +81,14 @@ export function CollectionWorkspace({
   const [conceptFilter, setConceptFilter] = useState<ConceptFilter>("all");
   const [inboxNoteId, setInboxNoteId] = useState<string | null>(null);
   const notesSaveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // A saved Concept never has its own play_addr persisted (TikTok's signed
+  // CDN URLs expire in ~24-48h, so a stored one would eventually just 404)
+  // — opening one for playback re-resolves it live from its sourceUrl, then
+  // plays it in the exact same ReelDetailModal the Hub uses.
+  const [detailConceptId, setDetailConceptId] = useState<string | null>(null);
+  const [detailVideo, setDetailVideo] = useState<ReelVideo | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const creator = creators.find((c) => c.id === collection.creatorId);
   const family = collectionFamily(collection.name, [
     { id: collection.id, name: collection.name, status: collection.status },
@@ -91,6 +109,38 @@ export function CollectionWorkspace({
     setNotes(value);
     clearTimeout(notesSaveTimeout.current);
     notesSaveTimeout.current = setTimeout(() => onUpdateNotes(value), 500);
+  }
+
+  async function openConceptDetail(concept: CollectionConcept) {
+    setDetailConceptId(concept.video.id);
+    setDetailVideo(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    const { results, error } = await resolveReelVideo("tiktok", concept.video.sourceUrl);
+    setDetailLoading(false);
+    if (error || results.length === 0) {
+      setDetailError(error ?? "Couldn't load this video.");
+      return;
+    }
+    // The resolved video's own id is a fresh `tt-<awemeId>` — keep the
+    // Concept's real (DB row) id instead so prev/next indexing below still
+    // matches it, and prefer the Concept's already-working thumbnail (the
+    // resolve endpoint's own cover is HEIC-first and won't render in most
+    // browsers) over the freshly resolved one.
+    setDetailVideo({
+      ...results[0],
+      id: concept.video.id,
+      thumbnailUrl: concept.video.thumbnailUrl ?? results[0].thumbnailUrl,
+      thumbGradient: concept.video.thumbGradient,
+      saved: true,
+      used: concept.status === "Used",
+    });
+  }
+
+  function closeConceptDetail() {
+    setDetailConceptId(null);
+    setDetailVideo(null);
+    setDetailError(null);
   }
 
   const total = collection.concepts.length;
@@ -120,6 +170,7 @@ export function CollectionWorkspace({
 
   const visibleConcepts =
     conceptFilter === "all" ? collection.concepts : collection.concepts.filter((c) => c.status === conceptFilter);
+  const detailIndex = visibleConcepts.findIndex((c) => c.video.id === detailConceptId);
 
   return (
     <div className="h-full overflow-y-auto animate-fade-in">
@@ -250,6 +301,7 @@ export function CollectionWorkspace({
             onStatusChange={onSetConceptStatus}
             onRemove={onRemoveVideo}
             onNotesChange={onSetConceptNotes}
+            onOpen={openConceptDetail}
           />
 
           <div className="sticky top-0 space-y-3">
@@ -393,6 +445,49 @@ export function CollectionWorkspace({
         overlapSubmissionIndexes={overlapSubmissionIndexes}
         onClose={() => setSendOpen(false)}
         onConfirm={(note) => onSendSubmission(note)}
+      />
+
+      {/* Shown while re-resolving a Concept's playable video (or if that
+          fails) — the real detail modal below only ever renders once a
+          video has actually loaded. */}
+      {detailConceptId && !detailVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-[3px] animate-fade-in">
+          <div className="rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl px-6 py-5 text-center max-w-xs">
+            {detailLoading ? (
+              <>
+                <Loader2 size={18} className="mx-auto animate-spin text-neutral-400" />
+                <p className="mt-2.5 text-[12.5px] text-neutral-400">Loading video…</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-neutral-300">{detailError ?? "Couldn't load this video."}</p>
+                <button
+                  onClick={closeConceptDetail}
+                  className="mt-3 text-[12px] text-[#D39448] hover:brightness-110 transition-[filter]"
+                >
+                  Close
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <ReelDetailModal
+        video={detailVideo}
+        open={!!detailVideo}
+        creator={creator}
+        onClose={closeConceptDetail}
+        onPrev={() => {
+          if (detailIndex > 0) void openConceptDetail(visibleConcepts[detailIndex - 1]);
+        }}
+        onNext={() => {
+          if (detailIndex >= 0 && detailIndex < visibleConcepts.length - 1) {
+            void openConceptDetail(visibleConcepts[detailIndex + 1]);
+          }
+        }}
+        hasPrev={detailIndex > 0}
+        hasNext={detailIndex >= 0 && detailIndex < visibleConcepts.length - 1}
       />
     </div>
   );

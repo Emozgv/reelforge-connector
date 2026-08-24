@@ -80,3 +80,12 @@ export async function fetchMoreProfileReels(
 ): Promise<SearchReelsResult> {
   return invokeSearchReels({ platform, mode: "profile_more", secUid, cursor, count: PROFILE_PAGE_SIZE });
 }
+
+// Re-resolves one already-saved Collection concept into a fresh, currently
+// playable ReelVideo, by its original TikTok share URL — a saved concept
+// never has its own play_addr persisted (TikTok's signed CDN URLs expire in
+// ~24-48h, so a stored one would eventually just 404), so opening it for
+// playback always asks TikHub for a live one instead.
+export async function resolveReelVideo(platform: Platform, sourceUrl: string): Promise<SearchReelsResult> {
+  return invokeSearchReels({ platform, mode: "resolve", query: sourceUrl });
+}

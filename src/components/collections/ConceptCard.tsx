@@ -18,12 +18,14 @@ export function ConceptCard({
   onStatusChange,
   onRemove,
   onNotesChange,
+  onOpen,
 }: {
   concept: CollectionConcept;
   submitted: boolean;
   onStatusChange: (status: ConceptStatus) => void;
   onRemove: () => void;
   onNotesChange: (notes: string) => void;
+  onOpen: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -41,7 +43,10 @@ export function ConceptCard({
   }
 
   return (
-    <div className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] transition-all duration-200 ease-out hover:border-white/[0.16] hover:shadow-[0_10px_24px_-10px_rgba(0,0,0,0.55)]">
+    <div
+      onClick={onOpen}
+      className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] transition-all duration-200 ease-out hover:border-white/[0.16] hover:shadow-[0_10px_24px_-10px_rgba(0,0,0,0.55)] cursor-pointer"
+    >
       {video.thumbnailUrl ? (
         <img src={video.thumbnailUrl} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       ) : (

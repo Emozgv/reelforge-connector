@@ -63,7 +63,9 @@ export function ReelDetailModal({
   open: boolean;
   creator?: Creator | null;
   onClose: () => void;
-  onSaveClick: (video: ReelVideo) => void;
+  // Omitted entirely in a context where "save" doesn't apply — e.g. opening
+  // an already-saved Collection concept, where there's nothing left to save.
+  onSaveClick?: (video: ReelVideo) => void;
   onAddToCollection?: (video: ReelVideo) => void;
   // Gallery-style browsing through the currently loaded reels, without
   // closing the modal. Omit hasPrev/hasNext's handlers to hide an arrow
@@ -225,29 +227,33 @@ export function ReelDetailModal({
                 </a>
               </div>
 
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={() => onSaveClick(video)}
-                  className={[
-                    "flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg text-[12.5px] font-medium transition-colors press-feedback",
-                    video.saved
-                      ? "bg-[#D39448] text-[#020508] hover:bg-[#e2b57c]"
-                      : "surface-field text-neutral-200 hover:bg-white/[0.06]",
-                  ].join(" ")}
-                >
-                  <Bookmark size={13} fill={video.saved ? "currentColor" : "none"} />
-                  {video.saved ? "Saved" : "Quick Save"}
-                </button>
-                {onAddToCollection && (
-                  <button
-                    onClick={() => onAddToCollection(video)}
-                    className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg surface-field text-[12.5px] text-neutral-200 hover:bg-white/[0.06] transition-colors press-feedback"
-                  >
-                    <FolderPlus size={13} />
-                    Add to collection
-                  </button>
-                )}
-              </div>
+              {(onSaveClick || onAddToCollection) && (
+                <div className="mt-3 flex items-center gap-2">
+                  {onSaveClick && (
+                    <button
+                      onClick={() => onSaveClick(video)}
+                      className={[
+                        "flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg text-[12.5px] font-medium transition-colors press-feedback",
+                        video.saved
+                          ? "bg-[#D39448] text-[#020508] hover:bg-[#e2b57c]"
+                          : "surface-field text-neutral-200 hover:bg-white/[0.06]",
+                      ].join(" ")}
+                    >
+                      <Bookmark size={13} fill={video.saved ? "currentColor" : "none"} />
+                      {video.saved ? "Saved" : "Quick Save"}
+                    </button>
+                  )}
+                  {onAddToCollection && (
+                    <button
+                      onClick={() => onAddToCollection(video)}
+                      className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg surface-field text-[12.5px] text-neutral-200 hover:bg-white/[0.06] transition-colors press-feedback"
+                    >
+                      <FolderPlus size={13} />
+                      Add to collection
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="px-5 py-4 border-b border-white/[0.07] space-y-2">
