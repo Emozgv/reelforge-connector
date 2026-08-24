@@ -165,6 +165,10 @@ export interface CollectionConcept {
   // Client-uploaded delivered video for this exact reel — lets the read-only
   // Finished view show a side-by-side against the original reference.
   finishedVideoUrl?: string;
+  // Where this concept was originally found — set once, at save time, by
+  // whichever research surface saved it ("Creativity Hub", "IG Research —
+  // Nightshade"). Pure history/context, never client-editable after the fact.
+  sourceLabel?: string;
 }
 
 // Production progress for one real Submission (client_os.submissions). "Check
@@ -254,6 +258,24 @@ export interface CreatorPackage {
   monthlyReelAllowance: number;
   billingCycleStart: string;
   status: "active" | "paused" | "cancelled";
+}
+
+// A trained IG/TikTok research account belonging to a Creator (up to 5 per
+// creator per platform). Real login/session/proxy handling lives entirely
+// outside this app (client_os.research_accounts never stores credentials) —
+// this is just the account's identity, sync state, and shared "who last
+// opened it" context so any authorized team member can pick up the same
+// research session, not a login object.
+export type ResearchAccountStatus = "active" | "needs_attention" | "disconnected";
+
+export interface ResearchAccount {
+  id: string;
+  creatorId: string;
+  platform: Platform;
+  label: string;
+  status: ResearchAccountStatus;
+  lastSyncedAt?: string;
+  lastOpenedAt?: string;
 }
 
 export interface Collection {

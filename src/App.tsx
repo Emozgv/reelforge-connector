@@ -4,6 +4,7 @@ import { Sidebar, type Page } from "./components/layout/Sidebar";
 const PAGE_LABELS: Record<Page, string> = {
   dashboard: "Dashboard",
   hub: "Creativity Hub",
+  research: "Research Accounts",
   collections: "All collections",
   creators: "Creators",
   production: "Production",
@@ -18,6 +19,7 @@ import { CreatorsPage } from "./components/creators/CreatorsPage";
 import { ProductionPage } from "./components/production/ProductionPage";
 import { LibraryPage } from "./components/library/LibraryPage";
 import { BillingPage } from "./components/billing/BillingPage";
+import { ResearchAccountsPage } from "./components/research/ResearchAccountsPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { FullScreenLoader } from "./components/auth/FullScreenLoader";
@@ -28,6 +30,7 @@ import { useAuthSession } from "./state/useAuthSession";
 import { useWorkspace } from "./state/useWorkspace";
 import { useActivityFeed } from "./state/useActivityFeed";
 import { useCreatorPackages } from "./state/useCreatorPackages";
+import { useResearchAccounts } from "./state/useResearchAccounts";
 import { usePauseAnimationsWhenHidden } from "./state/usePauseAnimationsWhenHidden";
 
 function App() {
@@ -70,6 +73,7 @@ function App() {
   const collectionsStore = useCollectionsStore(workspace?.id);
   const activity = useActivityFeed(workspace?.id);
   const { packages: creatorPackages } = useCreatorPackages(workspace?.id);
+  const researchAccountsStore = useResearchAccounts(workspace?.id);
 
   if (authLoading) {
     return <FullScreenLoader />;
@@ -144,6 +148,15 @@ function App() {
                 onOpenCollections={() => setPage("collections")}
                 onOpenCreators={() => setPage("creators")}
                 onOpenBilling={() => setPage("billing")}
+              />
+            )}
+            {page === "research" && (
+              <ResearchAccountsPage
+                creators={creatorsStore.creators}
+                creatorsError={creatorsStore.error}
+                collectionsStore={collectionsStore}
+                researchAccountsStore={researchAccountsStore}
+                userId={user.id}
               />
             )}
             {page === "collections" && (

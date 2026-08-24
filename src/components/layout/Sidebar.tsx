@@ -10,6 +10,7 @@ import {
   CreditCard,
   LogOut,
   Bell,
+  Radar,
 } from "lucide-react";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import type { ActivityEventType } from "../../lib/activityMapping";
@@ -25,6 +26,7 @@ const LAST_READ_KEY = "reelforge_notifications_last_read_at";
 export type Page =
   | "dashboard"
   | "hub"
+  | "research"
   | "collections"
   | "creators"
   | "production"
@@ -38,6 +40,7 @@ const NAV_GROUPS: { label: string; items: { id: Page; label: string; icon: React
     items: [
       { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} strokeWidth={1.75} /> },
       { id: "hub", label: "Creativity Hub", icon: <Sparkles size={16} strokeWidth={1.75} /> },
+      { id: "research", label: "Research Accounts", icon: <Radar size={16} strokeWidth={1.75} /> },
     ],
   },
   {

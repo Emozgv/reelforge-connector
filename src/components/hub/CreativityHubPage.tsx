@@ -515,9 +515,9 @@ export function CreativityHubPage({
       (c) => c.creatorId === selectedCreator?.id && c.name === "Quick Saves"
     );
     if (quickSaves) {
-      void collectionsStore.addVideoToCollection(quickSaves.id, video);
+      void collectionsStore.addVideoToCollection(quickSaves.id, video, undefined, undefined, "Creativity Hub");
     } else if (selectedCreator) {
-      void collectionsStore.createCollection("Quick Saves", selectedCreator.id, "", video);
+      void collectionsStore.createCollection("Quick Saves", selectedCreator.id, "", video, undefined, undefined, "Creativity Hub");
     }
   }
 
@@ -829,21 +829,21 @@ export function CreativityHubPage({
             (c) => c.creatorId === targetCreatorId && c.name === "Quick Saves"
           );
           if (quickSaves) {
-            void collectionsStore.addVideoToCollection(quickSaves.id, savePanelVideo, note);
+            void collectionsStore.addVideoToCollection(quickSaves.id, savePanelVideo, note, undefined, "Creativity Hub");
           } else {
-            void collectionsStore.createCollection("Quick Saves", targetCreatorId, "", savePanelVideo, note);
+            void collectionsStore.createCollection("Quick Saves", targetCreatorId, "", savePanelVideo, note, undefined, "Creativity Hub");
           }
         }}
         onSaveToCollection={(collectionId, note) => {
           if (!savePanelVideo) return;
           markSaved(savePanelVideo.id);
-          void collectionsStore.addVideoToCollection(collectionId, savePanelVideo, note);
+          void collectionsStore.addVideoToCollection(collectionId, savePanelVideo, note, undefined, "Creativity Hub");
         }}
         onCreateCollection={(name, note, creatorOverrideId) => {
           if (!savePanelVideo) return;
           markSaved(savePanelVideo.id);
           const targetCreatorId = creatorOverrideId ?? selectedCreator.id;
-          void collectionsStore.createCollection(name, targetCreatorId, "", savePanelVideo, note);
+          void collectionsStore.createCollection(name, targetCreatorId, "", savePanelVideo, note, undefined, "Creativity Hub");
         }}
       />
 

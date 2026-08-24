@@ -221,7 +221,8 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     collectionId: string,
     video: ReelVideo,
     notes?: string,
-    creatorId?: string
+    creatorId?: string,
+    sourceLabel?: string
   ) {
     const target = collectionsRef.current.find((c) => c.id === collectionId);
     if (!target || !workspaceId) return;
@@ -230,7 +231,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     const { data, error: insertError } = await supabase
       .schema("client_os")
       .from("concepts")
-      .insert(conceptToInsertRow(video, collectionId, workspaceId, notes, creatorId))
+      .insert(conceptToInsertRow(video, collectionId, workspaceId, notes, creatorId, sourceLabel))
       .select()
       .single();
 
@@ -253,7 +254,8 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     note: string,
     initialVideo?: ReelVideo,
     conceptNotes?: string,
-    conceptCreatorId?: string
+    conceptCreatorId?: string,
+    sourceLabel?: string
   ): Promise<{ id: string | null; error: string | null }> {
     if (!workspaceId) return { id: null, error: "No active workspace." };
 
@@ -275,7 +277,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       const { data: conceptRow } = await supabase
         .schema("client_os")
         .from("concepts")
-        .insert(conceptToInsertRow(initialVideo, meta.id, workspaceId, conceptNotes, conceptCreatorId))
+        .insert(conceptToInsertRow(initialVideo, meta.id, workspaceId, conceptNotes, conceptCreatorId, sourceLabel))
         .select()
         .single();
       if (conceptRow) concepts = [conceptFromRow(conceptRow as ConceptRow)];

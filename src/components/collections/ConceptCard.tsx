@@ -54,12 +54,20 @@ export function ConceptCard({
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/25" />
 
-      {/* top row: platform, submitted indicator, duration */}
-      <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <div className="w-5 h-5 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
+      {/* top row: platform (+ where this was found), submitted indicator, duration */}
+      <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1 min-w-0">
+          <div className="w-5 h-5 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center shrink-0">
             <PlatformIcon platform={video.platform} size={11} />
           </div>
+          {concept.sourceLabel && (
+            <span
+              title={concept.sourceLabel}
+              className="text-[9px] text-white/55 bg-black/45 backdrop-blur-sm rounded-full px-1.5 py-[1px] truncate max-w-[92px]"
+            >
+              {concept.sourceLabel}
+            </span>
+          )}
           {submitted && (
             <div
               title="Included in a submission to ReelForge"

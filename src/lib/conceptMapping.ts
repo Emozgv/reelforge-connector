@@ -27,6 +27,7 @@ export interface ConceptRow {
   notes: string;
   creator_id: string | null;
   finished_video_url: string | null;
+  source_label: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +95,7 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
     notes: row.notes ?? "",
     creatorId: row.creator_id ?? undefined,
     finishedVideoUrl: row.finished_video_url ?? undefined,
+    sourceLabel: row.source_label ?? undefined,
   };
 }
 
@@ -102,7 +104,8 @@ export function conceptToInsertRow(
   collectionId: string,
   workspaceId: string,
   notes?: string,
-  creatorId?: string
+  creatorId?: string,
+  sourceLabel?: string
 ) {
   return {
     workspace_id: workspaceId,
@@ -122,6 +125,7 @@ export function conceptToInsertRow(
     status: "Unused" as ConceptStatus,
     notes: notes || "",
     creator_id: creatorId || null,
+    source_label: sourceLabel || null,
     ai_metadata: {
       talking: video.talking,
       aiReady: video.aiReady,
