@@ -659,6 +659,10 @@ export function CreativityHubPage({
         collections={collectionsStore.collections}
         onClose={() => setSavedPopoverOpen(false)}
         onOpenCollection={onOpenCollection}
+        onCreateNextVersion={async (collectionId) => {
+          const result = await collectionsStore.createNextVersion(collectionId);
+          return result.id;
+        }}
       />
 
       <ReelDetailModal
