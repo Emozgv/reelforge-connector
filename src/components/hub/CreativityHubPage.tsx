@@ -16,14 +16,55 @@ import { ProfileHeader } from "./ProfileHeader";
 import { ReelDetailModal } from "./ReelDetailModal";
 import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTypes";
 
-const NICHE_CHIPS = [
+// The Hub is an OFM research workspace, not a general social search box —
+// these are the default entry points, and their specificity matters more
+// than it looks. A bare word like "gym" or "beach" is broad enough to pull
+// in ads, coaching sales pitches, and pro-athlete highlight clips alongside
+// the real creator content (confirmed by inspecting live results before
+// writing this list). A phrase that names an actual creator-format hook
+// ("get ready with me", "boyfriend does my makeup") searches far more
+// narrowly and came back dramatically more relevant in the same testing —
+// so the chips lean toward named formats over single generic nouns,
+// spanning the categories an OFM team actually adapts: POV/hooks, lifestyle,
+// beauty, fitness, dating/couple dynamics, talking content, fashion, travel,
+// golf, and everyday relatable moments. Six are shown at a time, randomly
+// sampled from this pool on load and on Refresh, so the entry points
+// themselves feel fresh across visits instead of the same six forever.
+const NICHE_CHIP_POOL = [
   "Cute blonde girl",
   "Golf lifestyle",
   "Gym POV",
   "Talking storytime",
   "Beach aesthetic",
   "Golden hour",
+  "Get ready with me",
+  "Boyfriend does my makeup",
+  "Couple morning routine",
+  "Date night outfit",
+  "A day in my life",
+  "Skincare routine",
+  "Makeup transformation",
+  "Outfit try-on haul",
+  "Home workout POV",
+  "Pilates girlie",
+  "Apartment tour",
+  "Cozy night in",
+  "Travel diary",
+  "Airport outfit",
+  "Storytime confession",
+  "Rant to camera",
+  "Life update",
+  "Closet cleanout",
+  "Sunday reset",
+  "Grocery run outfit",
+  "Boyfriend prank",
+  "First date POV",
 ];
+
+function pickRandomChips(pool: string[], count: number): string[] {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
 
 // The grid's intended size for one keyword-search batch — kept as one named
 // constant so the freshness/backfill logic below and the request itself
@@ -53,6 +94,7 @@ export function CreativityHubPage({
 }) {
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [query, setQuery] = useState("");
+  const [displayedChips, setDisplayedChips] = useState<string[]>(() => pickRandomChips(NICHE_CHIP_POOL, 6));
   const [focused, setFocused] = useState(false);
   const [videos, setVideos] = useState<ReelVideo[]>([]);
   // Kept fully independent per button — sharing one flag made both icons
@@ -338,6 +380,9 @@ export function CreativityHubPage({
     // Back to a genuinely blank slate — forget which videos have already
     // been shown this session, so it's not "remembered" across a Refresh.
     seenIdsRef.current.clear();
+    // Fresh set of suggested niches too, so the home state doesn't feel
+    // like the same six chips forever.
+    setDisplayedChips(pickRandomChips(NICHE_CHIP_POOL, 6));
     window.setTimeout(() => setRefreshSpinning(false), 280);
   }
 
@@ -386,7 +431,7 @@ export function CreativityHubPage({
       }
       return;
     }
-    const next = NICHE_CHIPS[Math.floor(Math.random() * NICHE_CHIPS.length)];
+    const next = NICHE_CHIP_POOL[Math.floor(Math.random() * NICHE_CHIP_POOL.length)];
     setQuery(next);
     setShuffleSpinning(true);
     void runSearch(next).finally(() => setShuffleSpinning(false));
@@ -503,7 +548,7 @@ export function CreativityHubPage({
           </div>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            {NICHE_CHIPS.map((chip, i) => (
+            {displayedChips.map((chip, i) => (
               <button
                 key={chip}
                 onClick={() => {
