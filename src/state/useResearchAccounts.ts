@@ -10,6 +10,7 @@ interface ResearchAccountRow {
   status: string;
   last_synced_at: string | null;
   last_opened_at: string | null;
+  last_shown_synced_at: string | null;
 }
 
 // Up to 5 per Creator per platform — same cap style as the 5-reference-photo
@@ -25,6 +26,7 @@ function fromRow(row: ResearchAccountRow): ResearchAccount {
     status: row.status as ResearchAccountStatus,
     lastSyncedAt: row.last_synced_at ?? undefined,
     lastOpenedAt: row.last_opened_at ?? undefined,
+    lastShownSyncedAt: row.last_shown_synced_at ?? undefined,
   };
 }
 
@@ -146,6 +148,24 @@ export function useResearchAccounts(workspaceId: string | undefined) {
       .eq("id", accountId);
   }
 
+  // Advances the swipe-mode watermark as a VA swipes past reels — workspace-
+  // shared, so nobody (including a different authorized VA later) re-sees
+  // the same reel. Only ever moves forward.
+  async function markSeen(accountId: string, syncedAtIso: string) {
+    setAccounts((prev) =>
+      prev.map((a) =>
+        a.id === accountId && (!a.lastShownSyncedAt || syncedAtIso > a.lastShownSyncedAt)
+          ? { ...a, lastShownSyncedAt: syncedAtIso }
+          : a
+      )
+    );
+    await supabase
+      .schema("client_os")
+      .from("research_accounts")
+      .update({ last_shown_synced_at: syncedAtIso })
+      .eq("id", accountId);
+  }
+
   return {
     accounts,
     loading,
@@ -153,6 +173,7 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     countFor,
     createAccount,
     renameAccount,
+    markSeen,
     deleteAccount,
     markOpened,
     requestSync,

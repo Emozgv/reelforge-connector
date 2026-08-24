@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, X, Users } from "lucide-react";
+import { Plus, RefreshCw, X, Users, LayoutGrid, Play } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
@@ -11,6 +11,7 @@ import { PlatformIcon } from "../hub/PlatformIcon";
 import { VideoGrid } from "../hub/VideoGrid";
 import { SavePanel } from "../hub/SavePanel";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
+import { SwipeResearchPlayer } from "./SwipeResearchPlayer";
 import { formatRelativeTime } from "../../lib/relativeTime";
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: "IG Research", tiktok: "TikTok Research" };
@@ -65,6 +66,8 @@ function NewAccountChip({ onCreate, disabled }: { onCreate: (label: string) => v
   );
 }
 
+type Mode = "swipe" | "archive";
+
 export function ResearchAccountsPage({
   creators,
   creatorsError,
@@ -81,12 +84,15 @@ export function ResearchAccountsPage({
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [videos, setVideos] = useState<ReelVideo[]>([]);
+  const [mode, setMode] = useState<Mode>("swipe");
+  const [rawItems, setRawItems] = useState<ResearchFeedItemRow[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [feedError, setFeedError] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [swipeIndex, setSwipeIndex] = useState(0);
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) setSelectedCreator(creators[0] ?? null);
@@ -105,43 +111,65 @@ export function ResearchAccountsPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCreator?.id, platform]);
 
+  async function loadFeed(accountId: string) {
+    setLoadingFeed(true);
+    setFeedError(false);
+    const { data, error } = await supabase
+      .schema("client_os")
+      .from("research_feed_items")
+      .select("*")
+      .eq("research_account_id", accountId)
+      .order("synced_at", { ascending: false });
+    if (error) {
+      setFeedError(true);
+      setRawItems([]);
+    } else {
+      setRawItems(data as ResearchFeedItemRow[]);
+    }
+    setLoadingFeed(false);
+  }
+
   useEffect(() => {
     if (!currentAccount) {
-      setVideos([]);
+      setRawItems([]);
       return;
     }
     void researchAccountsStore.markOpened(currentAccount.id, userId);
-
-    let active = true;
-    setLoadingFeed(true);
-    setFeedError(false);
-    (async () => {
-      const { data, error } = await supabase
-        .schema("client_os")
-        .from("research_feed_items")
-        .select("*")
-        .eq("research_account_id", currentAccount.id)
-        .order("synced_at", { ascending: false });
-      if (!active) return;
-      if (error) {
-        setFeedError(true);
-        setVideos([]);
-      } else {
-        setVideos((data as ResearchFeedItemRow[]).map(researchFeedItemToVideo));
-      }
-      setLoadingFeed(false);
-    })();
-    return () => {
-      active = false;
-    };
+    setSwipeIndex(0);
+    void loadFeed(currentAccount.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAccount?.id]);
+
+  const videos = useMemo(
+    () => rawItems.map((r) => ({ ...researchFeedItemToVideo(r), saved: savedIds.has(r.id) })),
+    [rawItems, savedIds]
+  );
+
+  // Swipe queue: unseen items first (oldest-unseen-first, so the order feels
+  // like scrolling forward through what accumulated since last time), then
+  // already-seen ones appended as a fallback rather than a dead end.
+  const swipeQueue = useMemo(() => {
+    const watermark = currentAccount?.lastShownSyncedAt;
+    const withMeta = rawItems.map((r) => ({
+      video: { ...researchFeedItemToVideo(r), saved: savedIds.has(r.id) },
+      syncedAt: r.synced_at,
+    }));
+    const unseen = withMeta.filter((x) => !watermark || x.syncedAt > watermark).sort((a, b) => a.syncedAt.localeCompare(b.syncedAt));
+    const seen = withMeta.filter((x) => watermark && x.syncedAt <= watermark).sort((a, b) => a.syncedAt.localeCompare(b.syncedAt));
+    return [...unseen, ...seen];
+  }, [rawItems, currentAccount?.lastShownSyncedAt, savedIds]);
+
+  function handleSwipeIndexChange(i: number) {
+    setSwipeIndex(i);
+    const item = swipeQueue[i];
+    if (item && currentAccount) void researchAccountsStore.markSeen(currentAccount.id, item.syncedAt);
+  }
 
   const detailIndex = videos.findIndex((v) => v.id === detailVideoId);
   const detailVideo = detailIndex >= 0 ? videos[detailIndex] : null;
 
   function markSaved(id: string) {
-    setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, saved: true } : v)));
+    setSavedIds((prev) => new Set(prev).add(id));
   }
 
   function sourceLabelFor(account: ResearchAccount): string {
@@ -152,6 +180,7 @@ export function ResearchAccountsPage({
     if (!currentAccount) return;
     setSyncing(true);
     await researchAccountsStore.requestSync(currentAccount.id);
+    await loadFeed(currentAccount.id);
     window.setTimeout(() => setSyncing(false), 900);
   }
 
@@ -185,8 +214,8 @@ export function ResearchAccountsPage({
           Research from your own trained feeds
         </h1>
         <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
-          Browse a Creator's own Instagram/TikTok research accounts, then save straight into the same Collections you
-          already use.
+          Swipe through a Creator's own Instagram/TikTok research account, then save straight into the same
+          Collections you already use.
         </p>
 
         {/* context toolbar */}
@@ -272,30 +301,65 @@ export function ResearchAccountsPage({
                     : "Not synced yet"}
                 </span>
               </div>
-              <button
-                onClick={() => void handleRefresh()}
-                disabled={syncing}
-                className="flex items-center gap-1.5 h-9 px-3.5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors duration-150 text-[12.5px] text-neutral-300 disabled:opacity-50"
-              >
-                <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
-                {syncing ? "Sync requested…" : "Refresh feed"}
-              </button>
+
+              <div className="flex items-center gap-2">
+                <div className="flex items-center h-9 p-1 rounded-full glass-panel">
+                  <button
+                    onClick={() => setMode("swipe")}
+                    className={[
+                      "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
+                      mode === "swipe" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
+                    ].join(" ")}
+                  >
+                    <Play size={11} />
+                    Swipe
+                  </button>
+                  <button
+                    onClick={() => setMode("archive")}
+                    className={[
+                      "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
+                      mode === "archive" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
+                    ].join(" ")}
+                  >
+                    <LayoutGrid size={11} />
+                    Archive
+                  </button>
+                </div>
+                <button
+                  onClick={() => void handleRefresh()}
+                  disabled={syncing}
+                  className="flex items-center gap-1.5 h-9 px-3.5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors duration-150 text-[12.5px] text-neutral-300 disabled:opacity-50"
+                >
+                  <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
+                  {syncing ? "Sync requested…" : "Refresh feed"}
+                </button>
+              </div>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-5">
               {feedError ? (
                 <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
                   <p className="text-[13px] text-neutral-400">Couldn't load this account's feed.</p>
                 </div>
+              ) : mode === "swipe" ? (
+                <SwipeResearchPlayer
+                  account={currentAccount}
+                  videos={swipeQueue.map((x) => x.video)}
+                  index={Math.min(swipeIndex, Math.max(swipeQueue.length - 1, 0))}
+                  onIndexChange={handleSwipeIndexChange}
+                  loadingMore={loadingFeed}
+                  onNearEnd={() => void loadFeed(currentAccount.id)}
+                  onSaveClick={(video) => {
+                    if (!video.saved) setSavePanelVideo(video);
+                  }}
+                  onAddToCollection={setSavePanelVideo}
+                  onExitToArchive={() => setMode("archive")}
+                />
               ) : (
                 <VideoGrid
                   videos={videos}
                   onSaveClick={(video) => {
-                    if (video.saved) {
-                      markSaved(video.id); // toggling off isn't meaningful pre-save; no-op guard
-                    } else {
-                      setSavePanelVideo(video);
-                    }
+                    if (!video.saved) setSavePanelVideo(video);
                   }}
                   onAddToCollection={setSavePanelVideo}
                   onOpenDetail={(video) => setDetailVideoId(video.id)}

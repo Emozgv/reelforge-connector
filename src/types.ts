@@ -276,6 +276,9 @@ export interface ResearchAccount {
   status: ResearchAccountStatus;
   lastSyncedAt?: string;
   lastOpenedAt?: string;
+  // Swipe-mode watermark — feed items synced at or before this have already
+  // been shown to the team, so nobody re-sees the same reel on a later visit.
+  lastShownSyncedAt?: string;
 }
 
 export interface Collection {
