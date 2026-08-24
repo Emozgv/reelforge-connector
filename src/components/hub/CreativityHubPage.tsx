@@ -58,6 +58,10 @@ export function CreativityHubPage({
   const [profileSecUid, setProfileSecUid] = useState<string | null>(null);
   const [profileCursor, setProfileCursor] = useState<string | null>(null);
   const [profileHasMore, setProfileHasMore] = useState(false);
+  // True only when TikHub genuinely couldn't retrieve this profile's reels
+  // (after real retries and a fallback source) — distinct from a profile
+  // that just has zero reels, which stays false with an empty `videos`.
+  const [profileReelsUnavailable, setProfileReelsUnavailable] = useState(false);
   const [searchCursor, setSearchCursor] = useState<string | null>(null);
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -133,11 +137,13 @@ export function CreativityHubPage({
       secUid?: string;
       cursor?: string;
       hasMore?: boolean;
+      reelsUnavailable?: boolean;
     }>,
     opts?: { isProfile?: boolean; isSearch?: boolean }
   ) {
     setSearching(true);
     setSearchError(false);
+    if (opts?.isProfile) setProfileReelsUnavailable(false);
     const res = await fetcher();
     // Every failure from a real call today is the provider, not us — show one
     // calm, on-brand message rather than the raw provider error text, so an
@@ -165,6 +171,7 @@ export function CreativityHubPage({
         setProfileSecUid(res.secUid ?? null);
         setProfileCursor(res.cursor ?? null);
         setProfileHasMore(!!res.hasMore);
+        setProfileReelsUnavailable(!!res.reelsUnavailable);
       }
       if (opts?.isSearch) {
         setSearchCursor(res.cursor ?? null);
@@ -257,6 +264,7 @@ export function CreativityHubPage({
     setProfileSecUid(null);
     setProfileCursor(null);
     setProfileHasMore(false);
+    setProfileReelsUnavailable(false);
     setSearchCursor(null);
     setSearchHasMore(false);
     setDetailVideoId(null);
@@ -582,18 +590,22 @@ export function CreativityHubPage({
                   ? lastAction?.kind === "profile"
                     ? `Loading @${lastAction.value.replace(/^@/, "")}'s reels…`
                     : "Searching…"
-                  : lastAction
-                    ? "No results found."
-                    : "Search a niche, or browse a public profile above."
+                  : profileReelsUnavailable
+                    ? "This profile is playing hard to get."
+                    : lastAction
+                      ? "No results found."
+                      : "Search a niche, or browse a public profile above."
               }
               emptyHint={
                 searching
                   ? "Pulling fresh results."
-                  : lastAction?.kind === "profile"
-                    ? "Double-check the username, or try a different public profile."
-                    : lastAction
-                      ? "Try a different keyword, or press Refresh for a new batch."
-                      : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
+                  : profileReelsUnavailable
+                    ? "Our provider couldn't retrieve its reels right now — try again shortly."
+                    : lastAction?.kind === "profile"
+                      ? "Double-check the username, or try a different public profile."
+                      : lastAction
+                        ? "Try a different keyword, or press Refresh for a new batch."
+                        : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
               }
             />
 

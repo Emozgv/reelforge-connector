@@ -14,6 +14,11 @@ export interface SearchReelsResult {
   secUid?: string;
   cursor?: string;
   hasMore?: boolean;
+  // Instagram profile mode only — set when the provider couldn't retrieve
+  // this profile's reels after real retries and a fallback source, distinct
+  // from a profile that genuinely just has zero reels (results is empty
+  // either way, but this flag says which case it is).
+  reelsUnavailable?: boolean;
 }
 
 interface RawSearchReelsResponse {
@@ -23,6 +28,7 @@ interface RawSearchReelsResponse {
   secUid?: string;
   cursor?: string;
   hasMore?: boolean;
+  reelsUnavailable?: boolean;
 }
 
 async function invokeSearchReels(body: Record<string, unknown>): Promise<SearchReelsResult> {
@@ -51,6 +57,7 @@ async function invokeSearchReels(body: Record<string, unknown>): Promise<SearchR
     secUid: data?.secUid,
     cursor: data?.cursor,
     hasMore: data?.hasMore,
+    reelsUnavailable: data?.reelsUnavailable,
   };
 }
 
