@@ -11,6 +11,8 @@ import {
   Clock,
   CalendarDays,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { Creator, ReelVideo } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
@@ -51,6 +53,10 @@ export function ReelDetailModal({
   onClose,
   onSaveClick,
   onAddToCollection,
+  onPrev,
+  onNext,
+  hasPrev = false,
+  hasNext = false,
 }: {
   video: ReelVideo | null;
   open: boolean;
@@ -58,6 +64,13 @@ export function ReelDetailModal({
   onClose: () => void;
   onSaveClick: (video: ReelVideo) => void;
   onAddToCollection?: (video: ReelVideo) => void;
+  // Gallery-style browsing through the currently loaded reels, without
+  // closing the modal. Omit hasPrev/hasNext's handlers to hide an arrow
+  // entirely (e.g. a single-video context with nothing to page through).
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
 }) {
   const [videoError, setVideoError] = useState(false);
 
@@ -69,10 +82,12 @@ export function ReelDetailModal({
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && hasPrev) onPrev?.();
+      if (e.key === "ArrowRight" && hasNext) onNext?.();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, onPrev, onNext, hasPrev, hasNext]);
 
   if (!open || !video) return null;
 
@@ -82,8 +97,34 @@ export function ReelDetailModal({
     <>
       <div onClick={onClose} className="fixed inset-0 z-40 bg-black/75 backdrop-blur-[3px] animate-fade-in" />
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
-        <div className="pointer-events-auto relative max-w-[92vw] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl overflow-hidden animate-rise-in flex">
+      {/* Gallery arrows — outside the modal panel itself, on the backdrop,
+          so switching reels never has to close and reopen the view. */}
+      {onPrev && (
+        <button
+          onClick={onPrev}
+          disabled={!hasPrev}
+          title="Previous reel"
+          className="fixed left-4 md:left-8 top-1/2 -translate-y-1/2 z-50 w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-black/70 transition-colors disabled:opacity-0 disabled:pointer-events-none"
+        >
+          <ChevronLeft size={20} />
+        </button>
+      )}
+      {onNext && (
+        <button
+          onClick={onNext}
+          disabled={!hasNext}
+          title="Next reel"
+          className="fixed right-4 md:right-8 top-1/2 -translate-y-1/2 z-50 w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-black/70 transition-colors disabled:opacity-0 disabled:pointer-events-none"
+        >
+          <ChevronRight size={20} />
+        </button>
+      )}
+
+      <div className="fixed inset-0 z-40 flex items-center justify-center px-4 pointer-events-none">
+        <div
+          key={video.id}
+          className="pointer-events-auto relative max-w-[92vw] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl overflow-hidden animate-fade-in flex"
+        >
           <button
             onClick={onClose}
             className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-black/70 transition-colors"
@@ -183,7 +224,7 @@ export function ReelDetailModal({
                   ].join(" ")}
                 >
                   <Bookmark size={13} fill={video.saved ? "currentColor" : "none"} />
-                  {video.saved ? "Saved" : "Save"}
+                  {video.saved ? "Saved" : "Quick Save"}
                 </button>
                 {onAddToCollection && (
                   <button

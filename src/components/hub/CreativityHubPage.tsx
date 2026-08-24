@@ -57,9 +57,6 @@ export function CreativityHubPage({
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
   const [savedPopoverOpen, setSavedPopoverOpen] = useState(false);
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
-  // Derived from the live list (not a frozen snapshot) so the modal's saved
-  // state always matches what just happened in the SavePanel behind it.
-  const detailVideo = videos.find((v) => v.id === detailVideoId) ?? null;
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) {
@@ -110,6 +107,12 @@ export function CreativityHubPage({
 
     return list;
   }, [videos, filters]);
+
+  // Gallery position within the currently displayed grid — derived from the
+  // live `filtered` list (not a frozen snapshot) so the modal's saved state
+  // and prev/next boundaries always match what's actually on screen.
+  const detailIndex = filtered.findIndex((v) => v.id === detailVideoId);
+  const detailVideo = detailIndex >= 0 ? filtered[detailIndex] : null;
 
   // Shared by both research modes — one gives real videos or a provider
   // error, the caller decides what "success" means for its own UI copy.
@@ -262,6 +265,31 @@ export function CreativityHubPage({
       setVideos((prev) => prev.map((v) => (v.id === video.id ? { ...v, saved: false } : v)));
     } else {
       setSavePanelVideo(video);
+    }
+  }
+
+  // One-click save straight into the selected creator's "Quick Saves"
+  // collection — no picker. Same target collection the SavePanel's own
+  // Quick Save button writes to, just without a UI in between.
+  function quickSaveVideo(video: ReelVideo) {
+    markSaved(video.id);
+    const quickSaves = collectionsStore.collections.find(
+      (c) => c.creatorId === selectedCreator?.id && c.name === "Quick Saves"
+    );
+    if (quickSaves) {
+      void collectionsStore.addVideoToCollection(quickSaves.id, video);
+    } else if (selectedCreator) {
+      void collectionsStore.createCollection("Quick Saves", selectedCreator.id, "", video);
+    }
+  }
+
+  // The detail modal's Save button is a direct Quick Save (fast, gallery-like
+  // browsing) — only an already-saved video still needs the instant toggle-off.
+  function handleDetailSaveClick(video: ReelVideo) {
+    if (video.saved) {
+      handleSaveClick(video);
+    } else {
+      quickSaveVideo(video);
     }
   }
 
@@ -573,17 +601,19 @@ export function CreativityHubPage({
         open={!!detailVideoId}
         creator={selectedCreator}
         onClose={() => setDetailVideoId(null)}
-        onSaveClick={(video) => {
-          handleSaveClick(video);
-          // Only hand off to the SavePanel when it's actually about to open
-          // (the not-yet-saved case) — an instant unsave-toggle has no panel
-          // to show, so the detail view should just stay open for that.
-          if (!video.saved) setDetailVideoId(null);
-        }}
+        onSaveClick={handleDetailSaveClick}
         onAddToCollection={(video) => {
           setSavePanelVideo(video);
           setDetailVideoId(null);
         }}
+        onPrev={() => {
+          if (detailIndex > 0) setDetailVideoId(filtered[detailIndex - 1].id);
+        }}
+        onNext={() => {
+          if (detailIndex >= 0 && detailIndex < filtered.length - 1) setDetailVideoId(filtered[detailIndex + 1].id);
+        }}
+        hasPrev={detailIndex > 0}
+        hasNext={detailIndex >= 0 && detailIndex < filtered.length - 1}
       />
     </div>
   );
