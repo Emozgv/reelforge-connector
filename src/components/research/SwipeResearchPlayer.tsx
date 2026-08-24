@@ -51,15 +51,20 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection }: {
           ) : (
             <div className="absolute inset-0" style={{ background: video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
           )}
-          <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+          {/* Playback inside ReelForge is the point of this whole mode — this
+              external link is deliberately a small secondary fallback, only
+              for the rare item with no direct video, never the primary way
+              to view research content. */}
+          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="text-[12px] text-white/70">This reel isn't playable in ReelForge yet.</p>
             <a
               href={video.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 h-10 px-4 rounded-full bg-white/95 text-[#020508] text-[13px] font-medium hover:bg-white transition-colors"
+              className="flex items-center gap-1.5 text-[11.5px] text-white/80 hover:text-white underline underline-offset-2 transition-colors"
             >
-              <ExternalLink size={14} />
-              Watch on {platformLabel}
+              <ExternalLink size={11} />
+              View original on {platformLabel}
             </a>
           </div>
         </>
@@ -141,6 +146,7 @@ export function SwipeResearchPlayer({
   onAddToCollection: (video: ReelVideo) => void;
   onExitToArchive: () => void;
 }) {
+  const connecting = account.status === "connecting";
   const wheelAccum = useRef(0);
   const touchStartY = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -233,6 +239,15 @@ export function SwipeResearchPlayer({
           <div className="h-full w-full flex flex-col items-center justify-center bg-[#0d0d0f] text-center px-6">
             {loadingMore ? (
               <Loader2 size={20} className="text-[#D39448] animate-spin" />
+            ) : connecting ? (
+              <>
+                <Loader2 size={18} className="text-amber-400/80 animate-pulse mb-1" />
+                <p className="text-[13px] text-neutral-300">This account is still connecting.</p>
+                <p className="mt-1.5 text-[11.5px] text-neutral-600">
+                  Once ReelForge finishes setting up its real session, this account's feed will start appearing here
+                  automatically.
+                </p>
+              </>
             ) : (
               <>
                 <p className="text-[13px] text-neutral-300">Nothing new to research yet.</p>

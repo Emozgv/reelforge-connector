@@ -266,13 +266,20 @@ export interface CreatorPackage {
 // this is just the account's identity, sync state, and shared "who last
 // opened it" context so any authorized team member can pick up the same
 // research session, not a login object.
-export type ResearchAccountStatus = "active" | "needs_attention" | "disconnected";
+// "connecting" = credentials captured and securely stored (Vault-backed,
+// never in this app's own tables), awaiting the separate automation worker
+// to actually establish a live session — an honest, real state, never
+// silently promoted to "active" without a real sync having happened.
+export type ResearchAccountStatus = "connecting" | "active" | "needs_attention" | "disconnected";
 
 export interface ResearchAccount {
   id: string;
   creatorId: string;
   platform: Platform;
   label: string;
+  // The account's real public handle — safe to show; the password never
+  // lives in this app at all (see private.research_account_secrets).
+  username?: string;
   status: ResearchAccountStatus;
   lastSyncedAt?: string;
   lastOpenedAt?: string;

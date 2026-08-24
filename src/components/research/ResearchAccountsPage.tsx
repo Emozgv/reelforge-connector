@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, X, Users, LayoutGrid, Play } from "lucide-react";
+import { Plus, RefreshCw, X, Users, LayoutGrid, Play, Lock, Loader2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
@@ -22,47 +22,120 @@ function accountsFor(accounts: ResearchAccount[], creatorId: string, platform: P
     .sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? ""));
 }
 
-function NewAccountChip({ onCreate, disabled }: { onCreate: (label: string) => void; disabled: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [label, setLabel] = useState("");
+const STATUS_LABEL: Record<ResearchAccount["status"], string> = {
+  connecting: "Connecting…",
+  active: "Active",
+  needs_attention: "Needs attention",
+  disconnected: "Disconnected",
+};
+const STATUS_DOT: Record<ResearchAccount["status"], string> = {
+  connecting: "bg-amber-400 animate-pulse",
+  active: "bg-emerald-400",
+  needs_attention: "bg-amber-400",
+  disconnected: "bg-neutral-600",
+};
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        title={disabled ? `Up to ${MAX_RESEARCH_ACCOUNTS_PER_PLATFORM} accounts` : "Add a research account"}
-        className="flex items-center gap-1 h-9 px-3 rounded-full border border-dashed border-white/[0.14] text-[12.5px] text-neutral-500 hover:text-neutral-200 hover:border-white/25 transition-colors duration-150 disabled:opacity-30 disabled:cursor-default"
-      >
-        <Plus size={13} />
-        Add account
-      </button>
-    );
+// The real "Add Research Account" flow — actually captures the account's
+// login (username + password) rather than just a display label. Submitting
+// hands the credential straight to the connect-research-account Edge
+// Function, which Vault-encrypts it server-side; nothing here ever stores
+// the password itself, not even transiently beyond this form's own state.
+function ConnectAccountModal({
+  platform,
+  onConnect,
+  onClose,
+}: {
+  platform: Platform;
+  onConnect: (label: string, username: string, password: string) => Promise<{ error: string | null }>;
+  onClose: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const platformName = platform === "instagram" ? "Instagram" : "TikTok";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    const { error: connectError } = await onConnect(label.trim() || username.trim(), username.trim(), password);
+    setSubmitting(false);
+    if (connectError) setError(connectError);
+    else onClose();
   }
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!label.trim()) return;
-        onCreate(label.trim());
-        setLabel("");
-        setOpen(false);
-      }}
-      className="flex items-center gap-1.5"
-    >
-      <input
-        autoFocus
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        onBlur={() => !label.trim() && setOpen(false)}
-        placeholder="e.g. Lifestyle & Storytime"
-        className="h-9 px-3 rounded-full surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow w-[190px]"
-      />
-      <button type="submit" className="h-9 px-3 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium">
-        Add
-      </button>
-    </form>
+    <>
+      <div onClick={onClose} className="fixed inset-0 z-40 bg-black/75 backdrop-blur-[3px] animate-fade-in" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
+        <form
+          onSubmit={handleSubmit}
+          className="pointer-events-auto w-full max-w-[380px] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl p-5 animate-fade-in"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-[15px] font-serif text-neutral-50">Connect a {platformName} account</h2>
+            <button type="button" onClick={onClose} className="text-neutral-500 hover:text-neutral-200">
+              <X size={16} />
+            </button>
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-neutral-500 leading-relaxed">
+            ReelForge securely stores this login and sets up the account — its research feed appears here once
+            connected.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">Label (optional)</label>
+              <input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. Lifestyle & Storytime"
+                className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+              />
+            </div>
+            <div>
+              <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">{platformName} username</label>
+              <input
+                autoFocus
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="@username"
+                className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+              />
+            </div>
+            <div>
+              <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+              />
+            </div>
+          </div>
+
+          {error && <p className="mt-3 text-[11.5px] text-rose-300/85">{error}</p>}
+
+          <div className="mt-4 flex items-center gap-1.5 text-[10.5px] text-neutral-600">
+            <Lock size={11} />
+            Encrypted at rest — never visible to anyone in ReelForge.
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting || !username.trim() || !password.trim()}
+            className="mt-4 w-full h-10 rounded-full bg-[#D39448] text-[#020508] text-[13px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 flex items-center justify-center gap-2"
+          >
+            {submitting && <Loader2 size={14} className="animate-spin" />}
+            {submitting ? "Connecting…" : "Connect account"}
+          </button>
+        </form>
+      </div>
+    </>
   );
 }
 
@@ -93,6 +166,7 @@ export function ResearchAccountsPage({
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) setSelectedCreator(creators[0] ?? null);
@@ -254,12 +328,7 @@ export function ResearchAccountsPage({
                   : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-white/[0.16]",
               ].join(" ")}
             >
-              <span
-                className={[
-                  "w-2 h-2 rounded-full shrink-0",
-                  a.status === "active" ? "bg-emerald-400" : a.status === "needs_attention" ? "bg-amber-400" : "bg-neutral-600",
-                ].join(" ")}
-              />
+              <span className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")} title={STATUS_LABEL[a.status]} />
               <span className="text-[12.5px]">{a.label}</span>
               <button
                 onClick={(e) => {
@@ -272,11 +341,38 @@ export function ResearchAccountsPage({
               </button>
             </button>
           ))}
-          <NewAccountChip
+          <button
+            onClick={() => setConnectModalOpen(true)}
             disabled={currentAccounts.length >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM}
-            onCreate={(label) => void researchAccountsStore.createAccount(selectedCreator.id, platform, label)}
-          />
+            title={
+              currentAccounts.length >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM
+                ? `Up to ${MAX_RESEARCH_ACCOUNTS_PER_PLATFORM} accounts`
+                : "Connect a research account"
+            }
+            className="flex items-center gap-1 h-9 px-3 rounded-full border border-dashed border-white/[0.14] text-[12.5px] text-neutral-500 hover:text-neutral-200 hover:border-white/25 transition-colors duration-150 disabled:opacity-30 disabled:cursor-default"
+          >
+            <Plus size={13} />
+            Connect account
+          </button>
         </div>
+
+        {connectModalOpen && (
+          <ConnectAccountModal
+            platform={platform}
+            onClose={() => setConnectModalOpen(false)}
+            onConnect={async (label, username, password) => {
+              const { id, error } = await researchAccountsStore.connectAccount(
+                selectedCreator.id,
+                platform,
+                label,
+                username,
+                password
+              );
+              if (id) setAccountId(id);
+              return { error };
+            }}
+          />
+        )}
 
         <div className="shimmer-divider mt-6" />
 
@@ -286,7 +382,7 @@ export function ResearchAccountsPage({
             <p className="text-[14.5px] font-serif text-neutral-300">
               No {platform === "instagram" ? "Instagram" : "TikTok"} research accounts for {selectedCreator.name} yet.
             </p>
-            <p className="text-[12px] text-neutral-600 mt-1.5">Add one above to start researching from its trained feed.</p>
+            <p className="text-[12px] text-neutral-600 mt-1.5">Connect one above to start researching from its trained feed.</p>
           </div>
         ) : (
           <>
@@ -294,8 +390,10 @@ export function ResearchAccountsPage({
               <div className="flex items-center gap-2 text-[12px] text-neutral-500">
                 <PlatformIcon platform={currentAccount.platform} size={12} />
                 <span className="text-neutral-300 font-medium">{currentAccount.label}</span>
+                {currentAccount.username && <span className="text-neutral-600">@{currentAccount.username}</span>}
                 <span>·</span>
-                <span>
+                <span className={currentAccount.status === "connecting" ? "text-amber-400/90" : ""}>
+                  {currentAccount.status === "connecting" && "Connecting — "}
                   {currentAccount.lastSyncedAt
                     ? `Synced ${formatRelativeTime(currentAccount.lastSyncedAt)}`
                     : "Not synced yet"}
@@ -366,8 +464,16 @@ export function ResearchAccountsPage({
                   spacious
                   loading={loadingFeed}
                   loadingLabel="Loading this account's research feed…"
-                  emptyTitle="No synced reels yet."
-                  emptyHint="Press Refresh feed to request a sync for this account."
+                  emptyTitle={
+                    currentAccount.status === "connecting"
+                      ? "This account is still connecting."
+                      : "No synced reels yet."
+                  }
+                  emptyHint={
+                    currentAccount.status === "connecting"
+                      ? "Once ReelForge finishes setting up its session, its real feed will start appearing here."
+                      : "Press Refresh feed to request a sync for this account."
+                  }
                 />
               )}
             </div>

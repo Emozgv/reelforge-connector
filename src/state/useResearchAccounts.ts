@@ -8,6 +8,7 @@ interface ResearchAccountRow {
   platform: string;
   label: string;
   status: string;
+  username: string | null;
   last_synced_at: string | null;
   last_opened_at: string | null;
   last_shown_synced_at: string | null;
@@ -23,6 +24,7 @@ function fromRow(row: ResearchAccountRow): ResearchAccount {
     creatorId: row.creator_id,
     platform: row.platform as Platform,
     label: row.label,
+    username: row.username ?? undefined,
     status: row.status as ResearchAccountStatus,
     lastSyncedAt: row.last_synced_at ?? undefined,
     lastOpenedAt: row.last_opened_at ?? undefined,
@@ -82,28 +84,45 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     return accountsRef.current.filter((a) => a.creatorId === creatorId && a.platform === platform).length;
   }
 
-  async function createAccount(
+  // The real "Add Research Account" action — actually captures the
+  // account's login (username + password) and hands it to the
+  // connect-research-account Edge Function, which Vault-encrypts the
+  // password and creates the account server-side with status "connecting".
+  // Nothing here (or anywhere in this app) ever sees or stores the password
+  // itself past this call.
+  async function connectAccount(
     creatorId: string,
     platform: Platform,
-    label: string
+    label: string,
+    username: string,
+    password: string
   ): Promise<{ id: string | null; error: string | null }> {
     if (!workspaceId) return { id: null, error: "No active workspace." };
     if (countFor(creatorId, platform) >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM) {
       return { id: null, error: `Up to ${MAX_RESEARCH_ACCOUNTS_PER_PLATFORM} ${platform} research accounts per creator.` };
     }
 
-    const { data, error: insertError } = await supabase
-      .schema("client_os")
-      .from("research_accounts")
-      .insert({ workspace_id: workspaceId, creator_id: creatorId, platform, label })
-      .select()
-      .single();
+    const { data, error: invokeError } = await supabase.functions.invoke<{
+      account?: ResearchAccountRow;
+      error?: string;
+    }>("connect-research-account", {
+      body: { workspaceId, creatorId, platform, label, username, password },
+    });
 
-    if (insertError || !data) {
-      return { id: null, error: insertError?.message ?? "Couldn't create research account." };
+    if (invokeError || !data?.account) {
+      const context = (invokeError as { context?: Response } | undefined)?.context;
+      if (context && typeof context.json === "function") {
+        try {
+          const responseBody = await context.clone().json();
+          if (typeof responseBody?.error === "string") return { id: null, error: responseBody.error };
+        } catch {
+          // fall through
+        }
+      }
+      return { id: null, error: data?.error ?? invokeError?.message ?? "Couldn't connect this account." };
     }
 
-    const created = fromRow(data as ResearchAccountRow);
+    const created = fromRow(data.account);
     setAccounts((prev) => [...prev, created]);
     return { id: created.id, error: null };
   }
@@ -171,7 +190,7 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     loading,
     error,
     countFor,
-    createAccount,
+    connectAccount,
     renameAccount,
     markSeen,
     deleteAccount,
