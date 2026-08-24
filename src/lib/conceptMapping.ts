@@ -81,7 +81,7 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
     aiScore: row.ai_score ?? 0,
     difficulty: row.difficulty ?? "Easy",
     setting: row.setting ?? "Indoor",
-    contentStyle: (row.content_style ?? "POV") as ContentStyle,
+    contentStyle: row.content_style ? (row.content_style as ContentStyle) : undefined,
     creatorFit: row.creator_fit ?? 0,
     trending: meta.trending ?? false,
     postedDaysAgo: meta.postedDaysAgo ?? 0,

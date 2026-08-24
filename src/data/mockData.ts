@@ -45,18 +45,21 @@ const difficulties: Difficulty[] = ["Easy", "Medium", "Hard"];
 const settings: Setting[] = ["Indoor", "Outdoor"];
 const languages: Language[] = ["English", "Spanish", "German", "Non-verbal"];
 
-// Small, intentionally mock content-style set — expected to grow. Add new values
-// here and to the ContentStyle union in types.ts; every consumer (filters, cards)
-// reads from this single source so extending the list needs no other changes.
+// Canonical Content Style list — every consumer (Hub filters, Creator
+// preferred-styles) reads from this single source. Add new values here and
+// to the ContentStyle union in types.ts to extend it.
 export const CONTENT_STYLES: ContentStyle[] = [
-  "POV",
-  "Talking",
-  "Lifestyle",
-  "Selfie",
-  "Mirror",
-  "Storytime",
-  "Fitness",
-  "Golf",
+  "Storytelling",
+  "Relatable",
+  "Comedy",
+  "Challenge",
+  "Scenario",
+  "Plot Twist",
+  "Hot Take",
+  "Engagement Bait",
+  "Compliment",
+  "Educational",
+  "Correction",
 ];
 
 function seedShuffle<T>(arr: T[], seed: number): T[] {

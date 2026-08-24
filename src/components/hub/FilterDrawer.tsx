@@ -115,158 +115,103 @@ export function FilterDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 py-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-6 max-w-[1200px] mx-auto">
-            <Section label="Platform">
-              {(["all", "instagram", "tiktok"] as const).map((v) => (
-                <Chip key={v} active={draft.platform === v} onClick={() => set("platform", v)}>
-                  {v === "all" ? "All" : v === "instagram" ? "Instagram" : "TikTok"}
-                </Chip>
-              ))}
-            </Section>
+          <div className="max-w-[1000px] mx-auto space-y-8">
+            {/* Compact filters — even 3-column grid, each with a short chip row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-6">
+              <Section label="Platform">
+                {(["all", "instagram", "tiktok"] as const).map((v) => (
+                  <Chip key={v} active={draft.platform === v} onClick={() => set("platform", v)}>
+                    {v === "all" ? "All" : v === "instagram" ? "Instagram" : "TikTok"}
+                  </Chip>
+                ))}
+              </Section>
 
-            <Section label="Length">
-              {(
-                [
-                  ["any", "Any"],
-                  ["0-5", "0–5s"],
-                  ["6-9", "6–9s"],
-                  ["10-12", "10–12s"],
-                ] as const
-              ).map(([v, label]) => (
-                <Chip key={v} active={draft.length === v} onClick={() => set("length", v)}>
-                  {label}
-                </Chip>
-              ))}
-            </Section>
+              <Section label="Length">
+                {(
+                  [
+                    ["any", "Any"],
+                    ["0-5", "0–5s"],
+                    ["6-9", "6–9s"],
+                    ["10-12", "10–12s"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <Chip key={v} active={draft.length === v} onClick={() => set("length", v)}>
+                    {label}
+                  </Chip>
+                ))}
+              </Section>
 
-            <Section label="Talking">
-              {(
-                [
-                  ["any", "Any"],
-                  ["talking", "Talking"],
-                  ["nontalking", "Non-talking"],
-                ] as const
-              ).map(([v, label]) => (
-                <Chip key={v} active={draft.talking === v} onClick={() => set("talking", v)}>
-                  {label}
-                </Chip>
-              ))}
-            </Section>
+              <Section label="Views">
+                {(
+                  [
+                    ["any", "Any"],
+                    ["10k", "10K+"],
+                    ["50k", "50K+"],
+                    ["100k", "100K+"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <Chip key={v} active={draft.views === v} onClick={() => set("views", v)}>
+                    {label}
+                  </Chip>
+                ))}
+              </Section>
 
-            <Section label="AI-friendly">
-              <Chip active={!draft.aiFriendly} onClick={() => set("aiFriendly", false)}>
-                Any
-              </Chip>
-              <Chip active={draft.aiFriendly} onClick={() => set("aiFriendly", true)}>
-                AI-ready only
-              </Chip>
-            </Section>
+              <Section label="Used / Unused">
+                {(
+                  [
+                    ["any", "Any"],
+                    ["used", "Used"],
+                    ["unused", "Unused"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <Chip key={v} active={draft.used === v} onClick={() => set("used", v)}>
+                    {label}
+                  </Chip>
+                ))}
+              </Section>
 
-            <Section label="Difficulty">
-              {(["any", "Easy", "Medium", "Hard"] as const).map((v) => (
-                <Chip key={v} active={draft.difficulty === v} onClick={() => set("difficulty", v)}>
-                  {v === "any" ? "Any" : v}
-                </Chip>
-              ))}
-            </Section>
+              <Section label="Saved / Unsaved">
+                {(
+                  [
+                    ["any", "Any"],
+                    ["saved", "Saved"],
+                    ["unsaved", "Unsaved"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <Chip key={v} active={draft.savedState === v} onClick={() => set("savedState", v)}>
+                    {label}
+                  </Chip>
+                ))}
+              </Section>
 
-            <Section label="Setting">
-              {(["any", "Indoor", "Outdoor"] as const).map((v) => (
-                <Chip key={v} active={draft.setting === v} onClick={() => set("setting", v)}>
-                  {v === "any" ? "Any" : v}
-                </Chip>
-              ))}
-            </Section>
+              <Section label="Sort">
+                {(
+                  [
+                    ["relevant", "Most relevant"],
+                    ["recent", "Recent"],
+                    ["mostViewed", "Most viewed"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <Chip key={v} active={draft.sort === v} onClick={() => set("sort", v)}>
+                    {label}
+                  </Chip>
+                ))}
+              </Section>
+            </div>
 
-            <Section label="Content style">
-              <Chip active={draft.contentStyle === "any"} onClick={() => set("contentStyle", "any")}>
-                Any
-              </Chip>
-              {CONTENT_STYLES.map((v) => (
-                <Chip key={v} active={draft.contentStyle === v} onClick={() => set("contentStyle", v)}>
-                  {v}
+            {/* Content Style — its own full-width row, more options than the rest */}
+            <div className="pt-6 border-t border-white/[0.06]">
+              <Section label="Content style" helper="the hook/format, not the niche">
+                <Chip active={draft.contentStyle === "any"} onClick={() => set("contentStyle", "any")}>
+                  Any
                 </Chip>
-              ))}
-            </Section>
-
-            <Section label="Creator fit" helper="Estimated fit">
-              {(
-                [
-                  ["any", "Any"],
-                  ["high", "High (80%+)"],
-                  ["medium", "Medium (50%+)"],
-                ] as const
-              ).map(([v, label]) => (
-                <Chip key={v} active={draft.creatorFit === v} onClick={() => set("creatorFit", v)}>
-                  {label}
-                </Chip>
-              ))}
-            </Section>
-
-            <Section label="Used / Unused">
-              {(
-                [
-                  ["any", "Any"],
-                  ["used", "Used"],
-                  ["unused", "Unused"],
-                ] as const
-              ).map(([v, label]) => (
-                <Chip key={v} active={draft.used === v} onClick={() => set("used", v)}>
-                  {label}
-                </Chip>
-              ))}
-            </Section>
-
-            <Section label="Saved / Unsaved">
-              {(
-                [
-                  ["any", "Any"],
-                  ["saved", "Saved"],
-                  ["unsaved", "Unsaved"],
-                ] as const
-              ).map(([v, label]) => (
-                <Chip key={v} active={draft.savedState === v} onClick={() => set("savedState", v)}>
-                  {label}
-                </Chip>
-              ))}
-            </Section>
-
-            <Section label="Views">
-              {(
-                [
-                  ["any", "Any"],
-                  ["10k", "10K+"],
-                  ["50k", "50K+"],
-                  ["100k", "100K+"],
-                ] as const
-              ).map(([v, label]) => (
-                <Chip key={v} active={draft.views === v} onClick={() => set("views", v)}>
-                  {label}
-                </Chip>
-              ))}
-            </Section>
-
-            <Section label="Language">
-              {(["any", "English", "Spanish", "German", "Non-verbal"] as const).map((v) => (
-                <Chip key={v} active={draft.language === v} onClick={() => set("language", v)}>
-                  {v === "any" ? "Any" : v}
-                </Chip>
-              ))}
-            </Section>
-
-            <Section label="Recent / Trending">
-              {(
-                [
-                  ["relevant", "Most relevant"],
-                  ["recent", "Recent"],
-                  ["trending", "Trending"],
-                ] as const
-              ).map(([v, label]) => (
-                <Chip key={v} active={draft.sort === v} onClick={() => set("sort", v)}>
-                  {label}
-                </Chip>
-              ))}
-            </Section>
+                {CONTENT_STYLES.map((v) => (
+                  <Chip key={v} active={draft.contentStyle === v} onClick={() => set("contentStyle", v)}>
+                    {v}
+                  </Chip>
+                ))}
+              </Section>
+            </div>
           </div>
         </div>
 

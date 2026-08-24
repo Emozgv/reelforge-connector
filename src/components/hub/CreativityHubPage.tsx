@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Shuffle, RefreshCw, Bookmark, SlidersHorizontal, Info, CloudOff, ChevronDown, Loader2 } from "lucide-react";
 import { searchReels, fetchProfileReels, fetchMoreProfileReels } from "../../lib/searchReels";
+import { classifyContentStyle } from "../../lib/contentStyleClassifier";
 import type { Creator, Platform, ReelProfileInfo, ReelVideo } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { CreatorSelector } from "./CreatorSelector";
@@ -166,27 +167,38 @@ export function CreativityHubPage({
   const savedCountLabel = savedCount > 99 ? "99+" : String(savedCount);
   const activeFilterCount = countActiveFilters(filters);
 
+  // Ground truth for Used/Saved — cross-referenced against every concept
+  // already saved anywhere in this workspace (by sourceUrl), not a
+  // session-only flag. A video saved last week still shows as Saved today
+  // if it resurfaces in a new search or Shuffle.
+  const { savedSourceUrls, usedSourceUrls } = useMemo(() => {
+    const saved = new Set<string>();
+    const used = new Set<string>();
+    for (const c of collectionsStore.collections) {
+      for (const concept of c.concepts) {
+        if (concept.video.sourceUrl) saved.add(concept.video.sourceUrl);
+        if (concept.status === "Used" && concept.video.sourceUrl) used.add(concept.video.sourceUrl);
+      }
+    }
+    return { savedSourceUrls: saved, usedSourceUrls: used };
+  }, [collectionsStore.collections]);
+
   const filtered = useMemo(() => {
     let list = videos.filter((v) => {
       if (filters.platform !== "all" && v.platform !== filters.platform) return false;
       if (filters.length === "0-5" && !(v.durationSec <= 5)) return false;
       if (filters.length === "6-9" && !(v.durationSec >= 6 && v.durationSec <= 9)) return false;
       if (filters.length === "10-12" && !(v.durationSec >= 10 && v.durationSec <= 12)) return false;
-      // Undefined (not analyzed yet) is "unknown" — it matches neither side
-      // of a talking/non-talking filter, rather than defaulting to one.
-      if (filters.talking === "talking" && v.talking !== true) return false;
-      if (filters.talking === "nontalking" && v.talking !== false) return false;
-      if (filters.aiFriendly && !v.aiReady) return false;
-      if (filters.difficulty !== "any" && v.difficulty !== filters.difficulty) return false;
-      if (filters.setting !== "any" && v.setting !== filters.setting) return false;
-      if (filters.contentStyle !== "any" && v.contentStyle !== filters.contentStyle) return false;
-      if (filters.creatorFit === "high" && !(v.creatorFit !== undefined && v.creatorFit >= 80)) return false;
-      if (filters.creatorFit === "medium" && !(v.creatorFit !== undefined && v.creatorFit >= 50)) return false;
-      if (filters.used === "used" && !v.used) return false;
-      if (filters.used === "unused" && v.used) return false;
-      if (filters.savedState === "saved" && !v.saved) return false;
-      if (filters.savedState === "unsaved" && v.saved) return false;
-      if (filters.language !== "any" && v.language !== filters.language) return false;
+      if (filters.contentStyle !== "any") {
+        const style = v.contentStyle ?? classifyContentStyle(v.caption, v.tags);
+        if (style !== filters.contentStyle) return false;
+      }
+      const isUsed = v.used || usedSourceUrls.has(v.sourceUrl);
+      if (filters.used === "used" && !isUsed) return false;
+      if (filters.used === "unused" && isUsed) return false;
+      const isSaved = v.saved || savedSourceUrls.has(v.sourceUrl);
+      if (filters.savedState === "saved" && !isSaved) return false;
+      if (filters.savedState === "unsaved" && isSaved) return false;
       if (filters.views === "10k" && v.viewsRaw < 10000) return false;
       if (filters.views === "50k" && v.viewsRaw < 50000) return false;
       if (filters.views === "100k" && v.viewsRaw < 100000) return false;
@@ -195,12 +207,12 @@ export function CreativityHubPage({
 
     if (filters.sort === "recent") {
       list = [...list].sort((a, b) => (a.postedDaysAgo ?? Infinity) - (b.postedDaysAgo ?? Infinity));
-    } else if (filters.sort === "trending") {
-      list = [...list].sort((a, b) => Number(!!b.trending) - Number(!!a.trending) || b.viewsRaw - a.viewsRaw);
+    } else if (filters.sort === "mostViewed") {
+      list = [...list].sort((a, b) => b.viewsRaw - a.viewsRaw);
     }
 
     return list;
-  }, [videos, filters]);
+  }, [videos, filters, savedSourceUrls, usedSourceUrls]);
 
   // Gallery position within the currently displayed grid — derived from the
   // live `filtered` list (not a frozen snapshot) so the modal's saved state

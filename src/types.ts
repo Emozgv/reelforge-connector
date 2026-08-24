@@ -2,9 +2,24 @@ export type Platform = "instagram" | "tiktok";
 
 export type Difficulty = "Easy" | "Medium" | "Hard";
 export type Setting = "Indoor" | "Outdoor";
-// Content Style is an evolving product concept — this list is intentionally a small,
-// easy-to-extend mock set (see CONTENT_STYLES in data/mockData.ts).
-export type ContentStyle = "POV" | "Talking" | "Lifestyle" | "Selfie" | "Mirror" | "Storytime" | "Fitness" | "Golf";
+// Content Style describes the content MECHANIC/hook an agency could recreate
+// — never the niche or subject ("golf", "mirror" are not styles). Real
+// values are detected deterministically from a video's own caption/hashtags
+// (see lib/contentStyleClassifier.ts) — undefined means "no confident match",
+// not "not applicable". See CONTENT_STYLES in data/mockData.ts for the
+// canonical list every consumer (filters, Creator preferences) reads from.
+export type ContentStyle =
+  | "Storytelling"
+  | "Relatable"
+  | "Comedy"
+  | "Challenge"
+  | "Scenario"
+  | "Plot Twist"
+  | "Hot Take"
+  | "Engagement Bait"
+  | "Compliment"
+  | "Educational"
+  | "Correction";
 // Spoken language of the clip — mock only, real detection is a later ingestion-phase concern.
 export type Language = "English" | "Spanish" | "German" | "Non-verbal";
 
@@ -208,13 +223,37 @@ export interface RegenerationRequest {
   createdAt: string;
 }
 
-// Package/plan terms — set by ReelForge, read-only for the client (client_os.workspace_packages).
+// Workspace-level pooled plan — reused specifically for Enterprise (the real
+// ReelForge model sells Enterprise as one shared arrangement across 3+
+// creators, unlike Starter/Growth/Scale which are each sold per single
+// creator — see CreatorPackage below). Set by ReelForge, read-only for the
+// client (client_os.workspace_packages). A workspace has this row only if
+// it's actually on an Enterprise arrangement.
 export interface WorkspacePackage {
   planName: string;
   monthlyAllowance: number;
   regenerationsIncluded: number;
   creatorSetupsIncluded: number;
   billingCycleStart: string;
+}
+
+// Real per-creator plan tier, matching ReelForge's actual pricing (Starter/
+// Growth/Scale are each sold per single creator; confirmed against
+// reelforgeai.net). Set by ReelForge staff — no client-facing write path yet
+// (client_os.creator_packages). A creator with no CreatorPackage has no
+// active plan; that must always read as "No active plan," never a default
+// free tier.
+export type PlanTier = "S" | "M" | "L" | "Enterprise";
+
+export interface CreatorPackage {
+  creatorId: string;
+  planTier: PlanTier;
+  planLabel: string;
+  // undefined for Enterprise (custom quote, not a flat monthly price).
+  priceMonthly?: number;
+  monthlyReelAllowance: number;
+  billingCycleStart: string;
+  status: "active" | "paused" | "cancelled";
 }
 
 export interface Collection {

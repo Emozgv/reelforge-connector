@@ -1,51 +1,47 @@
-import type { ContentStyle, Difficulty, Language, Platform, Setting } from "../../types";
+import type { ContentStyle, Platform } from "../../types";
 
+// V1.5 filter set — every filter here genuinely changes real Discovery
+// results. Talking, AI-friendly, Difficulty, Setting, Creator Fit, and
+// Language were removed: none of them have real data behind a freshly
+// searched TikTok/Instagram reel today (see types.ts's own comments on
+// ReelVideo), so presenting them as working filters would be dishonest.
+// They belong to a future AI-tagging layer, not this pass. Language
+// specifically is also already handled upstream in Discovery's own search
+// logic — it doesn't need a second, manual filter here.
 export interface HubFilters {
+  platform: "all" | Platform;
   length: "any" | "0-5" | "6-9" | "10-12";
-  talking: "any" | "talking" | "nontalking";
-  aiFriendly: boolean;
-  difficulty: "any" | Difficulty;
-  setting: "any" | Setting;
+  // Real, deterministic detection from caption/hashtag text (see
+  // lib/contentStyleClassifier.ts) — not an AI score, a keyword match.
   contentStyle: "any" | ContentStyle;
-  creatorFit: "any" | "high" | "medium";
+  // Cross-referenced against the creator's real saved Collections data
+  // (any concept with a matching sourceUrl / status), not a fake flag.
   used: "any" | "used" | "unused";
   savedState: "any" | "saved" | "unsaved";
-  platform: "all" | Platform;
   views: "any" | "10k" | "50k" | "100k";
-  sort: "relevant" | "recent" | "trending";
-  language: "any" | Language;
+  // "mostViewed" replaces the old "trending" — there is no real trend
+  // signal today, only a real view count, so it's labeled for what it is.
+  sort: "relevant" | "recent" | "mostViewed";
 }
 
 export const DEFAULT_FILTERS: HubFilters = {
+  platform: "all",
   length: "any",
-  talking: "any",
-  aiFriendly: false,
-  difficulty: "any",
-  setting: "any",
   contentStyle: "any",
-  creatorFit: "any",
   used: "any",
   savedState: "any",
-  platform: "all",
   views: "any",
   sort: "relevant",
-  language: "any",
 };
 
 export function countActiveFilters(f: HubFilters): number {
   let n = 0;
+  if (f.platform !== "all") n++;
   if (f.length !== "any") n++;
-  if (f.talking !== "any") n++;
-  if (f.aiFriendly) n++;
-  if (f.difficulty !== "any") n++;
-  if (f.setting !== "any") n++;
   if (f.contentStyle !== "any") n++;
-  if (f.creatorFit !== "any") n++;
   if (f.used !== "any") n++;
   if (f.savedState !== "any") n++;
-  if (f.platform !== "all") n++;
   if (f.views !== "any") n++;
   if (f.sort !== "relevant") n++;
-  if (f.language !== "any") n++;
   return n;
 }
