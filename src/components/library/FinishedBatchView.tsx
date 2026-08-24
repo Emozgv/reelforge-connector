@@ -1,9 +1,12 @@
-import { useRef, useState } from "react";
-import { ArrowLeft, Check, Eye, Heart, Lock, RotateCcw, UploadCloud } from "lucide-react";
-import type { Collection, CollectionConcept, Creator, RegenerationReason, Submission } from "../../types";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Check, Eye, Heart, Lock, Play, RotateCcw, UploadCloud } from "lucide-react";
+import type { Collection, CollectionConcept, Creator, ReelVideo, RegenerationReason, Submission } from "../../types";
 import { isFreeReason } from "../../lib/regenerationMapping";
+import { resolveReelVideo } from "../../lib/searchReels";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DriveGlyph } from "../collections/DriveGlyph";
+import { ReelDetailModal } from "../hub/ReelDetailModal";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
 const REASONS: RegenerationReason[] = [
   "Body",
@@ -30,8 +33,17 @@ function BatchItemCard({
     <button
       onClick={onSelect}
       className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] hover:border-[#D39448]/35 transition-colors duration-200"
-      style={{ background: concept.video.thumbGradient }}
     >
+      {concept.video.thumbnailUrl ? (
+        <img
+          src={concept.video.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0" style={{ background: concept.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-black/20" />
 
       <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1.5">
@@ -51,10 +63,10 @@ function BatchItemCard({
       <span
         className={[
           "absolute bottom-8 left-2 text-[9px] font-medium px-1.5 py-[2px] rounded-[4px]",
-          concept.finishedVideoUrl ? "text-emerald-300 bg-emerald-400/15" : "text-neutral-400 bg-white/[0.08]",
+          concept.finishedVideoUrl ? "text-emerald-300 bg-emerald-400/15" : "text-[#D39448] bg-[#D39448]/15",
         ].join(" ")}
       >
-        {concept.finishedVideoUrl ? "Delivered" : "Awaiting upload"}
+        {concept.finishedVideoUrl ? "Delivered" : "Request Regeneration"}
       </span>
 
       <div className="absolute bottom-2 left-2 right-2">
@@ -67,24 +79,79 @@ function BatchItemCard({
 function ItemDetail({
   collection,
   concept,
+  creator,
   pending,
   uploading,
   onBack,
   onUpload,
   onRequestRegeneration,
+  onPrevReel,
+  onNextReel,
+  hasPrevReel,
+  hasNextReel,
 }: {
   collection: Collection;
   concept: CollectionConcept;
+  creator?: Creator;
   pending: boolean;
   uploading: boolean;
   onBack: () => void;
   onUpload: (file: File) => void;
   onRequestRegeneration: (reason: RegenerationReason, note: string) => void;
+  // Gallery-style browsing across the batch's other reels, same as the Hub —
+  // re-resolves the newly selected reel's video if the player is still open.
+  onPrevReel: () => void;
+  onNextReel: () => void;
+  hasPrevReel: boolean;
+  hasNextReel: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [reason, setReason] = useState<RegenerationReason>(REASONS[0]);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+
+  // The reference reel never has its own play_addr persisted (TikTok's
+  // signed CDN URLs expire in ~24-48h) — opening it re-resolves a fresh,
+  // currently-playable video live from TikHub, exactly like the Hub and the
+  // live Collection editor both already do.
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [detailVideo, setDetailVideo] = useState<ReelVideo | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!videoOpen) return;
+    let cancelled = false;
+    setDetailVideo(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    void resolveReelVideo("tiktok", concept.video.sourceUrl).then(({ results, error }) => {
+      if (cancelled) return;
+      setDetailLoading(false);
+      if (error || results.length === 0) {
+        setDetailError(error ?? "Couldn't load this video.");
+        return;
+      }
+      setDetailVideo({
+        ...results[0],
+        id: concept.video.id,
+        thumbnailUrl: concept.video.thumbnailUrl ?? results[0].thumbnailUrl,
+        thumbGradient: concept.video.thumbGradient,
+        saved: true,
+        used: true,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoOpen, concept.video.id]);
+
+  function closeVideo() {
+    setVideoOpen(false);
+    setDetailVideo(null);
+    setDetailError(null);
+  }
 
   function submit() {
     onRequestRegeneration(reason, note);
@@ -116,14 +183,31 @@ function ItemDetail({
           <div className="grid grid-cols-2 gap-4 max-w-[440px]">
             <div>
               <p className="mb-1.5 text-[10px] tracking-wide uppercase text-neutral-600">Reference</p>
-              <div
-                className="relative aspect-[9/16] rounded-xl overflow-hidden"
-                style={{ background: concept.video.thumbGradient }}
+              <button
+                onClick={() => setVideoOpen(true)}
+                className="group/ref relative aspect-[9/16] w-full rounded-xl overflow-hidden block"
               >
+                {concept.video.thumbnailUrl ? (
+                  <img
+                    src={concept.video.thumbnailUrl}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="absolute inset-0"
+                    style={{ background: concept.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }}
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/15 group-hover/ref:bg-black/35 transition-colors duration-150 flex items-center justify-center">
+                  <span className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center opacity-0 group-hover/ref:opacity-100 transition-opacity duration-150">
+                    <Play size={14} className="text-white ml-0.5" fill="currentColor" />
+                  </span>
+                </div>
                 <span className="absolute bottom-2 left-2 text-[11px] text-white/90 font-medium">
                   @{concept.video.username}
                 </span>
-              </div>
+              </button>
             </div>
             <div>
               <p className="mb-1.5 text-[10px] tracking-wide uppercase text-neutral-600">Delivered</p>
@@ -245,6 +329,40 @@ function ItemDetail({
           )}
         </div>
       </div>
+
+      {videoOpen && !detailVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-[3px] animate-fade-in">
+          <div className="rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl px-6 py-5 text-center max-w-xs">
+            {detailLoading ? (
+              <>
+                <div className="mx-auto w-[18px] h-[18px] rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+                <p className="mt-2.5 text-[12.5px] text-neutral-400">Loading video…</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-neutral-300">{detailError ?? "Couldn't load this video."}</p>
+                <button
+                  onClick={closeVideo}
+                  className="mt-3 text-[12px] text-[#D39448] hover:brightness-110 transition-[filter]"
+                >
+                  Close
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <ReelDetailModal
+        video={detailVideo}
+        open={!!detailVideo}
+        creator={creator}
+        onClose={closeVideo}
+        onPrev={onPrevReel}
+        onNext={onNextReel}
+        hasPrev={hasPrevReel}
+        hasNext={hasNextReel}
+      />
     </div>
   );
 }
@@ -273,6 +391,7 @@ export function FinishedBatchView({
   const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   const selected = reels.find((r) => r.video.id === selectedId) ?? null;
+  const selectedIndex = reels.findIndex((r) => r.video.id === selectedId);
 
   async function handleUpload(conceptId: string, file: File) {
     setUploadingId(conceptId);
@@ -287,11 +406,22 @@ export function FinishedBatchView({
           <ItemDetail
             collection={collection}
             concept={selected}
+            creator={creator}
             pending={collection.regenerationRequests.some((r) => r.conceptId === selected.video.id && r.status !== "Done")}
             uploading={uploadingId === selected.video.id}
             onBack={() => setSelectedId(null)}
             onUpload={(file) => handleUpload(selected.video.id, file)}
             onRequestRegeneration={(reason, note) => onRequestRegeneration(selected.video.id, reason, note)}
+            onPrevReel={() => {
+              if (selectedIndex > 0) setSelectedId(reels[selectedIndex - 1].video.id);
+            }}
+            onNextReel={() => {
+              if (selectedIndex >= 0 && selectedIndex < reels.length - 1) {
+                setSelectedId(reels[selectedIndex + 1].video.id);
+              }
+            }}
+            hasPrevReel={selectedIndex > 0}
+            hasNextReel={selectedIndex >= 0 && selectedIndex < reels.length - 1}
           />
         ) : (
           <>

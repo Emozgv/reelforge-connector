@@ -13,7 +13,7 @@ interface DeliveredBatch {
   collectionId: string;
   collectionName: string;
   conceptCount: number;
-  thumbGradients: string[];
+  previews: { thumbnailUrl?: string; thumbGradient?: string }[];
   creator?: Creator;
   favorited: boolean;
   approvedAt?: string;
@@ -54,10 +54,13 @@ export function LibraryPage({
           collectionId: c.id,
           collectionName: c.name,
           conceptCount: s.conceptIds.length,
-          thumbGradients: c.concepts
+          previews: c.concepts
             .filter((concept) => s.conceptIds.includes(concept.video.id))
             .slice(0, 4)
-            .map((concept) => concept.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT),
+            .map((concept) => ({
+              thumbnailUrl: concept.video.thumbnailUrl,
+              thumbGradient: concept.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT,
+            })),
           creator: creators.find((cr) => cr.id === c.creatorId),
           favorited: s.favorited,
           approvedAt: s.approvedAt,
@@ -117,8 +120,18 @@ export function LibraryPage({
                 <button onClick={() => setOpenSubmissionId(b.submissionId)} className="block w-full text-left">
                   <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
                     {Array.from({ length: 4 }).map((_, i) =>
-                      b.thumbGradients[i] ? (
-                        <div key={i} style={{ background: b.thumbGradients[i] }} />
+                      b.previews[i] ? (
+                        b.previews[i].thumbnailUrl ? (
+                          <img
+                            key={i}
+                            src={b.previews[i].thumbnailUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div key={i} style={{ background: b.previews[i].thumbGradient }} />
+                        )
                       ) : (
                         <div key={i} className="bg-white/[0.03]" />
                       )
