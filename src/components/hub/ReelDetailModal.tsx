@@ -113,6 +113,8 @@ export function ReelDetailModal({
                     style={{ background: video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }}
                   />
                 )}
+                {/* Only reached when there's no playable video at all — a
+                    real last resort, not the everyday path. */}
                 <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
                   <a
                     href={video.sourceUrl}
@@ -135,6 +137,21 @@ export function ReelDetailModal({
                 {video.duration}
               </span>
             </div>
+
+            {/* Secondary, deliberately small — playback inside the modal is
+                the main way to watch now, this is just an escape hatch. */}
+            {video.videoUrl && !videoError && (
+              <a
+                href={video.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open on ${platformLabel}`}
+                className="absolute top-3 right-3 flex items-center gap-1 text-[10px] text-white/75 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[3px] font-medium hover:text-white hover:bg-black/60 transition-colors pointer-events-auto"
+              >
+                <ExternalLink size={9.5} />
+                {platformLabel}
+              </a>
+            )}
           </div>
 
           {/* info panel */}

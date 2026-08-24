@@ -217,11 +217,40 @@ export function CreativityHubPage({
     setLoadingMore(false);
   }
 
-  function handleRefresh() {
+  // Re-runs whatever's currently open — used only by the outage card's Retry,
+  // which needs to actually retry the failed fetch, not reset the Hub.
+  function retryLastAction() {
     if (!lastAction) return;
     setSpinning(true);
     const rerun = lastAction.kind === "search" ? runSearch(lastAction.value) : runProfileLookup(lastAction.value);
     void rerun.finally(() => setSpinning(false));
+  }
+
+  // The toolbar Refresh is context-aware rather than always re-fetching:
+  // with a result open it's a fast way back to the Hub's home state; from
+  // home (nothing open) it shuffles in a fresh niche instead of doing nothing.
+  // Either way it's pure client-side state — no reload, no full-page flash.
+  function handleRefresh() {
+    if (lastAction) {
+      setSpinning(true);
+      setLastAction(null);
+      setVideos([]);
+      setSearchError(false);
+      setPlatformNotice(null);
+      setQuery("");
+      setProfileHandle("");
+      setProfile(null);
+      setProfileSecUid(null);
+      setProfileCursor(null);
+      setProfileHasMore(false);
+      setDetailVideoId(null);
+      window.setTimeout(() => setSpinning(false), 280);
+      return;
+    }
+    const next = NICHE_CHIPS[Math.floor(Math.random() * NICHE_CHIPS.length)];
+    setQuery(next);
+    setSpinning(true);
+    void runSearch(next).finally(() => setSpinning(false));
   }
 
   function markSaved(id: string) {
@@ -392,8 +421,8 @@ export function CreativityHubPage({
 
             <button
               onClick={handleRefresh}
-              disabled={!lastAction || searching}
-              title={lastAction ? "Fetch a fresh batch for the same search" : "Search something first"}
+              disabled={searching}
+              title={lastAction ? "Back to the Hub home" : "Shuffle in a fresh niche"}
               className="flex items-center gap-2 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <Shuffle size={14} className={spinning ? "animate-spin" : ""} />
@@ -431,7 +460,7 @@ export function CreativityHubPage({
               normally.
             </p>
             <button
-              onClick={handleRefresh}
+              onClick={retryLastAction}
               disabled={searching || !lastAction}
               className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full surface-panel hover:bg-white/[0.06] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
             >
