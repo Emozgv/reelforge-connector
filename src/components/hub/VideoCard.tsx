@@ -7,13 +7,18 @@ export function VideoCard({
   video,
   onSaveClick,
   onAddToCollection,
+  onOpenDetail,
 }: {
   video: ReelVideo;
   onSaveClick: (video: ReelVideo) => void;
   onAddToCollection?: (video: ReelVideo) => void;
+  onOpenDetail?: (video: ReelVideo) => void;
 }) {
   return (
-    <div className="group relative aspect-[9/16] w-full rounded-2xl overflow-hidden border border-white/[0.08] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-[#D39448]/35 hover:shadow-[0_18px_40px_-12px_rgba(0,0,0,0.6)] cursor-pointer">
+    <div
+      onClick={() => onOpenDetail?.(video)}
+      className="group relative aspect-[9/16] w-full rounded-2xl overflow-hidden border border-white/[0.08] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-[#D39448]/35 hover:shadow-[0_18px_40px_-12px_rgba(0,0,0,0.6)] cursor-pointer"
+    >
       {video.thumbnailUrl ? (
         <img
           src={video.thumbnailUrl}
@@ -103,7 +108,10 @@ export function VideoCard({
           <FolderPlus size={12.5} strokeWidth={2} />
         </button>
         <button
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(video.sourceUrl, "_blank", "noopener,noreferrer");
+          }}
           title="Open source"
           className="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/15 transition-colors"
         >

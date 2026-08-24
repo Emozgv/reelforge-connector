@@ -6,6 +6,7 @@ export function VideoGrid({
   videos,
   onSaveClick,
   onAddToCollection,
+  onOpenDetail,
   spacious = false,
   emptyTitle = "No results match your search.",
   emptyHint = "Try a different keyword or platform.",
@@ -13,6 +14,7 @@ export function VideoGrid({
   videos: ReelVideo[];
   onSaveClick: (video: ReelVideo) => void;
   onAddToCollection?: (video: ReelVideo) => void;
+  onOpenDetail?: (video: ReelVideo) => void;
   spacious?: boolean;
   emptyTitle?: string;
   emptyHint?: string;
@@ -38,7 +40,12 @@ export function VideoGrid({
     <div className={["grid grid-cols-4", spacious ? "gap-5" : "gap-3.5"].join(" ")}>
       {videos.map((video, i) => (
         <div key={video.id} className="animate-rise-in" style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}>
-          <VideoCard video={video} onSaveClick={onSaveClick} onAddToCollection={onAddToCollection} />
+          <VideoCard
+            video={video}
+            onSaveClick={onSaveClick}
+            onAddToCollection={onAddToCollection}
+            onOpenDetail={onOpenDetail}
+          />
         </div>
       ))}
     </div>

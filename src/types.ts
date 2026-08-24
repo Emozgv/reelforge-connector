@@ -48,6 +48,24 @@ export interface Creator {
 // what's actually filled in.
 export type CreatorSetupStatus = "draft" | "in_progress" | "ready";
 
+// A public creator profile's own real, provider-reported stats — built from
+// the same post-list response as their reels (see search-reels's
+// extractProfileInfo), never estimated or fabricated client-side. Any field
+// the provider didn't expose is left undefined rather than guessed.
+export interface ReelProfileInfo {
+  platform: Platform;
+  username: string;
+  displayName?: string;
+  avatarUrl?: string;
+  bio?: string;
+  verified?: boolean;
+  followerCount?: number;
+  followingCount?: number;
+  // TikTok calls this "heart"/"heartCount" — the creator's all-time likes total.
+  likesCount?: number;
+  videoCount?: number;
+}
+
 export interface ReelVideo {
   id: string;
   platform: Platform;
@@ -57,8 +75,20 @@ export interface ReelVideo {
   // Real preview image for ingested reels. Mock/legacy items have no image and
   // fall back to thumbGradient instead.
   thumbnailUrl?: string;
+  // Direct playable video URL, when the provider exposes one. These are often
+  // short-lived signed CDN URLs and may fail to embed cross-origin — consumers
+  // should fall back gracefully (e.g. to thumbnailUrl + an external "watch" link).
+  videoUrl?: string;
+  // Full raw caption/description text (tags above are just the hashtags parsed
+  // out of it) — undefined for mock/legacy items.
+  caption?: string;
   views: string;
   viewsRaw: number;
+  // Real per-video engagement counts, when the provider exposes them.
+  // Undefined means "not available", never defaulted to 0.
+  likes?: number;
+  comments?: number;
+  shares?: number;
   tags: string[];
   saved: boolean;
   used: boolean;

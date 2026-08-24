@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Shuffle, Bookmark, SlidersHorizontal, Info, CloudOff, AtSign } from "lucide-react";
-import { searchReels, fetchProfileReels } from "../../lib/searchReels";
-import type { Creator, ReelVideo } from "../../types";
+import { Search, Shuffle, Bookmark, SlidersHorizontal, Info, CloudOff, ChevronDown, Loader2 } from "lucide-react";
+import { searchReels, fetchProfileReels, fetchMoreProfileReels } from "../../lib/searchReels";
+import type { Creator, Platform, ReelProfileInfo, ReelVideo } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { CreatorSelector } from "./CreatorSelector";
 import { FilterDrawer } from "./FilterDrawer";
@@ -11,6 +11,9 @@ import { RotatingMicrocopy } from "./RotatingMicrocopy";
 import { SavedCollectionsPopover } from "./SavedCollectionsPopover";
 import { SavePanel } from "./SavePanel";
 import { VideoGrid } from "./VideoGrid";
+import { ProfilePlatformDropdown } from "./ProfilePlatformDropdown";
+import { ProfileHeader } from "./ProfileHeader";
+import { ReelDetailModal } from "./ReelDetailModal";
 import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTypes";
 
 const NICHE_CHIPS = [
@@ -43,10 +46,20 @@ export function CreativityHubPage({
   const [platformNotice, setPlatformNotice] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<{ kind: "search" | "profile"; value: string } | null>(null);
   const [profileHandle, setProfileHandle] = useState("");
+  const [profilePlatform, setProfilePlatform] = useState<Platform>("tiktok");
+  const [profile, setProfile] = useState<ReelProfileInfo | null>(null);
+  const [profileSecUid, setProfileSecUid] = useState<string | null>(null);
+  const [profileCursor, setProfileCursor] = useState<string | null>(null);
+  const [profileHasMore, setProfileHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
   const [savedPopoverOpen, setSavedPopoverOpen] = useState(false);
+  const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
+  // Derived from the live list (not a frozen snapshot) so the modal's saved
+  // state always matches what just happened in the SavePanel behind it.
+  const detailVideo = videos.find((v) => v.id === detailVideoId) ?? null;
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) {
@@ -100,21 +113,43 @@ export function CreativityHubPage({
 
   // Shared by both research modes — one gives real videos or a provider
   // error, the caller decides what "success" means for its own UI copy.
-  async function loadVideos(fetcher: () => Promise<{ results: ReelVideo[]; error?: string }>) {
+  async function loadVideos(
+    fetcher: () => Promise<{
+      results: ReelVideo[];
+      error?: string;
+      profile?: ReelProfileInfo;
+      secUid?: string;
+      cursor?: string;
+      hasMore?: boolean;
+    }>,
+    opts?: { isProfile?: boolean }
+  ) {
     setSearching(true);
     setSearchError(false);
-    const { results, error } = await fetcher();
+    const res = await fetcher();
     // Every failure from a real call today is the provider, not us — show one
     // calm, on-brand message rather than the raw provider error text, so an
     // upstream outage never makes the page itself look broken. The raw reason
     // still goes to the console for us to debug, never to the client UI.
-    if (error) {
-      console.error("[search-reels] provider error:", error);
+    if (res.error) {
+      console.error("[search-reels] provider error:", res.error);
       setSearchError(true);
       setVideos([]);
+      if (opts?.isProfile) {
+        setProfile(null);
+        setProfileSecUid(null);
+        setProfileCursor(null);
+        setProfileHasMore(false);
+      }
     } else {
       setSearchError(false);
-      setVideos(results);
+      setVideos(res.results);
+      if (opts?.isProfile) {
+        setProfile(res.profile ?? null);
+        setProfileSecUid(res.secUid ?? null);
+        setProfileCursor(res.cursor ?? null);
+        setProfileHasMore(!!res.hasMore);
+      }
     }
     setSearching(false);
   }
@@ -128,6 +163,10 @@ export function CreativityHubPage({
     }
     setPlatformNotice(null);
     setLastAction({ kind: "search", value: trimmed });
+    setProfile(null);
+    setProfileSecUid(null);
+    setProfileCursor(null);
+    setProfileHasMore(false);
     await loadVideos(() => searchReels("tiktok", trimmed));
   }
 
@@ -136,13 +175,46 @@ export function CreativityHubPage({
   async function runProfileLookup(handle: string) {
     const trimmed = handle.trim();
     if (!trimmed) return;
-    if (filters.platform === "instagram") {
-      setPlatformNotice("Instagram profiles aren't connected yet — try TikTok or All for now.");
+    if (profilePlatform === "instagram") {
+      setPlatformNotice("Instagram profiles aren't connected yet — try TikTok for now.");
       return;
     }
     setPlatformNotice(null);
     setLastAction({ kind: "profile", value: trimmed });
-    await loadVideos(() => fetchProfileReels("tiktok", trimmed));
+    await loadVideos(() => fetchProfileReels(profilePlatform, trimmed), { isProfile: true });
+  }
+
+  // Fetches the next page of the same creator's reels and appends them —
+  // fast first batch on lookup, then the user pulls in more only as needed.
+  async function loadMoreProfileVideos() {
+    if (!profileSecUid || !profileCursor || !profileHasMore || loadingMore) return;
+    setLoadingMore(true);
+    const { results, error, cursor, hasMore } = await fetchMoreProfileReels(
+      profilePlatform,
+      profileSecUid,
+      profileCursor
+    );
+    if (error) {
+      console.error("[search-reels] provider error (load more):", error);
+      setProfileHasMore(false);
+    } else {
+      // TikHub's cursor can land back on the last item of the previous page —
+      // drop anything we've already got rather than showing/saving a duplicate.
+      let addedCount = 0;
+      setVideos((prev) => {
+        const seen = new Set(prev.map((v) => v.id));
+        const fresh = results.filter((v) => !seen.has(v.id));
+        addedCount = fresh.length;
+        return [...prev, ...fresh];
+      });
+      // A cursor that isn't advancing and returns nothing new is effectively
+      // the end, even if the provider still claims hasMore — stop rather than
+      // let "Load more" spin forever on a stuck page.
+      const stuck = addedCount === 0 && (cursor ?? null) === profileCursor;
+      setProfileCursor(cursor ?? null);
+      setProfileHasMore(!!hasMore && !stuck);
+    }
+    setLoadingMore(false);
   }
 
   function handleRefresh() {
@@ -288,8 +360,8 @@ export function CreativityHubPage({
 
           {/* profile-based research — a public creator's own reels, independent
               of (and a fallback for) the keyword search above */}
-          <div className="flex-1 min-w-[220px] max-w-sm flex items-center gap-2 h-11 px-3.5 rounded-full glass-panel">
-            <AtSign size={14} className="text-neutral-500 shrink-0" />
+          <div className="flex-1 min-w-[240px] max-w-sm flex items-center gap-1.5 h-11 pl-1.5 pr-3.5 rounded-full glass-panel">
+            <ProfilePlatformDropdown value={profilePlatform} onChange={setProfilePlatform} />
             <input
               value={profileHandle}
               onChange={(e) => setProfileHandle(e.target.value)}
@@ -368,30 +440,52 @@ export function CreativityHubPage({
             </button>
           </div>
         ) : (
-          <VideoGrid
-            videos={filtered}
-            onSaveClick={handleSaveClick}
-            onAddToCollection={setSavePanelVideo}
-            spacious
-            emptyTitle={
-              searching
-                ? lastAction?.kind === "profile"
-                  ? `Loading @${lastAction.value.replace(/^@/, "")}'s reels…`
-                  : "Searching…"
-                : lastAction
-                  ? "No results found."
-                  : "Search a niche, or browse a public profile above."
-            }
-            emptyHint={
-              searching
-                ? "Pulling fresh results from TikTok."
-                : lastAction?.kind === "profile"
-                  ? "Double-check the username, or try a different public profile."
+          <>
+            {lastAction?.kind === "profile" && profile && <ProfileHeader profile={profile} />}
+
+            <VideoGrid
+              videos={filtered}
+              onSaveClick={handleSaveClick}
+              onAddToCollection={setSavePanelVideo}
+              onOpenDetail={(video) => setDetailVideoId(video.id)}
+              spacious
+              emptyTitle={
+                searching
+                  ? lastAction?.kind === "profile"
+                    ? `Loading @${lastAction.value.replace(/^@/, "")}'s reels…`
+                    : "Searching…"
                   : lastAction
-                    ? "Try a different keyword, or press Refresh for a new batch."
-                    : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
-            }
-          />
+                    ? "No results found."
+                    : "Search a niche, or browse a public profile above."
+              }
+              emptyHint={
+                searching
+                  ? "Pulling fresh results from TikTok."
+                  : lastAction?.kind === "profile"
+                    ? "Double-check the username, or try a different public profile."
+                    : lastAction
+                      ? "Try a different keyword, or press Refresh for a new batch."
+                      : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
+              }
+            />
+
+            {lastAction?.kind === "profile" && filtered.length > 0 && profileHasMore && (
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={() => void loadMoreProfileVideos()}
+                  disabled={loadingMore}
+                  className="flex items-center gap-2 h-10 px-5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300 disabled:opacity-60"
+                >
+                  {loadingMore ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <ChevronDown size={14} />
+                  )}
+                  {loadingMore ? "Loading more…" : "Load more reels"}
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         <div className="h-10" />
@@ -443,6 +537,24 @@ export function CreativityHubPage({
         collections={collectionsStore.collections}
         onClose={() => setSavedPopoverOpen(false)}
         onOpenCollection={onOpenCollection}
+      />
+
+      <ReelDetailModal
+        video={detailVideo}
+        open={!!detailVideoId}
+        creator={selectedCreator}
+        onClose={() => setDetailVideoId(null)}
+        onSaveClick={(video) => {
+          handleSaveClick(video);
+          // Only hand off to the SavePanel when it's actually about to open
+          // (the not-yet-saved case) — an instant unsave-toggle has no panel
+          // to show, so the detail view should just stay open for that.
+          if (!video.saved) setDetailVideoId(null);
+        }}
+        onAddToCollection={(video) => {
+          setSavePanelVideo(video);
+          setDetailVideoId(null);
+        }}
       />
     </div>
   );
