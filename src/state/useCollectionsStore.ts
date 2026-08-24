@@ -287,6 +287,32 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     return { id: created.id, error: null };
   }
 
+  // A DB trigger auto-creates every creator's "Quick Saves" collection the
+  // moment the creator row is inserted — but that insert happens entirely
+  // server-side, so this store's local `collections` state has no idea it
+  // exists until the next full fetch. Called right after creating a new
+  // creator so a Quick Save right afterward finds it immediately instead of
+  // racing the trigger with a client-side createCollection (which would just
+  // fail on the same-name unique constraint).
+  async function syncQuickSavesForCreator(creatorId: string) {
+    if (!workspaceId) return;
+    if (collectionsRef.current.some((c) => c.creatorId === creatorId && c.name === "Quick Saves")) return;
+    const { data } = await supabase
+      .schema("client_os")
+      .from("collections")
+      .select("*")
+      .eq("creator_id", creatorId)
+      .eq("name", "Quick Saves")
+      .maybeSingle();
+    if (!data) return;
+    const meta = collectionMetaFromRow(data as CollectionRow);
+    setCollections((prev) =>
+      prev.some((c) => c.id === meta.id)
+        ? prev
+        : [{ ...meta, concepts: [], submissions: [], history: [], regenerationRequests: [] }, ...prev]
+    );
+  }
+
   // Creates the next numbered version of a Collection's family — the name is
   // always computed here, from the freshest known collections list, at the
   // exact moment of creation. Never accepts a name from the caller, so a
@@ -735,6 +761,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     clearSaveError,
     addVideoToCollection,
     createCollection,
+    syncQuickSavesForCreator,
     createNextVersion,
     removeVideoFromCollection,
     setConceptStatus,

@@ -55,9 +55,9 @@ export function SavePanel({
   // latest version by default. Listing every version as its own flat row
   // here let a save silently land on an older version nobody would ever
   // open again, making the saved concept effectively invisible.
-  const collectionsForAssignee = groupCollectionsByFamily(collections.filter((c) => c.creatorId === assigneeId)).map(
-    (family) => family[family.length - 1]
-  );
+  const collectionsForAssignee = groupCollectionsByFamily(collections.filter((c) => c.creatorId === assigneeId))
+    .map((family) => family[family.length - 1])
+    .sort((a, b) => Number(b.name === "Quick Saves") - Number(a.name === "Quick Saves"));
 
   function finish(label: string) {
     setConfirmedLabel(label);

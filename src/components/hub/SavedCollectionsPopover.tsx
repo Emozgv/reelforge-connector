@@ -39,7 +39,9 @@ export function SavedCollectionsPopover({
   // Same grouping the main Collections page uses — "Aesthetic Reels" and
   // "Aesthetic Reels 2" collapse into one row with a version switcher,
   // instead of listing every version as its own unrelated row.
-  const families = groupCollectionsByFamily(ownCollections);
+  const families = groupCollectionsByFamily(ownCollections).sort(
+    (a, b) => Number(b[0].name === "Quick Saves") - Number(a[0].name === "Quick Saves")
+  );
 
   return (
     <>

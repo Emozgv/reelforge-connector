@@ -14,11 +14,16 @@ export function CreatorSetupWizard({
   creatorsStore,
   onClose,
   onDone,
+  onCreatorCreated,
 }: {
   open: boolean;
   creatorsStore: CreatorsStore;
   onClose: () => void;
   onDone: (creatorId: string) => void;
+  // Fired right after the new creator's row exists — lets the caller pull
+  // its just-auto-created "Quick Saves" collection into local state before
+  // anything (e.g. a Hub quick save) needs to find it.
+  onCreatorCreated?: (creatorId: string) => void;
 }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
@@ -59,6 +64,7 @@ export function CreatorSetupWizard({
       setError(result.error ?? "Couldn't create creator.");
       return;
     }
+    onCreatorCreated?.(result.id);
     setCreatorId(result.id);
     setStep(1);
   }

@@ -49,7 +49,11 @@ export function CollectionsPage({
         creator,
         // One entry per numbered family ("Aesthetic Reels" + "Aesthetic Reels 2"
         // is one folder, not two independent rows) — oldest -> newest within.
-        families: groupCollectionsByFamily(visible.filter((c) => c.creatorId === creator.id)),
+        // "Quick Saves" (the creator's automatic default collection) always
+        // leads the list — everything else keeps its existing order.
+        families: groupCollectionsByFamily(visible.filter((c) => c.creatorId === creator.id)).sort(
+          (a, b) => Number(b[0].name === "Quick Saves") - Number(a[0].name === "Quick Saves")
+        ),
       }))
       .filter((g) => g.families.length > 0);
   }, [collections, activeCreatorId, viewMode]);

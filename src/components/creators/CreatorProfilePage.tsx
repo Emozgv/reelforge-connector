@@ -132,7 +132,11 @@ export function CreatorProfilePage({
     setUploadingReference(false);
   }
 
-  const ownCollections = collections.filter((c) => c.creatorId === creator.id);
+  // "Quick Saves" (the creator's automatic default collection) always leads
+  // the list — everything else keeps its existing order.
+  const ownCollections = collections
+    .filter((c) => c.creatorId === creator.id)
+    .sort((a, b) => Number(b.name === "Quick Saves") - Number(a.name === "Quick Saves"));
   const allSubmissions = ownCollections
     .flatMap((c) => c.submissions.map((s) => ({ ...s, collectionName: c.name })))
     .sort((a, b) => b.sentAt.localeCompare(a.sentAt));

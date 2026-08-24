@@ -93,6 +93,7 @@ export function CreatorsPage({
       <CreatorSetupWizard
         open={createOpen}
         creatorsStore={creatorsStore}
+        onCreatorCreated={(creatorId) => void collectionsStore.syncQuickSavesForCreator(creatorId)}
         onClose={() => setCreateOpen(false)}
         onDone={(creatorId) => {
           setCreateOpen(false);
