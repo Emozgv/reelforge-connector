@@ -128,6 +128,18 @@ export function CreativityHubPage({
   // side session state. Cleared only on Refresh (see handleRefresh below);
   // switching keywords or platforms just starts a new, empty key.
   const seenIdsRef = useRef<Map<string, Set<string>>>(new Map());
+  // Bumped at the start of every fetch that can replace `videos` (runSearch,
+  // loadVideos, and the profile Shuffle branch below). A search/Shuffle can
+  // take a few real seconds now that the loading state is meant to stay
+  // visible that whole time — long enough that a user can fire a second
+  // search before the first resolves (new keyword, another chip, Shuffle
+  // again). Without this, an OLDER request resolving AFTER a newer one would
+  // silently overwrite the newer results, or flip `searching` back to false
+  // early — both look identical to "old results came back" from the user's
+  // side. Each fetch captures its own id and only commits `videos`/
+  // `searching`/etc. if it's still the most recent one by the time it
+  // resolves; a superseded request's response is discarded outright.
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) {
@@ -201,10 +213,15 @@ export function CreativityHubPage({
     }>,
     opts: { isProfile: true }
   ) {
+    const requestId = ++requestIdRef.current;
     setSearching(true);
     setSearchError(false);
     if (opts.isProfile) setProfileReelsUnavailable(false);
     const res = await fetcher();
+    // A newer search/profile lookup/Shuffle has started since this one was
+    // fired — this response is stale, discard it rather than let it
+    // overwrite what the user actually asked for next.
+    if (requestId !== requestIdRef.current) return;
     // Every failure from a real call today is the provider, not us — show one
     // calm, on-brand message rather than the raw provider error text, so an
     // upstream outage never makes the page itself look broken. The raw reason
@@ -256,6 +273,7 @@ export function CreativityHubPage({
   async function runSearch(q: string, cursorOverride?: string, platformOverride?: "all" | Platform) {
     const trimmed = q.trim();
     if (!trimmed) return;
+    const requestId = ++requestIdRef.current;
     const platform = platformOverride ?? filters.platform;
     setPlatformNotice(null);
     setLastAction({ kind: "search", value: trimmed });
@@ -280,6 +298,10 @@ export function CreativityHubPage({
       round++
     ) {
       const res = await searchReels(platform, trimmed, cursor);
+      // A newer search/Shuffle has started since this one was fired — stop
+      // backfilling and discard whatever this stale request already has;
+      // whichever call is still current owns the grid and the loading state.
+      if (requestId !== requestIdRef.current) return;
       if (res.error) {
         console.error("[search-reels] provider error:", res.error);
         hadError = true;
@@ -294,6 +316,7 @@ export function CreativityHubPage({
       cursor = res.cursor;
       hasMore = !!res.hasMore;
     }
+    if (requestId !== requestIdRef.current) return;
 
     if (hadError && collected.length === 0) {
       setSearchError(true);
@@ -363,6 +386,10 @@ export function CreativityHubPage({
   // of what's currently open. It never re-fetches a batch of the same topic
   // (that's Shuffle's job, entirely separate below).
   function handleRefresh() {
+    // Invalidates any search/profile/shuffle fetch still in flight — without
+    // this, one could resolve after Refresh and quietly repopulate the grid
+    // it just cleared back to the Hub's home state.
+    requestIdRef.current++;
     setRefreshSpinning(true);
     setLastAction(null);
     setVideos([]);
@@ -407,21 +434,28 @@ export function CreativityHubPage({
       setDetailVideoId(null);
       if (profileSecUid && profileHasMore && profileCursor) {
         void (async () => {
+          const requestId = ++requestIdRef.current;
           setSearching(true);
           const { results, error, cursor, hasMore } = await fetchMoreProfileReels(
             profilePlatform,
             profileSecUid,
             profileCursor
           );
-          if (error) {
-            console.error("[search-reels] provider error (shuffle):", error);
-            setSearchError(true);
-          } else {
-            setVideos(results);
-            setProfileCursor(cursor ?? null);
-            setProfileHasMore(!!hasMore);
+          // Only commit if nothing newer (another Shuffle, a new search, a
+          // fresh profile lookup) has started in the meantime — otherwise
+          // this stale response would clobber whatever the user asked for
+          // next, or falsely mark the newer request's loading as finished.
+          if (requestId === requestIdRef.current) {
+            if (error) {
+              console.error("[search-reels] provider error (shuffle):", error);
+              setSearchError(true);
+            } else {
+              setVideos(results);
+              setProfileCursor(cursor ?? null);
+              setProfileHasMore(!!hasMore);
+            }
+            setSearching(false);
           }
-          setSearching(false);
           setShuffleSpinning(false);
         })();
       } else {
