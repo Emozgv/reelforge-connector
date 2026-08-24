@@ -705,32 +705,26 @@ export function CreativityHubPage({
               loading={searching}
               loadingLabel={
                 shuffleSpinning
-                  ? "Shuffling in a fresh batch…"
+                  ? "ReelForge is shuffling in a fresh batch…"
                   : lastAction?.kind === "profile"
-                    ? `Loading @${lastAction.value.replace(/^@/, "")}'s reels…`
-                    : "ReelForge is researching your next batch…"
+                    ? `ReelForge is loading @${lastAction.value.replace(/^@/, "")}'s reels…`
+                    : "ReelForge is finding new videos for you…"
               }
               emptyTitle={
-                searching
-                  ? lastAction?.kind === "profile"
-                    ? `Loading @${lastAction.value.replace(/^@/, "")}'s reels…`
-                    : "Searching…"
-                  : profileReelsUnavailable
-                    ? "This profile is playing hard to get."
-                    : lastAction
-                      ? "No results found."
-                      : "Search a niche, or browse a public profile above."
+                profileReelsUnavailable
+                  ? "This profile is playing hard to get."
+                  : lastAction
+                    ? "No results found."
+                    : "Search a niche, or browse a public profile above."
               }
               emptyHint={
-                searching
-                  ? "Good research can take a few seconds — hang tight."
-                  : profileReelsUnavailable
-                    ? "Our provider couldn't retrieve its reels right now — try again shortly."
-                    : lastAction?.kind === "profile"
-                      ? "Double-check the username, or try a different public profile."
-                      : lastAction
-                        ? "Try a different keyword, or press Refresh for a new batch."
-                        : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
+                profileReelsUnavailable
+                  ? "Our provider couldn't retrieve its reels right now — try again shortly."
+                  : lastAction?.kind === "profile"
+                    ? "Double-check the username, or try a different public profile."
+                    : lastAction
+                      ? "Try a different keyword, or press Refresh for a new batch."
+                      : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
               }
             />
 
