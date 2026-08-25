@@ -170,6 +170,28 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, [stopHeartbeat]);
 
+  // Called once, the first time a Research Account becomes available (app
+  // load, or the very first account ever selected) — never on a later
+  // account/platform switch, which still just calls endSession() as before.
+  // Without this, that first render fell straight into endSession()'s
+  // "idle" state, which reads as "Research session ended" even though no
+  // session had ever existed yet — genuinely wrong when Connector isn't
+  // even running, and the real "Start ReelForge Connector" state only
+  // showed up a click later. This mirrors startSession's own first check
+  // (checking -> idle or needs_connector) but deliberately stops short of
+  // beginSession() — reachable settles into idle, same as if nothing had
+  // run at all, so it never starts a session on its own.
+  const checkInitialReachability = useCallback(async (accountId: string, platform: Platform) => {
+    if (platform !== "instagram" && platform !== "tiktok") return;
+    setStatus("checking");
+    if (await checkHealth()) {
+      setStatus("idle");
+      return;
+    }
+    pendingRef.current = { accountId, platform };
+    setStatus("needs_connector");
+  }, []);
+
   // Marks Connector unreachable mid-session (heartbeat failure, or a
   // beginSession attempt that never resolved) and puts the UI back into the
   // one state it can always recover from with a real click.
@@ -500,5 +522,18 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
 
   useEffect(() => () => void endSession(), [endSession]);
 
-  return { currentReel, hasPrev, status, error, startSession, endSession, next, prev, like, block, retryWithWake };
+  return {
+    currentReel,
+    hasPrev,
+    status,
+    error,
+    startSession,
+    endSession,
+    checkInitialReachability,
+    next,
+    prev,
+    like,
+    block,
+    retryWithWake,
+  };
 }

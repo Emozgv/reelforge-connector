@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
@@ -392,7 +392,18 @@ export function ResearchAccountsPage({
   // section and back does NOT hit this at all (currentAccount doesn't
   // change), which is what keeps a session already running across that
   // kind of navigation.
+  const didInitialReachabilityCheckRef = useRef(false);
   useEffect(() => {
+    // The very first time an account is available (app load, or the first
+    // account ever picked), reflect Connector's real reachability instead
+    // of jumping straight to endSession()'s "session ended" idle state —
+    // that reads as wrong when no session ever existed. Every later switch
+    // still just ends whatever was running, exactly as before.
+    if (!didInitialReachabilityCheckRef.current && currentAccount) {
+      didInitialReachabilityCheckRef.current = true;
+      void liveSession.checkInitialReachability(currentAccount.id, currentAccount.platform);
+      return;
+    }
     void liveSession.endSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAccount?.id, currentAccount?.status]);
