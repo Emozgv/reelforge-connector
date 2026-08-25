@@ -1,0 +1,5 @@
+# The ReelForge Connector desktop app (Tauri + bundled Node/Chromium/Rust
+# build artifacts) is not part of this web deployment and is multi-GB —
+# Vercel's CLI doesn't reliably respect connector-app's own nested
+# .gitignore, so exclude it explicitly here.
+connector-app
