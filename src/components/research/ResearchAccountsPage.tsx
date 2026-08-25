@@ -266,6 +266,16 @@ export function ResearchAccountsPage({
   );
   const currentAccount = currentAccounts.find((a) => a.id === accountId) ?? currentAccounts[0] ?? null;
 
+  // A cancelled-login message belongs to the specific account/context it
+  // failed in — moving away from that context (switching platform, picking
+  // a different account, a different Creator) should leave it behind, not
+  // carry it along as a stale warning about an attempt that has nothing to
+  // do with what's now on screen.
+  useEffect(() => {
+    setReconnectError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCreator?.id, platform, currentAccount?.id]);
+
   // While a connect/reconnect is pending, poll for the real status flip —
   // this app has no other way to learn that the local connector script
   // (running outside the browser) has finished a real login.
@@ -484,7 +494,10 @@ export function ResearchAccountsPage({
             </button>
           ))}
           <button
-            onClick={() => setConnectFlow({ mode: "new", start: null })}
+            onClick={() => {
+              setReconnectError(null);
+              setConnectFlow({ mode: "new", start: null });
+            }}
             disabled={currentAccounts.length >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM}
             title={
               currentAccounts.length >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM
