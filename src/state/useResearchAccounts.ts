@@ -11,7 +11,7 @@ interface ResearchAccountRow {
   username: string | null;
   last_synced_at: string | null;
   last_opened_at: string | null;
-  last_shown_synced_at: string | null;
+  last_shown_seq: number | null;
   session_verified_at: string | null;
   action_kind: string | null;
   action_target_url: string | null;
@@ -35,7 +35,7 @@ function fromRow(row: ResearchAccountRow): ResearchAccount {
     status: row.status as ResearchAccountStatus,
     lastSyncedAt: row.last_synced_at ?? undefined,
     lastOpenedAt: row.last_opened_at ?? undefined,
-    lastShownSyncedAt: row.last_shown_synced_at ?? undefined,
+    lastShownSeq: row.last_shown_seq ?? undefined,
     sessionVerifiedAt: row.session_verified_at ?? undefined,
     actionKind: row.action_kind === "like" ? "like" : undefined,
     actionTargetUrl: row.action_target_url ?? undefined,
@@ -267,18 +267,16 @@ export function useResearchAccounts(workspaceId: string | undefined) {
   // Advances the swipe-mode watermark as a VA swipes past reels — workspace-
   // shared, so nobody (including a different authorized VA later) re-sees
   // the same reel. Only ever moves forward.
-  async function markSeen(accountId: string, syncedAtIso: string) {
+  async function markSeen(accountId: string, seq: number) {
     setAccounts((prev) =>
       prev.map((a) =>
-        a.id === accountId && (!a.lastShownSyncedAt || syncedAtIso > a.lastShownSyncedAt)
-          ? { ...a, lastShownSyncedAt: syncedAtIso }
-          : a
+        a.id === accountId && (a.lastShownSeq === undefined || seq > a.lastShownSeq) ? { ...a, lastShownSeq: seq } : a
       )
     );
     await supabase
       .schema("client_os")
       .from("research_accounts")
-      .update({ last_shown_synced_at: syncedAtIso })
+      .update({ last_shown_seq: seq })
       .eq("id", accountId);
   }
 

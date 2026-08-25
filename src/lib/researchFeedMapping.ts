@@ -2,6 +2,10 @@ import type { Platform, ReelVideo } from "../types";
 
 export interface ResearchFeedItemRow {
   id: string;
+  // True per-row, strictly increasing identity — the real ordering/watermark
+  // key. synced_at is shared across every reel in the same sync batch, so it
+  // can't give per-item resolution (see the migration that added this).
+  seq: number;
   platform: string;
   source_username: string;
   source_url: string;

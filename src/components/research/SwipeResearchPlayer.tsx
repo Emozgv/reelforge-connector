@@ -209,15 +209,36 @@ export function SwipeResearchPlayer({
   const wheelAccum = useRef(0);
   const touchStartY = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // One deliberate navigation action must move exactly one reel — a fast
+  // trackpad flick fires many wheel events in quick succession (each with
+  // its own large deltaY), and without a cooldown each one could cross the
+  // threshold on its own and fire another navigation before the first
+  // finished, "flying through" several reels from what felt like one
+  // gesture. Centralizing the lock in goNext/goPrev (rather than only in
+  // the wheel handler) means keyboard repeat and rapid clicks get the same
+  // one-motion-one-reel guarantee.
+  const navLockedRef = useRef(false);
+  const NAV_LOCK_MS = 350;
 
   const hasNext = index < videos.length - 1;
   const hasPrev = index > 0;
 
+  function lockNav() {
+    navLockedRef.current = true;
+    window.setTimeout(() => {
+      navLockedRef.current = false;
+    }, NAV_LOCK_MS);
+  }
+
   function goNext() {
-    if (hasNext) onIndexChange(index + 1);
+    if (!hasNext || navLockedRef.current) return;
+    lockNav();
+    onIndexChange(index + 1);
   }
   function goPrev() {
-    if (hasPrev) onIndexChange(index - 1);
+    if (!hasPrev || navLockedRef.current) return;
+    lockNav();
+    onIndexChange(index - 1);
   }
 
   // Prefetch — stay a few reels ahead of the swipe cursor so it never stalls
@@ -244,6 +265,14 @@ export function SwipeResearchPlayer({
   }, [index, videos.length]);
 
   function handleWheel(e: React.WheelEvent) {
+    // Don't accumulate momentum while locked out — otherwise a fast flick's
+    // trailing wheel events pile up past the threshold during the lock, and
+    // the instant it clears, that leftover accumulation fires an extra,
+    // unintended navigation on its own.
+    if (navLockedRef.current) {
+      wheelAccum.current = 0;
+      return;
+    }
     wheelAccum.current += e.deltaY;
     if (wheelAccum.current > WHEEL_THRESHOLD) {
       wheelAccum.current = 0;

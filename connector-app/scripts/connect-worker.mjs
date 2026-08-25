@@ -24,6 +24,20 @@ const LOGIN_URL = {
   tiktok: "https://www.tiktok.com/login/phone-or-email/email",
 };
 
+// Automated (non-login) contexts force English — without this, Chromium
+// inherits whatever locale the host machine is set to, Instagram renders
+// its UI in that language, and any text/accessible-name-based selector
+// (like the real Like button's "Like"/"Unlike" accessible name) silently
+// never matches on a non-English machine. Confirmed as the real cause of
+// "Like doesn't work": this account's own session was captured on a
+// German-locale host, so Instagram was serving German UI the whole time.
+// Login itself is untouched — the VA should see Instagram in whatever
+// language they'd normally get.
+const AUTOMATION_CONTEXT_OPTIONS = {
+  locale: "en-US",
+  extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+};
+
 function emit(event, extra = {}) {
   console.log(JSON.stringify({ event, ...extra }));
 }
@@ -287,7 +301,7 @@ async function resyncMain(accountId, token) {
   emit("loading_feed");
 
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ storageState });
+  const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
   const page = await context.newPage();
   const feedItems = await captureInstagramFeed(context, page);
   await browser.close();
@@ -346,7 +360,7 @@ async function likeMain(accountId, token, targetUrl) {
   emit("liking");
 
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ storageState });
+  const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
   const page = await context.newPage();
 
   let liked = false;
@@ -359,18 +373,52 @@ async function likeMain(accountId, token, targetUrl) {
     // "Like" (unliked) / "Unlike" (already liked) — the one part of its
     // otherwise-obfuscated class names that's stayed stable and is
     // meaningful to target on purpose, since it's the same thing a screen
-    // reader user relies on. If the reel is already liked, this is already
-    // a genuine positive signal — nothing more to do.
-    const likeButton = page.getByRole("button", { name: "Like", exact: true }).first();
-    const alreadyLiked = await page.getByRole("button", { name: "Unlike", exact: true }).first().isVisible().catch(() => false);
+    // reader user relies on. AUTOMATION_CONTEXT_OPTIONS forces English so
+    // that's actually true — without it this text simply doesn't exist on
+    // a non-English-locale session. The attribute-selector fallback covers
+    // the case where the label lives directly on the svg icon rather than
+    // propagating up to something Playwright's role engine recognizes as a
+    // button.
+    async function isUnlikedVisible() {
+      if (await page.getByRole("button", { name: "Like", exact: true }).first().isVisible().catch(() => false)) return true;
+      return page.locator('svg[aria-label="Like" i]').first().isVisible().catch(() => false);
+    }
+    async function isLikedVisible() {
+      if (await page.getByRole("button", { name: "Unlike", exact: true }).first().isVisible().catch(() => false)) return true;
+      return page.locator('svg[aria-label="Unlike" i]').first().isVisible().catch(() => false);
+    }
+    async function clickLike() {
+      const roleButton = page.getByRole("button", { name: "Like", exact: true }).first();
+      if (await roleButton.isVisible().catch(() => false)) {
+        await roleButton.click();
+        return true;
+      }
+      const svgIcon = page.locator('svg[aria-label="Like" i]').first();
+      if (await svgIcon.isVisible().catch(() => false)) {
+        // The clickable element is typically an ancestor of the icon svg,
+        // not the svg itself — walk up to the nearest element Playwright
+        // considers actionable.
+        await svgIcon.locator("xpath=ancestor::*[@role='button' or self::button][1]").first().click().catch(async () => {
+          await svgIcon.click();
+        });
+        return true;
+      }
+      return false;
+    }
+
+    const alreadyLiked = await isLikedVisible();
 
     if (alreadyLiked) {
       liked = true;
-    } else if (await likeButton.isVisible().catch(() => false)) {
-      await likeButton.click();
-      await sleep(1500);
-      liked = await page.getByRole("button", { name: "Unlike", exact: true }).first().isVisible().catch(() => false);
-      if (!liked) failureReason = "Clicked Like, but Instagram's real button didn't confirm it.";
+    } else if (await isUnlikedVisible()) {
+      const clicked = await clickLike();
+      if (!clicked) {
+        failureReason = "Couldn't find a real Like button on this reel's page.";
+      } else {
+        await sleep(1500);
+        liked = await isLikedVisible();
+        if (!liked) failureReason = "Clicked Like, but Instagram's real button didn't confirm it.";
+      }
     } else {
       failureReason = "Couldn't find a real Like button on this reel's page.";
     }

@@ -290,9 +290,12 @@ export interface ResearchAccount {
   status: ResearchAccountStatus;
   lastSyncedAt?: string;
   lastOpenedAt?: string;
-  // Swipe-mode watermark — feed items synced at or before this have already
-  // been shown to the team, so nobody re-sees the same reel on a later visit.
-  lastShownSyncedAt?: string;
+  // Swipe-mode watermark — feed items at or below this seq have already
+  // been shown to the team, so nobody re-sees the same reel on a later
+  // visit. A true per-row sequence, not a timestamp: synced_at is shared by
+  // every reel in the same sync batch, which isn't precise enough to tell
+  // "seen" apart at the level of one specific reel within that batch.
+  lastShownSeq?: number;
   // Set only when submit-research-account-session verified a real
   // authenticated session — the actual "genuinely connected" proof.
   sessionVerifiedAt?: string;

@@ -307,12 +307,15 @@ export function ResearchAccountsPage({
   async function loadFeed(accountId: string) {
     setLoadingFeed(true);
     setFeedError(false);
+    // seq (a true per-row identity) is the deterministic order — synced_at
+    // alone is shared by every reel in the same sync batch and can't fully
+    // order or tie-break within it.
     const { data, error } = await supabase
       .schema("client_os")
       .from("research_feed_items")
       .select("*")
       .eq("research_account_id", accountId)
-      .order("synced_at", { ascending: false });
+      .order("seq", { ascending: false });
     if (error) {
       setFeedError(true);
       setRawItems([]);
@@ -338,24 +341,27 @@ export function ResearchAccountsPage({
     [rawItems, savedIds]
   );
 
-  // Swipe queue: unseen items first (oldest-unseen-first, so the order feels
-  // like scrolling forward through what accumulated since last time), then
-  // already-seen ones appended as a fallback rather than a dead end.
+  // The active swipe session is unseen content only, oldest-first — this is
+  // the whole "reopening should feel fresh" fix. It used to fall back to
+  // replaying already-seen items once unseen ran out, which is exactly what
+  // made returning to an account feel like reopening yesterday's cached
+  // playlist instead of a fresh session. Already-seen history isn't lost —
+  // it's still there in Archive (via `videos` below) — it just never
+  // reappears in the active recommendation stream. seq (not synced_at) is
+  // what "unseen" and ordering are computed from, since synced_at is shared
+  // per sync batch and doesn't have single-reel resolution.
   const swipeQueue = useMemo(() => {
-    const watermark = currentAccount?.lastShownSyncedAt;
-    const withMeta = rawItems.map((r) => ({
-      video: { ...researchFeedItemToVideo(r), saved: savedIds.has(r.id) },
-      syncedAt: r.synced_at,
-    }));
-    const unseen = withMeta.filter((x) => !watermark || x.syncedAt > watermark).sort((a, b) => a.syncedAt.localeCompare(b.syncedAt));
-    const seen = withMeta.filter((x) => watermark && x.syncedAt <= watermark).sort((a, b) => a.syncedAt.localeCompare(b.syncedAt));
-    return [...unseen, ...seen];
-  }, [rawItems, currentAccount?.lastShownSyncedAt, savedIds]);
+    const watermark = currentAccount?.lastShownSeq;
+    return rawItems
+      .filter((r) => watermark === undefined || r.seq > watermark)
+      .map((r) => ({ video: { ...researchFeedItemToVideo(r), saved: savedIds.has(r.id) }, seq: r.seq }))
+      .sort((a, b) => a.seq - b.seq);
+  }, [rawItems, currentAccount?.lastShownSeq, savedIds]);
 
   function handleSwipeIndexChange(i: number) {
     setSwipeIndex(i);
     const item = swipeQueue[i];
-    if (item && currentAccount) void researchAccountsStore.markSeen(currentAccount.id, item.syncedAt);
+    if (item && currentAccount) void researchAccountsStore.markSeen(currentAccount.id, item.seq);
   }
 
   const detailIndex = videos.findIndex((v) => v.id === detailVideoId);
