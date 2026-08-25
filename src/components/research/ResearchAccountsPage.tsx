@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, RefreshCw, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
@@ -261,6 +261,8 @@ export function ResearchAccountsPage({
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const syncInFlightRef = useRef(false);
+  const lastAutoSyncRef = useRef<{ accountId: string; at: number } | null>(null);
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) setSelectedCreator(creators[0] ?? null);
@@ -360,43 +362,85 @@ export function ResearchAccountsPage({
     return `${PLATFORM_LABEL[account.platform]} — ${account.label}`;
   }
 
-  async function handleRefresh() {
-    if (!currentAccount) return;
-    setSyncing(true);
-    setSyncError(null);
+  // A real sync run — shared by the manual "Refresh feed" button and the
+  // silent auto-prefetch below. `visible` only controls whether it drives
+  // the button's spinner/error text; the actual work (issue a token, hand
+  // off to Connector, poll until a fresh batch actually lands) is identical
+  // either way, so a background prefetch is exactly as real as a manual one.
+  // syncInFlightRef prevents the two paths from ever overlapping.
+  async function runSync(account: ResearchAccount, visible: boolean) {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    if (visible) {
+      setSyncing(true);
+      setSyncError(null);
+    }
 
-    const { start, error } = await researchAccountsStore.syncAccountFeed(currentAccount.id, currentAccount.platform);
+    const { start, error } = await researchAccountsStore.syncAccountFeed(account.id, account.platform);
     if (!start) {
-      setSyncError(error);
-      setSyncing(false);
+      if (visible) {
+        setSyncError(error);
+        setSyncing(false);
+      }
+      syncInFlightRef.current = false;
       return;
     }
 
-    window.location.href = syncDeepLink(currentAccount.platform, start);
+    // For a background prefetch this is invisible in practice: a custom
+    // URL scheme handoff doesn't navigate the page away, and when
+    // Connector is already running (the normal case while a VA is mid-
+    // session) the OS delivers it with no relaunch or permission prompt.
+    window.location.href = syncDeepLink(account.platform, start);
 
     // Poll for the real sync to land — last_synced_at only moves once
     // Connector has actually pulled and stored a fresh batch using the
     // account's real session, so this reflects genuine completion, not a
     // fixed timer standing in for it.
-    const before = currentAccount.lastSyncedAt;
+    const before = account.lastSyncedAt;
     const deadline = Date.now() + 60_000;
     let synced = false;
     while (Date.now() < deadline) {
       await new Promise((r) => window.setTimeout(r, 2000));
       const latest = await researchAccountsStore.refetch();
-      const updated = latest.find((a) => a.id === currentAccount.id);
+      const updated = latest.find((a) => a.id === account.id);
       if (updated?.lastSyncedAt && updated.lastSyncedAt !== before) {
         synced = true;
         break;
       }
     }
-    if (!synced) {
+    if (visible && !synced) {
       setSyncError("This is taking longer than expected — make sure ReelForge Connector opened, then try again.");
     }
 
-    await loadFeed(currentAccount.id);
-    setSyncing(false);
+    if (accountId === account.id) await loadFeed(account.id);
+    if (visible) setSyncing(false);
+    syncInFlightRef.current = false;
   }
+
+  async function handleRefresh() {
+    if (!currentAccount) return;
+    await runSync(currentAccount, true);
+  }
+
+  // Keeps the swipe experience feeling continuous: once the VA is within a
+  // handful of reels of the end of what's loaded, quietly start pulling in
+  // more of the account's real Reels recommendations from its existing
+  // session — well before they'd actually hit the end. The cooldown stops
+  // this from re-firing on every single swipe once it's already running or
+  // just ran.
+  const AUTO_SYNC_REMAINING_THRESHOLD = 5;
+  const AUTO_SYNC_COOLDOWN_MS = 90_000;
+  useEffect(() => {
+    if (!currentAccount || currentAccount.status !== "active" || currentAccount.platform !== "instagram") return;
+    if (syncInFlightRef.current) return;
+    const remaining = swipeQueue.length - swipeIndex;
+    if (remaining > AUTO_SYNC_REMAINING_THRESHOLD) return;
+    const last = lastAutoSyncRef.current;
+    if (last && last.accountId === currentAccount.id && Date.now() - last.at < AUTO_SYNC_COOLDOWN_MS) return;
+    lastAutoSyncRef.current = { accountId: currentAccount.id, at: Date.now() };
+    void runSync(currentAccount, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swipeIndex, swipeQueue.length, currentAccount?.id, currentAccount?.status, currentAccount?.platform]);
 
   if (!selectedCreator) {
     return (
