@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
+import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
@@ -109,9 +110,10 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
       </div>
 
       {/* right action rail. Like is a real action on the actual Instagram
-          account (see connect-worker.mjs's likeMain) — kept visually
-          separate, above a divider, from Save / Add-to-Collection below,
-          which are ReelForge-only actions and never touch the real account. */}
+          account (it acts on this exact live session, no separate context
+          spin-up) — kept visually separate, above a divider, from Save /
+          Add-to-Collection below, which are ReelForge-only actions and
+          never touch the real account. */}
       <div className="absolute bottom-6 right-3 flex flex-col items-center gap-4">
         {canLike && (
           <>
@@ -180,13 +182,20 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
 const WHEEL_THRESHOLD = 60;
 const SWIPE_THRESHOLD = 50;
 
+// Driven by a real, persistent Instagram session (see
+// useLiveResearchSession) rather than an array + index into stored reels —
+// there's exactly one current reel; forward/back are real requests, not
+// array navigation. hasPrev/loading/status/error all reflect that live
+// session's actual state.
 export function SwipeResearchPlayer({
   account,
-  videos,
-  index,
-  onIndexChange,
-  loadingMore,
-  onNearEnd,
+  currentReel,
+  hasPrev,
+  loading,
+  sessionStatus,
+  sessionError,
+  onNext,
+  onPrev,
   onSaveClick,
   onAddToCollection,
   onExitToArchive,
@@ -194,11 +203,13 @@ export function SwipeResearchPlayer({
   likeStatus,
 }: {
   account: ResearchAccount;
-  videos: ReelVideo[];
-  index: number;
-  onIndexChange: (i: number) => void;
-  loadingMore: boolean;
-  onNearEnd: () => void;
+  currentReel: ReelVideo | null;
+  hasPrev: boolean;
+  loading: boolean;
+  sessionStatus: LiveSessionStatus;
+  sessionError: string | null;
+  onNext: () => void;
+  onPrev: () => void;
   onSaveClick: (video: ReelVideo) => void;
   onAddToCollection: (video: ReelVideo) => void;
   onExitToArchive: () => void;
@@ -214,14 +225,13 @@ export function SwipeResearchPlayer({
   // its own large deltaY), and without a cooldown each one could cross the
   // threshold on its own and fire another navigation before the first
   // finished, "flying through" several reels from what felt like one
-  // gesture. Centralizing the lock in goNext/goPrev (rather than only in
-  // the wheel handler) means keyboard repeat and rapid clicks get the same
-  // one-motion-one-reel guarantee.
+  // gesture. Centralizing the lock (rather than only in the wheel handler)
+  // means keyboard repeat and rapid clicks get the same one-motion-one-reel
+  // guarantee. This is a client-side debounce on top of — not a substitute
+  // for — the live session itself only ever processing one next/prev at a
+  // time.
   const navLockedRef = useRef(false);
   const NAV_LOCK_MS = 350;
-
-  const hasNext = index < videos.length - 1;
-  const hasPrev = index > 0;
 
   function lockNav() {
     navLockedRef.current = true;
@@ -231,22 +241,15 @@ export function SwipeResearchPlayer({
   }
 
   function goNext() {
-    if (!hasNext || navLockedRef.current) return;
+    if (navLockedRef.current || loading) return;
     lockNav();
-    onIndexChange(index + 1);
+    onNext();
   }
   function goPrev() {
-    if (!hasPrev || navLockedRef.current) return;
+    if (!hasPrev || navLockedRef.current || loading) return;
     lockNav();
-    onIndexChange(index - 1);
+    onPrev();
   }
-
-  // Prefetch — stay a few reels ahead of the swipe cursor so it never stalls
-  // waiting on the network mid-session.
-  useEffect(() => {
-    if (videos.length - index <= 3) onNearEnd();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, videos.length]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -262,7 +265,7 @@ export function SwipeResearchPlayer({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, videos.length]);
+  }, [hasPrev, loading]);
 
   function handleWheel(e: React.WheelEvent) {
     // Don't accumulate momentum while locked out — otherwise a fast flick's
@@ -282,8 +285,6 @@ export function SwipeResearchPlayer({
       goPrev();
     }
   }
-
-  const current = videos[index];
 
   return (
     <div className="flex flex-col items-center">
@@ -311,22 +312,20 @@ export function SwipeResearchPlayer({
         }}
         className="relative w-[360px] h-[min(76vh,660px)] rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_20px_60px_-20px_rgba(0,0,0,0.7)]"
       >
-        {current ? (
+        {currentReel ? (
           <SwipeSlide
-            key={current.id}
-            video={current}
+            key={currentReel.id}
+            video={currentReel}
             active
-            onSaveClick={() => onSaveClick(current)}
-            onAddToCollection={() => onAddToCollection(current)}
-            onLikeClick={() => onLikeClick(current)}
-            likeStatus={likeStatus[current.id]}
-            canLike={current.platform === "instagram"}
+            onSaveClick={() => onSaveClick(currentReel)}
+            onAddToCollection={() => onAddToCollection(currentReel)}
+            onLikeClick={() => onLikeClick(currentReel)}
+            likeStatus={likeStatus[currentReel.id]}
+            canLike={currentReel.platform === "instagram"}
           />
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center bg-[#0d0d0f] text-center px-6">
-            {loadingMore ? (
-              <Loader2 size={20} className="text-[#D39448] animate-spin" />
-            ) : connecting ? (
+            {connecting ? (
               <>
                 <Loader2 size={18} className="text-amber-400/80 animate-pulse mb-1" />
                 <p className="text-[13px] text-neutral-300">This account is still connecting.</p>
@@ -334,6 +333,11 @@ export function SwipeResearchPlayer({
                   Once ReelForge finishes setting up its real session, this account's feed will start appearing here
                   automatically.
                 </p>
+              </>
+            ) : sessionStatus === "error" ? (
+              <>
+                <p className="text-[13px] text-neutral-300">Couldn't start this research session.</p>
+                {sessionError && <p className="mt-1.5 text-[11.5px] text-neutral-600">{sessionError}</p>}
               </>
             ) : (
               <Loader2 size={20} className="text-[#D39448] animate-spin" />
@@ -350,14 +354,13 @@ export function SwipeResearchPlayer({
             <ChevronUp size={16} />
           </button>
         )}
-        {(hasNext || loadingMore) && (
+        {currentReel && (
           <button
             onClick={goNext}
-            disabled={!hasNext}
             title="Next"
             className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-colors disabled:opacity-40"
           >
-            {loadingMore && !hasNext ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
           </button>
         )}
       </div>

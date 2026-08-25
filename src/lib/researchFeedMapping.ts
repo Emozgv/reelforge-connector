@@ -22,13 +22,16 @@ export interface ResearchFeedItemRow {
   synced_at: string;
 }
 
-function formatViews(raw: number): string {
+// Exported for useLiveResearchSession — a live session's reels come
+// straight from Connector's in-memory extraction, not this table, but need
+// the exact same raw-number -> display-string treatment.
+export function formatViews(raw: number): string {
   if (raw >= 1_000_000) return `${(raw / 1_000_000).toFixed(1)}M`;
   if (raw >= 1_000) return `${(raw / 1_000).toFixed(1)}K`;
   return String(raw);
 }
 
-function formatDuration(totalSeconds: number): string {
+export function formatDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;

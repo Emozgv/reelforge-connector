@@ -157,6 +157,7 @@ function App() {
                 collectionsStore={collectionsStore}
                 researchAccountsStore={researchAccountsStore}
                 userId={user.id}
+                workspaceId={workspace?.id}
               />
             )}
             {page === "collections" && (

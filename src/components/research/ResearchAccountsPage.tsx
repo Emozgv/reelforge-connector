@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
@@ -6,12 +6,13 @@ import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types"
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import type { ConnectStart, ResearchAccountsStore } from "../../state/useResearchAccounts";
 import { MAX_RESEARCH_ACCOUNTS_PER_PLATFORM } from "../../state/useResearchAccounts";
+import { useLiveResearchSession } from "../../state/useLiveResearchSession";
 import { CreatorSelector } from "../hub/CreatorSelector";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { VideoGrid } from "../hub/VideoGrid";
 import { SavePanel } from "../hub/SavePanel";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
-import { SwipeResearchPlayer } from "./SwipeResearchPlayer";
+import { SwipeResearchPlayer, type LikeStatus } from "./SwipeResearchPlayer";
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: "IG Research", tiktok: "TikTok Research" };
 
@@ -42,23 +43,6 @@ const STATUS_DOT: Record<ResearchAccount["status"], string> = {
 // asks for. Nothing in this web app or that link ever sees a password.
 function connectDeepLink(platform: Platform, start: ConnectStart): string {
   return `reelforge-connect://connect?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}`;
-}
-
-// Same app, different host segment — Connector reuses the account's
-// already-verified session instead of asking for a fresh login, and pulls
-// in more of its real feed. See connector-app/scripts/connect-worker.mjs's
-// resyncMain and the submit-research-feed-sync edge function.
-function syncDeepLink(platform: Platform, start: ConnectStart): string {
-  return `reelforge-connect://resync?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}`;
-}
-
-// A real Like: Connector reuses the account's existing session to open the
-// actual reel and click Instagram's own Like control — see likeMain in
-// connect-worker.mjs. This is a genuine action on the real account, not a
-// local UI toggle; ReelForge only ever shows it as liked once Connector
-// reports back that the real button's state actually changed.
-function likeDeepLink(platform: Platform, start: ConnectStart, targetUrl: string): string {
-  return `reelforge-connect://like?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}&targetUrl=${encodeURIComponent(targetUrl)}`;
 }
 
 // The real "Connect Research Account" flow, in two steps. Step 1 (this
@@ -247,29 +231,30 @@ export function ResearchAccountsPage({
   collectionsStore,
   researchAccountsStore,
   userId,
+  workspaceId,
 }: {
   creators: Creator[];
   creatorsError?: string | null;
   collectionsStore: CollectionsStore;
   researchAccountsStore: ResearchAccountsStore;
   userId?: string;
+  workspaceId?: string;
 }) {
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [accountId, setAccountId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("swipe");
+  // Archive only, from here down — the live session (below) drives Swipe.
   const [rawItems, setRawItems] = useState<ResearchFeedItemRow[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [feedError, setFeedError] = useState(false);
-  const [swipeIndex, setSwipeIndex] = useState(0);
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
-  const syncInFlightRef = useRef(false);
-  const lastAutoSyncRef = useRef<{ accountId: string; at: number } | null>(null);
-  const [likeStatus, setLikeStatus] = useState<Record<string, "pending" | "liked" | "failed">>({});
+  const [likeStatus, setLikeStatus] = useState<Record<string, LikeStatus>>({});
+  const liveSession = useLiveResearchSession(workspaceId);
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) setSelectedCreator(creators[0] ?? null);
@@ -331,38 +316,37 @@ export function ResearchAccountsPage({
       return;
     }
     void researchAccountsStore.markOpened(currentAccount.id, userId);
-    setSwipeIndex(0);
     void loadFeed(currentAccount.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAccount?.id]);
+
+  // The live research session itself — this is the actual architecture
+  // change: opening a connected Instagram account starts a real, persistent
+  // Reels session on the authenticated account (see useLiveResearchSession
+  // and connector-app/scripts/session-server.mjs), and closing/switching
+  // away from it ends that session. Nothing here is reconstructed from
+  // client_os.research_feed_items — that table remains, but only as
+  // Archive's history, never as what the active swipe queue is built from.
+  useEffect(() => {
+    if (!currentAccount || currentAccount.status !== "active") {
+      void liveSession.endSession();
+      return;
+    }
+    void liveSession.startSession(currentAccount.id, currentAccount.platform);
+    return () => {
+      void liveSession.endSession();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentAccount?.id, currentAccount?.status]);
 
   const videos = useMemo(
     () => rawItems.map((r) => ({ ...researchFeedItemToVideo(r), saved: savedIds.has(r.id) })),
     [rawItems, savedIds]
   );
 
-  // The active swipe session is unseen content only, oldest-first — this is
-  // the whole "reopening should feel fresh" fix. It used to fall back to
-  // replaying already-seen items once unseen ran out, which is exactly what
-  // made returning to an account feel like reopening yesterday's cached
-  // playlist instead of a fresh session. Already-seen history isn't lost —
-  // it's still there in Archive (via `videos` below) — it just never
-  // reappears in the active recommendation stream. seq (not synced_at) is
-  // what "unseen" and ordering are computed from, since synced_at is shared
-  // per sync batch and doesn't have single-reel resolution.
-  const swipeQueue = useMemo(() => {
-    const watermark = currentAccount?.lastShownSeq;
-    return rawItems
-      .filter((r) => watermark === undefined || r.seq > watermark)
-      .map((r) => ({ video: { ...researchFeedItemToVideo(r), saved: savedIds.has(r.id) }, seq: r.seq }))
-      .sort((a, b) => a.seq - b.seq);
-  }, [rawItems, currentAccount?.lastShownSeq, savedIds]);
-
-  function handleSwipeIndexChange(i: number) {
-    setSwipeIndex(i);
-    const item = swipeQueue[i];
-    if (item && currentAccount) void researchAccountsStore.markSeen(currentAccount.id, item.seq);
-  }
+  const currentSwipeVideo = liveSession.currentReel
+    ? { ...liveSession.currentReel, saved: savedIds.has(liveSession.currentReel.id) }
+    : null;
 
   const detailIndex = videos.findIndex((v) => v.id === detailVideoId);
   const detailVideo = detailIndex >= 0 ? videos[detailIndex] : null;
@@ -375,111 +359,16 @@ export function ResearchAccountsPage({
     return `${PLATFORM_LABEL[account.platform]} — ${account.label}`;
   }
 
-  // Pulls in more of the account's real feed, entirely in the background —
-  // there's no manual "Refresh feed" affordance by design: the VA should
-  // never need to think about syncing at all. syncInFlightRef keeps this
-  // from overlapping with a Like action reusing the same Connector session.
-  async function runSync(account: ResearchAccount) {
-    if (syncInFlightRef.current) return;
-    syncInFlightRef.current = true;
-
-    const { start } = await researchAccountsStore.syncAccountFeed(account.id, account.platform);
-    if (!start) {
-      syncInFlightRef.current = false;
-      return;
-    }
-
-    // This is invisible in practice: a custom URL scheme handoff doesn't
-    // navigate the page away, Connector's window never shows itself for a
-    // background operation (see handle_connect_url in lib.rs), and when
-    // Connector is already running (the normal case while a VA is mid-
-    // session) the OS delivers it with no relaunch or permission prompt —
-    // nothing for the VA to notice.
-    window.location.href = syncDeepLink(account.platform, start);
-
-    // Poll for the real sync to land — last_synced_at only moves once
-    // Connector has actually pulled and stored a fresh batch using the
-    // account's real session, so this reflects genuine completion, not a
-    // fixed timer standing in for it.
-    const before = account.lastSyncedAt;
-    const deadline = Date.now() + 60_000;
-    while (Date.now() < deadline) {
-      await new Promise((r) => window.setTimeout(r, 2000));
-      const latest = await researchAccountsStore.refetch();
-      const updated = latest.find((a) => a.id === account.id);
-      if (updated?.lastSyncedAt && updated.lastSyncedAt !== before) break;
-    }
-
-    if (accountId === account.id) await loadFeed(account.id);
-    syncInFlightRef.current = false;
-  }
-
-  // Keeps the swipe experience feeling continuous. A real resync — a real
-  // headless browser opening Reels and capturing a batch — realistically
-  // takes tens of seconds, not milliseconds, so a small "5 remaining"
-  // buffer got outrun by normal swipe speed (confirmed: a real test still
-  // hit a hard 17/17 end). The buffer target is deliberately generous so a
-  // sync in progress has time to land before the VA actually catches up to
-  // it. The cooldown is now just a debounce against firing twice in the
-  // same tick — real pacing comes from syncInFlightRef plus the fact that a
-  // completed sync's new items change swipeQueue.length, which re-runs this
-  // effect and immediately chains another cycle if still under the target.
-  const AUTO_SYNC_REMAINING_THRESHOLD = 20;
-  const AUTO_SYNC_COOLDOWN_MS = 5_000;
-  useEffect(() => {
-    if (!currentAccount || currentAccount.status !== "active" || currentAccount.platform !== "instagram") return;
-    if (syncInFlightRef.current) return;
-    const remaining = swipeQueue.length - swipeIndex;
-    if (remaining > AUTO_SYNC_REMAINING_THRESHOLD) return;
-    const last = lastAutoSyncRef.current;
-    if (last && last.accountId === currentAccount.id && Date.now() - last.at < AUTO_SYNC_COOLDOWN_MS) return;
-    lastAutoSyncRef.current = { accountId: currentAccount.id, at: Date.now() };
-    void runSync(currentAccount);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [swipeIndex, swipeQueue.length, currentAccount?.id, currentAccount?.status, currentAccount?.platform]);
-
-  // A real Like — this is a genuine action on the real Instagram account
-  // (see likeMain in connect-worker.mjs), never a local toggle. Shares
-  // syncInFlightRef with the feed sync above so a like and a background
-  // prefetch can never collide over Connector's one operation-per-account
-  // token slot; if a prefetch happens to be running, this waits briefly for
-  // it to finish rather than racing it.
+  // A real Like — acts directly on this account's real, currently-open
+  // Reels session (see useLiveResearchSession.like / session-server.mjs's
+  // Session.like), not a local toggle and not a separate deep-link round
+  // trip. Success is only ever reported once Connector has confirmed
+  // Instagram's own button genuinely changed state.
   async function handleLikeClick(video: ReelVideo) {
-    if (!currentAccount || currentAccount.platform !== "instagram") return;
     if (likeStatus[video.id] === "pending" || likeStatus[video.id] === "liked") return;
-
-    for (let waited = 0; syncInFlightRef.current && waited < 20_000; waited += 500) {
-      await new Promise((r) => window.setTimeout(r, 500));
-    }
-    if (syncInFlightRef.current) return;
-
     setLikeStatus((prev) => ({ ...prev, [video.id]: "pending" }));
-    syncInFlightRef.current = true;
-
-    const { start } = await researchAccountsStore.likeReel(currentAccount.id, currentAccount.platform, video.sourceUrl);
-    if (!start) {
-      setLikeStatus((prev) => ({ ...prev, [video.id]: "failed" }));
-      syncInFlightRef.current = false;
-      return;
-    }
-
-    window.location.href = likeDeepLink(currentAccount.platform, start, video.sourceUrl);
-
-    const startedAt = Date.now();
-    const deadline = startedAt + 45_000;
-    let result: "liked" | "failed" = "failed";
-    while (Date.now() < deadline) {
-      await new Promise((r) => window.setTimeout(r, 1500));
-      const latest = await researchAccountsStore.refetch();
-      const updated = latest.find((a) => a.id === currentAccount.id);
-      if (updated?.actionCompletedAt && new Date(updated.actionCompletedAt).getTime() >= startedAt) {
-        result = updated.actionStatus === "done" ? "liked" : "failed";
-        break;
-      }
-    }
-
-    setLikeStatus((prev) => ({ ...prev, [video.id]: result }));
-    syncInFlightRef.current = false;
+    const { liked } = await liveSession.like();
+    setLikeStatus((prev) => ({ ...prev, [video.id]: liked ? "liked" : "failed" }));
   }
 
   if (!selectedCreator) {
@@ -665,18 +554,16 @@ export function ResearchAccountsPage({
             </div>
 
             <div className="mt-5">
-              {feedError ? (
-                <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
-                  <p className="text-[13px] text-neutral-400">Couldn't load this account's feed.</p>
-                </div>
-              ) : mode === "swipe" ? (
+              {mode === "swipe" ? (
                 <SwipeResearchPlayer
                   account={currentAccount}
-                  videos={swipeQueue.map((x) => x.video)}
-                  index={Math.min(swipeIndex, Math.max(swipeQueue.length - 1, 0))}
-                  onIndexChange={handleSwipeIndexChange}
-                  loadingMore={loadingFeed}
-                  onNearEnd={() => void loadFeed(currentAccount.id)}
+                  currentReel={currentSwipeVideo}
+                  hasPrev={liveSession.hasPrev}
+                  loading={liveSession.status === "connecting"}
+                  sessionStatus={liveSession.status}
+                  sessionError={liveSession.error}
+                  onNext={() => void liveSession.next()}
+                  onPrev={() => void liveSession.prev()}
                   onSaveClick={(video) => {
                     if (!video.saved) setSavePanelVideo(video);
                   }}
@@ -685,6 +572,10 @@ export function ResearchAccountsPage({
                   onLikeClick={handleLikeClick}
                   likeStatus={likeStatus}
                 />
+              ) : feedError ? (
+                <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
+                  <p className="text-[13px] text-neutral-400">Couldn't load this account's archive.</p>
+                </div>
               ) : (
                 <VideoGrid
                   videos={videos}
@@ -695,16 +586,16 @@ export function ResearchAccountsPage({
                   onOpenDetail={(video) => setDetailVideoId(video.id)}
                   spacious
                   loading={loadingFeed}
-                  loadingLabel="Loading this account's feed…"
+                  loadingLabel="Loading this account's archive…"
                   emptyTitle={
                     currentAccount.status === "connecting"
                       ? "This account is still connecting."
-                      : "Nothing here yet."
+                      : "Nothing archived yet."
                   }
                   emptyHint={
                     currentAccount.status === "connecting"
                       ? "Its real feed will start appearing here once it's ready."
-                      : "Switch to Swipe — its feed loads there first."
+                      : "Reels you've researched will accumulate here over time."
                   }
                 />
               )}

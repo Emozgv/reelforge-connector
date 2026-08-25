@@ -30,6 +30,7 @@
     "targets": "all",
     "resources": {
       "../scripts/connect-worker.mjs": "connect-worker.mjs",
+      "../scripts/session-server.mjs": "session-server.mjs",
       "../node_modules/playwright": "node_modules/playwright",
       "../node_modules/playwright-core": "node_modules/playwright-core",
       "../runtime/node": "runtime/node"

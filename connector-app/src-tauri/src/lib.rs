@@ -80,6 +80,53 @@ fn connect_worker_path(handle: &AppHandle) -> Result<PathBuf, String> {
     Err("ReelForge Connector's login worker script was not found.".into())
 }
 
+fn session_server_path(handle: &AppHandle) -> Result<PathBuf, String> {
+    let candidates = [
+        handle.path().resolve("session-server.mjs", BaseDirectory::Resource).ok(),
+        std::env::current_dir().ok().map(|p| p.join("scripts").join("session-server.mjs")),
+        std::env::current_dir().ok().map(|p| p.join("..").join("scripts").join("session-server.mjs")),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if candidate.exists() {
+            return Ok(strip_windows_verbatim_prefix(candidate));
+        }
+    }
+    Err("ReelForge Connector's session server script was not found.".into())
+}
+
+// Spawned once, when Connector itself launches (see .setup()) — this is the
+// long-running process the web app talks to directly over
+// http://127.0.0.1:PORT for an active research session's next/prev/like.
+// It's cheap to have running idle (no browser opens until a session is
+// actually requested), so there's no lazy-start complexity here: it's just
+// always there the moment Connector is.
+fn spawn_session_server(handle: &AppHandle) {
+    let (worker, node) = match (session_server_path(handle), resolve_node_executable(handle)) {
+        (Ok(w), Ok(n)) => (w, n),
+        (Err(e), _) | (_, Err(e)) => {
+            eprintln!("Could not start ReelForge Connector's session server: {e}");
+            return;
+        }
+    };
+
+    let mut command = Command::new(&node);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+        .arg(&worker)
+        .env("PLAYWRIGHT_BROWSERS_PATH", "0")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    if let Err(e) = command.spawn() {
+        eprintln!("Could not start ReelForge Connector's session server: {e}");
+    }
+}
+
 // Runs the real login (a real, visible Chromium window the VA logs into
 // themselves) and streams its progress back to the window as it happens —
 // this can take anywhere from a few seconds to several minutes depending on
@@ -180,6 +227,15 @@ struct ParsedConnectUrl {
 //   reelforge-connect://connect?platform=..&account=..&token=..              (real login)
 //   reelforge-connect://resync?account=..&token=..                          (resync — reuses the existing session)
 //   reelforge-connect://like?account=..&token=..&targetUrl=..               (real Like on the real reel)
+//   reelforge-connect://wake?account=wake&token=wake                        (just ensure Connector is running)
+//
+// A live research session itself (next/prev/like while actively swiping)
+// doesn't go through this deep-link mechanism at all — see
+// scripts/session-server.mjs, which the web app talks to directly over
+// http://127.0.0.1 once Connector is confirmed running. "wake" exists only
+// to get Connector's process alive (and therefore its session server
+// listening) when it isn't already, the same way opening any other link
+// would as a side effect — it deliberately does nothing else.
 fn parse_connect_url(raw: &str) -> Option<ParsedConnectUrl> {
     let url = url::Url::parse(raw).ok()?;
     let mode = url.host_str().unwrap_or("connect").to_string();
@@ -256,6 +312,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
+            spawn_session_server(app.handle());
+
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 for url in event.urls() {

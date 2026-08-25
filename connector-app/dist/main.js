@@ -84,6 +84,11 @@ function handleProgress(event) {
 }
 
 function startConnect(mode, platform, account, token, targetUrl) {
+  // "wake" exists purely to get Connector's process (and therefore its
+  // session server) running via a cold start — the app launching at all is
+  // the entire point, there's no worker to spawn and nothing to show.
+  if (mode === "wake") return;
+
   // Both the live event and the poll loop can observe the very same URL —
   // the poll consuming it right after a live event already handled it, or
   // vice versa — so skip only an exact repeat of the last one, never a
