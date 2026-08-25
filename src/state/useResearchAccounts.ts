@@ -55,15 +55,22 @@ export function useResearchAccounts(workspaceId: string | undefined) {
   const accountsRef = useRef<ResearchAccount[]>([]);
   accountsRef.current = accounts;
 
-  async function refetch() {
-    if (!workspaceId) return;
+  // Returns the freshly fetched list directly (not just via setState) so
+  // callers polling for a specific change (e.g. a feed sync landing) can
+  // read the real current value instead of a stale closure snapshot from
+  // whichever render they were called in.
+  async function refetch(): Promise<ResearchAccount[]> {
+    if (!workspaceId) return accountsRef.current;
     const { data, error: fetchError } = await supabase
       .schema("client_os")
       .from("research_accounts")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true });
-    if (!fetchError) setAccounts((data as ResearchAccountRow[]).map(fromRow));
+    if (fetchError) return accountsRef.current;
+    const next = (data as ResearchAccountRow[]).map(fromRow);
+    setAccounts(next);
+    return next;
   }
 
   useEffect(() => {
@@ -205,15 +212,25 @@ export function useResearchAccounts(workspaceId: string | undefined) {
       .eq("id", accountId);
   }
 
-  // Queues a re-sync — the actual fetch happens in the external sync worker;
-  // this just timestamps the request so that worker (polling this column)
-  // knows to pick it up, and the UI can show "sync requested" meanwhile.
-  async function requestSync(accountId: string) {
-    await supabase
-      .schema("client_os")
-      .from("research_accounts")
-      .update({ sync_requested_at: new Date().toISOString() })
-      .eq("id", accountId);
+  // Step 1 of a real feed resync: issues a short-lived sync token for an
+  // already-connected account. ReelForge Connector uses it to reuse the
+  // account's existing, already-verified session (no fresh login) and pull
+  // in more of its real feed — see submit-research-feed-sync for where that
+  // actually lands in research_feed_items.
+  async function syncAccountFeed(accountId: string, platform: Platform): Promise<{ start: ConnectStart | null; error: string | null }> {
+    if (!workspaceId) return { start: null, error: "No active workspace." };
+
+    const { data, error: invokeError } = await supabase.functions.invoke<{
+      accountId?: string;
+      platform?: string;
+      token?: string;
+      error?: string;
+    }>("start-research-feed-sync", { body: { workspaceId, accountId } });
+
+    if (invokeError || !data?.token) {
+      return { start: null, error: await parseInvokeError(invokeError, data ?? null) };
+    }
+    return { start: { id: accountId, token: data.token, platform }, error: null };
   }
 
   // Advances the swipe-mode watermark as a VA swipes past reels — workspace-
@@ -246,7 +263,7 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     markSeen,
     deleteAccount,
     markOpened,
-    requestSync,
+    syncAccountFeed,
   };
 }
 

@@ -85,7 +85,7 @@ fn connect_worker_path(handle: &AppHandle) -> Result<PathBuf, String> {
 // this can take anywhere from a few seconds to several minutes depending on
 // whether Instagram/TikTok asks for extra verification.
 #[tauri::command]
-async fn start_connect(handle: AppHandle, platform: String, account: String, token: String) -> Result<(), String> {
+async fn start_connect(handle: AppHandle, mode: String, platform: String, account: String, token: String) -> Result<(), String> {
     let worker = connect_worker_path(&handle)?;
     let node = resolve_node_executable(&handle)?;
 
@@ -102,6 +102,7 @@ async fn start_connect(handle: AppHandle, platform: String, account: String, tok
         command.env("PLAYWRIGHT_BROWSERS_PATH", "0");
         command
             .arg(&worker)
+            .arg(format!("--mode={mode}"))
             .arg(format!("--platform={platform}"))
             .arg(format!("--account={account}"))
             .arg(format!("--token={token}"))
@@ -145,14 +146,18 @@ async fn start_connect(handle: AppHandle, platform: String, account: String, tok
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ParsedConnectUrl {
+    mode: String,
     platform: String,
     account: String,
     token: String,
 }
 
-// The web app opens reelforge-connect://connect?platform=..&account=..&token=..
+// The web app opens either:
+//   reelforge-connect://connect?platform=..&account=..&token=..   (real login)
+//   reelforge-connect://resync?account=..&token=..                (resync — reuses the existing session)
 fn parse_connect_url(raw: &str) -> Option<ParsedConnectUrl> {
     let url = url::Url::parse(raw).ok()?;
+    let mode = url.host_str().unwrap_or("connect").to_string();
     let mut platform = None;
     let mut account = None;
     let mut token = None;
@@ -165,7 +170,8 @@ fn parse_connect_url(raw: &str) -> Option<ParsedConnectUrl> {
         }
     }
     Some(ParsedConnectUrl {
-        platform: platform?,
+        mode,
+        platform: platform.unwrap_or_default(),
         account: account?,
         token: token?,
     })
@@ -191,7 +197,7 @@ fn handle_connect_url(app: &AppHandle, raw: &str) {
         }
         let _ = app.emit(
             "reelforge-connect-url",
-            serde_json::json!({ "platform": parsed.platform, "account": parsed.account, "token": parsed.token }),
+            serde_json::json!({ "mode": parsed.mode, "platform": parsed.platform, "account": parsed.account, "token": parsed.token }),
         );
     }
     if let Some(window) = app.get_webview_window("main") {

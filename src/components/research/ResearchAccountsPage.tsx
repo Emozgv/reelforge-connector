@@ -45,6 +45,14 @@ function connectDeepLink(platform: Platform, start: ConnectStart): string {
   return `reelforge-connect://connect?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}`;
 }
 
+// Same app, different host segment — Connector reuses the account's
+// already-verified session instead of asking for a fresh login, and pulls
+// in more of its real feed. See connector-app/scripts/connect-worker.mjs's
+// resyncMain and the submit-research-feed-sync edge function.
+function syncDeepLink(platform: Platform, start: ConnectStart): string {
+  return `reelforge-connect://resync?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}`;
+}
+
 // The real "Connect Research Account" flow, in two steps. Step 1 (this
 // modal's form) only asks for a label + the account's public username — no
 // password, because a stored password could never reliably get through a
@@ -252,6 +260,7 @@ export function ResearchAccountsPage({
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) setSelectedCreator(creators[0] ?? null);
@@ -354,9 +363,39 @@ export function ResearchAccountsPage({
   async function handleRefresh() {
     if (!currentAccount) return;
     setSyncing(true);
-    await researchAccountsStore.requestSync(currentAccount.id);
+    setSyncError(null);
+
+    const { start, error } = await researchAccountsStore.syncAccountFeed(currentAccount.id, currentAccount.platform);
+    if (!start) {
+      setSyncError(error);
+      setSyncing(false);
+      return;
+    }
+
+    window.location.href = syncDeepLink(currentAccount.platform, start);
+
+    // Poll for the real sync to land — last_synced_at only moves once
+    // Connector has actually pulled and stored a fresh batch using the
+    // account's real session, so this reflects genuine completion, not a
+    // fixed timer standing in for it.
+    const before = currentAccount.lastSyncedAt;
+    const deadline = Date.now() + 60_000;
+    let synced = false;
+    while (Date.now() < deadline) {
+      await new Promise((r) => window.setTimeout(r, 2000));
+      const latest = await researchAccountsStore.refetch();
+      const updated = latest.find((a) => a.id === currentAccount.id);
+      if (updated?.lastSyncedAt && updated.lastSyncedAt !== before) {
+        synced = true;
+        break;
+      }
+    }
+    if (!synced) {
+      setSyncError("This is taking longer than expected — make sure ReelForge Connector opened, then try again.");
+    }
+
     await loadFeed(currentAccount.id);
-    window.setTimeout(() => setSyncing(false), 900);
+    setSyncing(false);
   }
 
   if (!selectedCreator) {
@@ -472,6 +511,7 @@ export function ResearchAccountsPage({
           </button>
         </div>
         {reconnectError && <p className="mt-2 text-[11.5px] text-rose-300/85">{reconnectError}</p>}
+        {syncError && <p className="mt-2 text-[11.5px] text-rose-300/85">{syncError}</p>}
 
         {connectFlow && (
           <ConnectAccountModal
@@ -547,7 +587,7 @@ export function ResearchAccountsPage({
                   className="flex items-center gap-1.5 h-9 px-3.5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors duration-150 text-[12.5px] text-neutral-300 disabled:opacity-50"
                 >
                   <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
-                  {syncing ? "Sync requested…" : "Refresh feed"}
+                  {syncing ? "Syncing more content…" : "Refresh feed"}
                 </button>
               </div>
             </div>
