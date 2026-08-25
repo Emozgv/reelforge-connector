@@ -123,12 +123,17 @@ function collectMediaFrom(node, out, depth = 0) {
 // regardless of whether this captures anything, so every failure here is
 // swallowed rather than allowed to fail the connection itself.
 //
-// Captures from both the home feed and the Reels tab: Reels is the closer
-// match for a continuous short-video swipe experience, but pulling from
-// both sources means a real account with a thin Reels history (e.g. right
-// after first connecting) still comes back with a real, usable batch
-// instead of just one or two items.
-async function captureInstagramFeed(context, page, { targetCount = 40, maxMs = 45000 } = {}) {
+// Sourced ONLY from the Reels tab (instagram.com/reels/) — deliberately not
+// the Home feed. Home is a chronological-ish mix of accounts you follow
+// plus injected suggestions; Reels is Instagram's actual algorithmic
+// recommendation surface, the direct equivalent of TikTok's For You and the
+// specific thing "this account's trained/personalized feed" means. An
+// earlier version of this also pulled from Home to pad out thin batches,
+// but that meant the synced feed wasn't purely the account's real
+// recommendation stream — removed rather than blended, even though it means
+// a freshly-connected account with little Reels history may come back with
+// fewer items at first.
+async function captureInstagramFeed(context, page, { targetCount = 40, maxMs = 60000 } = {}) {
   const collected = new Map();
   const startedAt = Date.now();
 
@@ -156,22 +161,13 @@ async function captureInstagramFeed(context, page, { targetCount = 40, maxMs = 4
   }
 
   try {
-    await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
-    await sleep(2000);
-    await scrollAndWait(6);
+    await page.goto("https://www.instagram.com/reels/", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await sleep(2500);
+    await scrollAndWait(24);
   } catch {
-    // Home feed is a bonus source — continue to Reels regardless.
-  }
-
-  if (collected.size < targetCount && Date.now() - startedAt < maxMs) {
-    try {
-      await page.goto("https://www.instagram.com/reels/", { waitUntil: "domcontentloaded", timeout: 30000 });
-      await sleep(2500);
-      await scrollAndWait(16);
-    } catch {
-      // If Reels itself fails to load, whatever the home feed already
-      // captured above is still returned below.
-    }
+    // Nothing to fall back to — an empty/thin result here is honest: it
+    // means this specific account's Reels recommendation stream didn't
+    // load, not that some other, less relevant source filled in instead.
   }
 
   return Array.from(collected.values());
