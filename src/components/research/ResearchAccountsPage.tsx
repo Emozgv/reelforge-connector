@@ -571,6 +571,7 @@ export function ResearchAccountsPage({
                   onExitToArchive={() => setMode("archive")}
                   onLikeClick={handleLikeClick}
                   likeStatus={likeStatus}
+                  onRefreshSession={() => void liveSession.startSession(currentAccount.id, currentAccount.platform)}
                   onRetryWake={() => {
                     // needs_connector -> the wake path (must run from this
                     // real click); a plain error -> just start over.

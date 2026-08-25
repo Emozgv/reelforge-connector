@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon } from "lucide-react";
+import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
+import { formatDuration } from "../../lib/researchFeedMapping";
 
 export type LikeStatus = "pending" | "liked" | "failed";
 
@@ -23,11 +24,17 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
   const videoRef = useRef<HTMLVideoElement>(null);
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [paused, setPaused] = useState(false);
+  // Instagram's private feed API doesn't reliably carry a duration field for
+  // Reels the way it does for other media types — server-side extraction
+  // left this at 0 more often than not. The real, always-correct source is
+  // the actual playing <video> element itself once its metadata loads.
+  const [liveDurationSec, setLiveDurationSec] = useState<number | null>(null);
 
   useEffect(() => {
     setVideoError(false);
     setCaptionExpanded(false);
     setPaused(false);
+    setLiveDurationSec(null);
   }, [video.id]);
 
   useEffect(() => {
@@ -55,6 +62,10 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
             playsInline
             className="absolute inset-0 w-full h-full object-cover"
             onError={() => setVideoError(true)}
+            onLoadedMetadata={() => {
+              const d = videoRef.current?.duration;
+              if (typeof d === "number" && isFinite(d) && d > 0) setLiveDurationSec(Math.round(d));
+            }}
           />
           {paused && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/20">
@@ -171,9 +182,11 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
         <div className="w-6 h-6 rounded-full bg-black/45 backdrop-blur-md flex items-center justify-center border border-white/10">
           <PlatformIcon platform={video.platform} size={11} />
         </div>
-        <span className="text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
-          {video.duration}
-        </span>
+        {liveDurationSec !== null && (
+          <span className="text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
+            {formatDuration(liveDurationSec)}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -202,6 +215,7 @@ export function SwipeResearchPlayer({
   onLikeClick,
   likeStatus,
   onRetryWake,
+  onRefreshSession,
 }: {
   account: ResearchAccount;
   currentReel: ReelVideo | null;
@@ -217,6 +231,7 @@ export function SwipeResearchPlayer({
   onLikeClick: (video: ReelVideo) => void;
   likeStatus: Record<string, LikeStatus>;
   onRetryWake: () => void;
+  onRefreshSession: () => void;
 }) {
   const connecting = account.status === "connecting";
   const wheelAccum = useRef(0);
@@ -296,6 +311,16 @@ export function SwipeResearchPlayer({
         <span>·</span>
         <button onClick={onExitToArchive} className="text-[#D39448] hover:brightness-110 transition-[filter]">
           View archive
+        </button>
+        <span>·</span>
+        <button
+          onClick={onRefreshSession}
+          disabled={sessionStatus === "connecting"}
+          title="End this live session and start a brand-new one — a fresh FYP, not a replay of this session's history"
+          className="flex items-center gap-1 text-neutral-400 hover:text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-default"
+        >
+          <RotateCw size={11} className={sessionStatus === "connecting" ? "animate-spin" : ""} />
+          Refresh feed
         </button>
       </div>
 
