@@ -376,33 +376,24 @@ export function ResearchAccountsPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // The live research session itself — this is the actual architecture
-  // change: opening a connected Instagram account starts a real, persistent
-  // Reels session on the authenticated account (see useLiveResearchSession
-  // and connector-app/scripts/session-server.mjs), and closing/switching
-  // away from it ends that session. Nothing here is reconstructed from
-  // client_os.research_feed_items — that table remains, but only as
-  // Archive's history, never as what the active swipe queue is built from.
+  // The live research session itself never auto-starts just because the
+  // selected account/platform changed — switching Instagram <-> TikTok or
+  // to a different account always lands on the same neutral "session
+  // ended, press Start research" state End research already produces,
+  // never a feed that's suddenly playing again on its own. Only an actual
+  // click (the "Start research" button, or "Start ReelForge Connector")
+  // ever begins a session — see useLiveResearchSession's startSession,
+  // which is exactly what onRefreshSession/onRetryWake already call.
   //
-  // Deliberately no cleanup-triggered endSession here anymore — only one
-  // live session (one real Chromium context) should ever be running, and a
-  // separate fire-and-forget endSession() from this effect's cleanup used
-  // to race with startSession()'s own internal `await endSession()` for
-  // the new account: the cleanup nulled the session ref synchronously,
-  // so by the time startSession's own end-call ran it saw nothing left to
-  // actually wait on, and moved straight to opening the new session —
-  // meaning the old one's real Connector-side close and the new one's
-  // open could briefly overlap. Leaving startSession as the ONLY thing
-  // that ever ends the previous session on a switch means it genuinely
-  // awaits the old session's real shutdown before starting the next one
-  // — true sequential close-then-open, using the exact lifecycle that
-  // already exists rather than a second mechanism.
+  // What this effect still does on every account/platform change: cleanly
+  // end whatever session was running before, so switching away always
+  // closes the previous live session rather than leaving it running
+  // unattended in the background. Navigating to a different Client OS
+  // section and back does NOT hit this at all (currentAccount doesn't
+  // change), which is what keeps a session already running across that
+  // kind of navigation.
   useEffect(() => {
-    if (!currentAccount || currentAccount.status !== "active") {
-      void liveSession.endSession();
-      return;
-    }
-    void liveSession.startSession(currentAccount.id, currentAccount.platform);
+    void liveSession.endSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAccount?.id, currentAccount?.status]);
 
