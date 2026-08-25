@@ -152,6 +152,7 @@ function App() {
             userId={user.id}
             workspaceId={workspace?.id}
             active={page === "research"}
+            onOpenCollection={navigateToCollection}
           />
         </div>
 

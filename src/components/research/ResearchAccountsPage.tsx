@@ -11,6 +11,7 @@ import { CreatorSelector } from "../hub/CreatorSelector";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { VideoGrid } from "../hub/VideoGrid";
 import { SavePanel } from "../hub/SavePanel";
+import { SavedCollectionsPopover } from "../hub/SavedCollectionsPopover";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
 import { SwipeResearchPlayer, type LikeStatus } from "./SwipeResearchPlayer";
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
@@ -234,6 +235,7 @@ export function ResearchAccountsPage({
   userId,
   workspaceId,
   active,
+  onOpenCollection,
 }: {
   creators: Creator[];
   creatorsError?: string | null;
@@ -247,6 +249,10 @@ export function ResearchAccountsPage({
   // gating things that should stop when it isn't (keyboard shortcuts,
   // video playback), not the session's own lifecycle.
   active: boolean;
+  // Navigates to the Collections page for a specific collection — used by
+  // the Collection button's browse popover (see SavedCollectionsPopover),
+  // same navigation App.tsx already wires up for the Hub/Dashboard/etc.
+  onOpenCollection: (collectionId: string) => void;
 }) {
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [platform, setPlatform] = useState<Platform>("instagram");
@@ -258,13 +264,13 @@ export function ResearchAccountsPage({
   const [feedError, setFeedError] = useState(false);
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
-  // Save and Collection are deliberately different entry points into the
-  // same reusable picker (see SavePanel's own `mode` prop) rather than two
-  // separate components — Save opens straight to its familiar Quick Save
-  // shortcut, Collection skips that and goes straight to "pick one of your
-  // existing collections," which is genuinely what pressing Collection
-  // means. No new UI, just a different way into the one that exists.
-  const [savePanelMode, setSavePanelMode] = useState<"full" | "collectionOnly">("full");
+  // Save and Collection are genuinely different actions, not two doors into
+  // the same picker: Save opens the familiar quick-save/choose-a-collection
+  // panel (SavePanel), Collection opens the same browse-your-collections
+  // popover Creativity Hub's own "N saved" pill already uses
+  // (SavedCollectionsPopover) — a pure browse/navigate view, not a save
+  // target. Reusing that existing component rather than building another.
+  const [savedPopoverOpen, setSavedPopoverOpen] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
@@ -635,13 +641,9 @@ export function ResearchAccountsPage({
                   onNext={() => void liveSession.next()}
                   onPrev={() => void liveSession.prev()}
                   onSaveClick={(video) => {
-                    setSavePanelMode("full");
                     if (!video.saved) setSavePanelVideo(video);
                   }}
-                  onAddToCollection={(video) => {
-                    setSavePanelMode("collectionOnly");
-                    setSavePanelVideo(video);
-                  }}
+                  onAddToCollection={() => setSavedPopoverOpen(true)}
                   onExitToArchive={() => setMode("archive")}
                   onLikeClick={handleLikeClick}
                   likeStatus={likeStatus}
@@ -664,13 +666,9 @@ export function ResearchAccountsPage({
                 <VideoGrid
                   videos={videos}
                   onSaveClick={(video) => {
-                    setSavePanelMode("full");
                     if (!video.saved) setSavePanelVideo(video);
                   }}
-                  onAddToCollection={(video) => {
-                    setSavePanelMode("collectionOnly");
-                    setSavePanelVideo(video);
-                  }}
+                  onAddToCollection={() => setSavedPopoverOpen(true)}
                   onOpenDetail={(video) => setDetailVideoId(video.id)}
                   spacious
                   loading={loadingFeed}
@@ -694,7 +692,6 @@ export function ResearchAccountsPage({
 
       <SavePanel
         open={!!savePanelVideo}
-        mode={savePanelMode}
         video={savePanelVideo}
         creators={creators}
         defaultCreatorId={selectedCreator.id}
@@ -735,18 +732,26 @@ export function ResearchAccountsPage({
         }}
       />
 
+      <SavedCollectionsPopover
+        open={savedPopoverOpen}
+        creator={selectedCreator}
+        collections={collectionsStore.collections}
+        onClose={() => setSavedPopoverOpen(false)}
+        onOpenCollection={onOpenCollection}
+        onCreateNextVersion={async (collectionId) => {
+          const result = await collectionsStore.createNextVersion(collectionId);
+          return result.id;
+        }}
+      />
+
       <ReelDetailModal
         video={detailVideo}
         open={!!detailVideoId}
         creator={selectedCreator}
         onClose={() => setDetailVideoId(null)}
-        onSaveClick={(video) => {
-          setSavePanelMode("full");
-          setSavePanelVideo(video);
-        }}
-        onAddToCollection={(video) => {
-          setSavePanelMode("collectionOnly");
-          setSavePanelVideo(video);
+        onSaveClick={(video) => setSavePanelVideo(video)}
+        onAddToCollection={() => {
+          setSavedPopoverOpen(true);
           setDetailVideoId(null);
         }}
         onPrev={() => {
