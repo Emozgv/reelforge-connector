@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, X, Users, LayoutGrid, Play, Lock, Loader2 } from "lucide-react";
+import { Plus, RefreshCw, X, Users, LayoutGrid, Play, Copy, Check, Loader2, Terminal, RotateCw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
-import type { ResearchAccountsStore } from "../../state/useResearchAccounts";
+import type { ConnectStart, ResearchAccountsStore } from "../../state/useResearchAccounts";
 import { MAX_RESEARCH_ACCOUNTS_PER_PLATFORM } from "../../state/useResearchAccounts";
 import { CreatorSelector } from "../hub/CreatorSelector";
 import { PlatformIcon } from "../hub/PlatformIcon";
@@ -35,105 +35,166 @@ const STATUS_DOT: Record<ResearchAccount["status"], string> = {
   disconnected: "bg-neutral-600",
 };
 
-// The real "Add Research Account" flow — actually captures the account's
-// login (username + password) rather than just a display label. Submitting
-// hands the credential straight to the connect-research-account Edge
-// Function, which Vault-encrypts it server-side; nothing here ever stores
-// the password itself, not even transiently beyond this form's own state.
+// The real "Connect Research Account" flow, in two steps. Step 1 (this
+// modal's form) only asks for a label + the account's public username — no
+// password, because a stored password could never reliably get through a
+// real Instagram/TikTok login on its own (2FA, SMS codes, checkpoints, and
+// CAPTCHAs are the norm, not the exception). Submitting the form issues a
+// one-time token; step 2 is a command the user runs locally, which opens a
+// real, visible browser to the real platform login page and waits for a
+// human to actually finish logging in — including whatever verification the
+// platform asks for. Only once that script detects a genuine session cookie
+// and hands it back does the account go "Active" here — this modal just
+// reflects that live status, it never sets it.
 function ConnectAccountModal({
   platform,
-  onConnect,
+  mode,
+  initialStart,
+  initialLabel,
+  liveAccount,
+  onSubmitNew,
   onClose,
 }: {
   platform: Platform;
-  onConnect: (label: string, username: string, password: string) => Promise<{ error: string | null }>;
+  mode: "new" | "reconnect";
+  initialStart: ConnectStart | null;
+  initialLabel?: string;
+  liveAccount: ResearchAccount | null;
+  onSubmitNew: (label: string, username: string) => Promise<{ start: ConnectStart | null; error: string | null }>;
   onClose: () => void;
 }) {
   const [label, setLabel] = useState("");
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [start, setStart] = useState<ConnectStart | null>(initialStart);
+  const [copied, setCopied] = useState(false);
   const platformName = platform === "instagram" ? "Instagram" : "TikTok";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) return;
+    if (!username.trim()) return;
     setSubmitting(true);
-    setError(null);
-    const { error: connectError } = await onConnect(label.trim() || username.trim(), username.trim(), password);
+    setFormError(null);
+    const { start: newStart, error: connectError } = await onSubmitNew(label.trim() || username.trim(), username.trim());
     setSubmitting(false);
-    if (connectError) setError(connectError);
-    else onClose();
+    if (connectError) setFormError(connectError);
+    else setStart(newStart);
   }
+
+  const command = start
+    ? `npm run connect -- --platform=${platform} --account=${start.id} --token=${start.token}`
+    : "";
+
+  function handleCopy() {
+    void navigator.clipboard.writeText(command);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  const status = liveAccount?.status;
 
   return (
     <>
       <div onClick={onClose} className="fixed inset-0 z-40 bg-black/75 backdrop-blur-[3px] animate-fade-in" />
       <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
-        <form
-          onSubmit={handleSubmit}
-          className="pointer-events-auto w-full max-w-[380px] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl p-5 animate-fade-in"
-        >
+        <div className="pointer-events-auto w-full max-w-[440px] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl p-5 animate-fade-in">
           <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-serif text-neutral-50">Connect a {platformName} account</h2>
+            <h2 className="text-[15px] font-serif text-neutral-50">
+              {mode === "reconnect" ? `Reconnect ${initialLabel ?? "this account"}` : `Connect a ${platformName} account`}
+            </h2>
             <button type="button" onClick={onClose} className="text-neutral-500 hover:text-neutral-200">
               <X size={16} />
             </button>
           </div>
-          <p className="mt-1.5 text-[11.5px] text-neutral-500 leading-relaxed">
-            ReelForge securely stores this login and sets up the account — its research feed appears here once
-            connected.
-          </p>
 
-          <div className="mt-4 space-y-3">
-            <div>
-              <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">Label (optional)</label>
-              <input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="e.g. Lifestyle & Storytime"
-                className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
-              />
+          {!start ? (
+            <form onSubmit={handleSubmit}>
+              <p className="mt-1.5 text-[11.5px] text-neutral-500 leading-relaxed">
+                You'll log into the real {platformName} account yourself in a moment — this just sets it up.
+              </p>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">Label (optional)</label>
+                  <input
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    placeholder="e.g. Lifestyle & Storytime"
+                    className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">{platformName} username</label>
+                  <input
+                    autoFocus
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="@username"
+                    className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+                  />
+                </div>
+              </div>
+
+              {formError && <p className="mt-3 text-[11.5px] text-rose-300/85">{formError}</p>}
+
+              <button
+                type="submit"
+                disabled={submitting || !username.trim()}
+                className="mt-4 w-full h-10 rounded-full bg-[#D39448] text-[#020508] text-[13px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {submitting && <Loader2 size={14} className="animate-spin" />}
+                {submitting ? "Setting up…" : "Continue"}
+              </button>
+            </form>
+          ) : status === "active" ? (
+            <div className="mt-4">
+              <div className="flex items-center gap-2 text-emerald-400 text-[13px]">
+                <Check size={15} />
+                Connected — this is now a genuine, authenticated session.
+              </div>
+              <p className="mt-1.5 text-[11.5px] text-neutral-500 leading-relaxed">
+                Its real research feed will appear under {initialLabel ?? "this account"} as it syncs.
+              </p>
+              <button
+                onClick={onClose}
+                className="mt-4 w-full h-10 rounded-full bg-[#D39448] text-[#020508] text-[13px] font-medium hover:brightness-110 transition-[filter] duration-150"
+              >
+                Done
+              </button>
             </div>
-            <div>
-              <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">{platformName} username</label>
-              <input
-                autoFocus
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="@username"
-                className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
-              />
+          ) : (
+            <div className="mt-4">
+              <p className="text-[11.5px] text-neutral-500 leading-relaxed">
+                Run this in a terminal, in the <span className="text-neutral-300">ReelForge-Client-OS/connector</span> folder
+                (<span className="text-neutral-300">npm install</span> first time only). A real, visible {platformName} login
+                window will open — log in as you normally would, including any verification step {platformName} asks for.
+                It closes itself the moment you're actually logged in.
+              </p>
+              <div className="mt-3 flex items-center gap-2 rounded-lg surface-field px-3 py-2.5">
+                <Terminal size={13} className="text-neutral-500 shrink-0" />
+                <code className="text-[11px] text-neutral-300 break-all leading-snug">{command}</code>
+                <button
+                  onClick={handleCopy}
+                  className="shrink-0 text-neutral-500 hover:text-neutral-200 transition-colors duration-150"
+                  title="Copy command"
+                >
+                  {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                </button>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2 text-[12px] text-amber-300/90">
+                <Loader2 size={13} className="animate-spin" />
+                Waiting for you to finish logging in…
+              </div>
+              {status === "needs_attention" && (
+                <p className="mt-2 text-[11.5px] text-amber-300/80">
+                  This is taking a while, or a previous attempt didn't finish. You can close this and press Reconnect
+                  to get a fresh link.
+                </p>
+              )}
             </div>
-            <div>
-              <label className="text-[10.5px] tracking-wide uppercase text-neutral-500">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="mt-1 w-full h-9 px-3 rounded-lg surface-field text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
-              />
-            </div>
-          </div>
-
-          {error && <p className="mt-3 text-[11.5px] text-rose-300/85">{error}</p>}
-
-          <div className="mt-4 flex items-center gap-1.5 text-[10.5px] text-neutral-600">
-            <Lock size={11} />
-            Encrypted at rest — never visible to anyone in ReelForge.
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting || !username.trim() || !password.trim()}
-            className="mt-4 w-full h-10 rounded-full bg-[#D39448] text-[#020508] text-[13px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 flex items-center justify-center gap-2"
-          >
-            {submitting && <Loader2 size={14} className="animate-spin" />}
-            {submitting ? "Connecting…" : "Connect account"}
-          </button>
-        </form>
+          )}
+        </div>
       </div>
     </>
   );
@@ -166,7 +227,8 @@ export function ResearchAccountsPage({
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) setSelectedCreator(creators[0] ?? null);
@@ -177,6 +239,22 @@ export function ResearchAccountsPage({
     [researchAccountsStore.accounts, selectedCreator, platform]
   );
   const currentAccount = currentAccounts.find((a) => a.id === accountId) ?? currentAccounts[0] ?? null;
+
+  // While a connect/reconnect is pending, poll for the real status flip —
+  // this app has no other way to learn that the local connector script
+  // (running outside the browser) has finished a real login.
+  useEffect(() => {
+    if (!connectFlow?.start) return;
+    const interval = window.setInterval(() => {
+      void researchAccountsStore.refetch();
+    }, 2500);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectFlow?.start?.id]);
+
+  const connectFlowAccount = connectFlow?.start
+    ? researchAccountsStore.accounts.find((a) => a.id === connectFlow.start!.id) ?? null
+    : null;
 
   // Switching Creator or platform re-picks whichever account was worked on
   // most recently — a real, DB-backed resume point, not device-local memory.
@@ -330,6 +408,21 @@ export function ResearchAccountsPage({
             >
               <span className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")} title={STATUS_LABEL[a.status]} />
               <span className="text-[12.5px]">{a.label}</span>
+              {(a.status === "needs_attention" || a.status === "disconnected") && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setReconnectError(null);
+                    const { start, error } = await researchAccountsStore.reconnectAccount(a.id, a.platform);
+                    if (start) setConnectFlow({ mode: "reconnect", start, label: a.label });
+                    else setReconnectError(error);
+                  }}
+                  title="Reconnect"
+                  className="text-neutral-500 hover:text-[#D39448] transition-colors duration-150"
+                >
+                  <RotateCw size={11} />
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -342,7 +435,7 @@ export function ResearchAccountsPage({
             </button>
           ))}
           <button
-            onClick={() => setConnectModalOpen(true)}
+            onClick={() => setConnectFlow({ mode: "new", start: null })}
             disabled={currentAccounts.length >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM}
             title={
               currentAccounts.length >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM
@@ -355,21 +448,23 @@ export function ResearchAccountsPage({
             Connect account
           </button>
         </div>
+        {reconnectError && <p className="mt-2 text-[11.5px] text-rose-300/85">{reconnectError}</p>}
 
-        {connectModalOpen && (
+        {connectFlow && (
           <ConnectAccountModal
             platform={platform}
-            onClose={() => setConnectModalOpen(false)}
-            onConnect={async (label, username, password) => {
-              const { id, error } = await researchAccountsStore.connectAccount(
-                selectedCreator.id,
-                platform,
-                label,
-                username,
-                password
-              );
-              if (id) setAccountId(id);
-              return { error };
+            mode={connectFlow.mode}
+            initialStart={connectFlow.start}
+            initialLabel={connectFlow.label}
+            liveAccount={connectFlowAccount}
+            onClose={() => setConnectFlow(null)}
+            onSubmitNew={async (label, username) => {
+              const { start, error } = await researchAccountsStore.connectAccount(selectedCreator.id, platform, label, username);
+              if (start) {
+                setAccountId(start.id);
+                setConnectFlow({ mode: "new", start, label });
+              }
+              return { start, error };
             }}
           />
         )}

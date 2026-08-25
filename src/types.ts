@@ -262,14 +262,21 @@ export interface CreatorPackage {
 
 // A trained IG/TikTok research account belonging to a Creator (up to 5 per
 // creator per platform). Real login/session/proxy handling lives entirely
-// outside this app (client_os.research_accounts never stores credentials) —
-// this is just the account's identity, sync state, and shared "who last
-// opened it" context so any authorized team member can pick up the same
-// research session, not a login object.
-// "connecting" = credentials captured and securely stored (Vault-backed,
-// never in this app's own tables), awaiting the separate automation worker
-// to actually establish a live session — an honest, real state, never
-// silently promoted to "active" without a real sync having happened.
+// outside this app (client_os.research_accounts never stores credentials or
+// the session itself — see private.research_account_secrets) — this is just
+// the account's identity, connection state, and shared "who last opened it"
+// context so any authorized team member can pick up the same research
+// session, not a login object.
+//
+// "connecting" = the account row exists and a connection is in progress
+// (waiting for a human to complete the real login in a real browser via the
+// connector script — see connect-research-account / submit-research-
+// account-session), but no authenticated session has been verified yet.
+// "active" is set ONLY once submit-research-account-session has confirmed a
+// genuine session cookie exists — the row itself is never, by itself, proof
+// of a real connection. "needs_attention" covers both a pending
+// verification/challenge and an expired session; either way, reconnecting
+// re-runs the same real login flow.
 export type ResearchAccountStatus = "connecting" | "active" | "needs_attention" | "disconnected";
 
 export interface ResearchAccount {
@@ -277,8 +284,8 @@ export interface ResearchAccount {
   creatorId: string;
   platform: Platform;
   label: string;
-  // The account's real public handle — safe to show; the password never
-  // lives in this app at all (see private.research_account_secrets).
+  // The account's real public handle — safe to show; no credential or
+  // session ever lives in this app at all (see private.research_account_secrets).
   username?: string;
   status: ResearchAccountStatus;
   lastSyncedAt?: string;
@@ -286,6 +293,9 @@ export interface ResearchAccount {
   // Swipe-mode watermark — feed items synced at or before this have already
   // been shown to the team, so nobody re-sees the same reel on a later visit.
   lastShownSyncedAt?: string;
+  // Set only when submit-research-account-session verified a real
+  // authenticated session — the actual "genuinely connected" proof.
+  sessionVerifiedAt?: string;
 }
 
 export interface Collection {

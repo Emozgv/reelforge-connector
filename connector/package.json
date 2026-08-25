@@ -1,0 +1,12 @@
+{
+  "name": "reelforge-research-account-connector",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "connect": "node connect-research-account.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

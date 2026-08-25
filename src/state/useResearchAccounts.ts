@@ -12,10 +12,12 @@ interface ResearchAccountRow {
   last_synced_at: string | null;
   last_opened_at: string | null;
   last_shown_synced_at: string | null;
+  session_verified_at: string | null;
 }
 
 // Up to 5 per Creator per platform — same cap style as the 5-reference-photo
-// limit on Creators, enforced client-side rather than a DB trigger.
+// limit on Creators, enforced client-side (and authoritatively, again, by
+// connect-research-account server-side).
 export const MAX_RESEARCH_ACCOUNTS_PER_PLATFORM = 5;
 
 function fromRow(row: ResearchAccountRow): ResearchAccount {
@@ -29,15 +31,22 @@ function fromRow(row: ResearchAccountRow): ResearchAccount {
     lastSyncedAt: row.last_synced_at ?? undefined,
     lastOpenedAt: row.last_opened_at ?? undefined,
     lastShownSyncedAt: row.last_shown_synced_at ?? undefined,
+    sessionVerifiedAt: row.session_verified_at ?? undefined,
   };
+}
+
+export interface ConnectStart {
+  id: string;
+  token: string;
+  platform: Platform;
 }
 
 /**
  * Research Accounts for the active workspace, backed by
  * client_os.research_accounts. Real login/session/proxy handling lives
  * entirely outside this app — this hook only manages the account's identity
- * and shared "who's researching, what's synced" state, so any authorized
- * workspace member sees the same context.
+ * and shared "who's researching, is it genuinely connected" state, so any
+ * authorized workspace member sees the same context.
  */
 export function useResearchAccounts(workspaceId: string | undefined) {
   const [accounts, setAccounts] = useState<ResearchAccount[]>([]);
@@ -45,6 +54,17 @@ export function useResearchAccounts(workspaceId: string | undefined) {
   const [error, setError] = useState<string | null>(null);
   const accountsRef = useRef<ResearchAccount[]>([]);
   accountsRef.current = accounts;
+
+  async function refetch() {
+    if (!workspaceId) return;
+    const { data, error: fetchError } = await supabase
+      .schema("client_os")
+      .from("research_accounts")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+    if (!fetchError) setAccounts((data as ResearchAccountRow[]).map(fromRow));
+  }
 
   useEffect(() => {
     if (!workspaceId) {
@@ -84,47 +104,76 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     return accountsRef.current.filter((a) => a.creatorId === creatorId && a.platform === platform).length;
   }
 
-  // The real "Add Research Account" action — actually captures the
-  // account's login (username + password) and hands it to the
-  // connect-research-account Edge Function, which Vault-encrypts the
-  // password and creates the account server-side with status "connecting".
-  // Nothing here (or anywhere in this app) ever sees or stores the password
-  // itself past this call.
-  async function connectAccount(
-    creatorId: string,
-    platform: Platform,
-    label: string,
-    username: string,
-    password: string
-  ): Promise<{ id: string | null; error: string | null }> {
-    if (!workspaceId) return { id: null, error: "No active workspace." };
-    if (countFor(creatorId, platform) >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM) {
-      return { id: null, error: `Up to ${MAX_RESEARCH_ACCOUNTS_PER_PLATFORM} ${platform} research accounts per creator.` };
-    }
-
-    const { data, error: invokeError } = await supabase.functions.invoke<{
-      account?: ResearchAccountRow;
-      error?: string;
-    }>("connect-research-account", {
-      body: { workspaceId, creatorId, platform, label, username, password },
-    });
-
-    if (invokeError || !data?.account) {
+  function parseInvokeError(invokeError: unknown, data: { error?: string } | null): Promise<string> {
+    return (async () => {
       const context = (invokeError as { context?: Response } | undefined)?.context;
       if (context && typeof context.json === "function") {
         try {
           const responseBody = await context.clone().json();
-          if (typeof responseBody?.error === "string") return { id: null, error: responseBody.error };
+          if (typeof responseBody?.error === "string") return responseBody.error;
         } catch {
           // fall through
         }
       }
-      return { id: null, error: data?.error ?? invokeError?.message ?? "Couldn't connect this account." };
+      return data?.error ?? (invokeError as { message?: string } | undefined)?.message ?? "Something went wrong.";
+    })();
+  }
+
+  // Step 1 of the real connect flow: creates the account (status
+  // "connecting") and returns a short-lived, single-use token. This does
+  // NOT connect anything by itself — the account only becomes "active"
+  // once the companion connector script (run locally, opening a real
+  // browser for the human to actually complete login/verification in) has
+  // its submitted session verified by submit-research-account-session.
+  async function connectAccount(
+    creatorId: string,
+    platform: Platform,
+    label: string,
+    username: string
+  ): Promise<{ start: ConnectStart | null; error: string | null }> {
+    if (!workspaceId) return { start: null, error: "No active workspace." };
+    if (countFor(creatorId, platform) >= MAX_RESEARCH_ACCOUNTS_PER_PLATFORM) {
+      return { start: null, error: `Up to ${MAX_RESEARCH_ACCOUNTS_PER_PLATFORM} ${platform} research accounts per creator.` };
+    }
+
+    const { data, error: invokeError } = await supabase.functions.invoke<{
+      account?: ResearchAccountRow;
+      token?: string;
+      error?: string;
+    }>("connect-research-account", {
+      body: { workspaceId, creatorId, platform, label, username },
+    });
+
+    if (invokeError || !data?.account || !data.token) {
+      return { start: null, error: await parseInvokeError(invokeError, data ?? null) };
     }
 
     const created = fromRow(data.account);
     setAccounts((prev) => [...prev, created]);
-    return { id: created.id, error: null };
+    return { start: { id: created.id, token: data.token, platform }, error: null };
+  }
+
+  // Re-issues a fresh token on an existing account (needs_attention /
+  // disconnected -> connecting again) — the real "reconnect" path, same
+  // underlying login flow as a first-time connect.
+  async function reconnectAccount(accountId: string, platform: Platform): Promise<{ start: ConnectStart | null; error: string | null }> {
+    if (!workspaceId) return { start: null, error: "No active workspace." };
+
+    const { data, error: invokeError } = await supabase.functions.invoke<{
+      account?: ResearchAccountRow;
+      token?: string;
+      error?: string;
+    }>("connect-research-account", {
+      body: { workspaceId, platform, reconnectAccountId: accountId },
+    });
+
+    if (invokeError || !data?.account || !data.token) {
+      return { start: null, error: await parseInvokeError(invokeError, data ?? null) };
+    }
+
+    const updated = fromRow(data.account);
+    setAccounts((prev) => prev.map((a) => (a.id === accountId ? updated : a)));
+    return { start: { id: updated.id, token: data.token, platform }, error: null };
   }
 
   async function renameAccount(accountId: string, label: string) {
@@ -191,6 +240,8 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     error,
     countFor,
     connectAccount,
+    reconnectAccount,
+    refetch,
     renameAccount,
     markSeen,
     deleteAccount,
