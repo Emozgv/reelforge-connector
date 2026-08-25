@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle } from "lucide-react";
+import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
@@ -355,6 +355,7 @@ export function SwipeResearchPlayer({
   blockStatus,
   onRetryWake,
   onRefreshSession,
+  onEndResearch,
   active,
 }: {
   account: ResearchAccount;
@@ -374,6 +375,10 @@ export function SwipeResearchPlayer({
   blockStatus: Record<string, BlockStatus>;
   onRetryWake: () => void;
   onRefreshSession: () => void;
+  // Intentionally ends the current live session and returns to a neutral
+  // start state — never touches Archive, Saves, Collections, or the
+  // account's connection. Just the active viewing session.
+  onEndResearch: () => void;
   // Whether Research Accounts is the section actually on screen — the page
   // itself stays mounted across navigation now (see App.tsx), so this is
   // what gates video playback and the arrow-key shortcuts instead.
@@ -474,6 +479,20 @@ export function SwipeResearchPlayer({
           <RotateCw size={11} className={sessionStatus === "connecting" ? "animate-spin" : ""} />
           Refresh feed
         </button>
+        {sessionStatus === "active" && (
+          <>
+            <span>·</span>
+            <button
+              type="button"
+              onClick={onEndResearch}
+              title="End the current live session — Archive, Saves, Collections, and this account's connection are untouched"
+              className="flex items-center gap-1 text-neutral-400 hover:text-neutral-200 transition-colors"
+            >
+              <Square size={10} />
+              End research
+            </button>
+          </>
+        )}
       </div>
 
       <div
@@ -543,6 +562,22 @@ export function SwipeResearchPlayer({
                   className="mt-4 h-9 px-4 rounded-full glass-panel text-[12.5px] text-neutral-300 hover:bg-white/[0.06] transition-colors duration-150"
                 >
                   Try again
+                </button>
+              </>
+            ) : sessionStatus === "idle" ? (
+              <>
+                <Square size={16} className="text-neutral-600 mb-1" />
+                <p className="text-[13px] text-neutral-300">Research session ended.</p>
+                <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">
+                  Archive, saves, and this account's connection are untouched — start a new live session whenever
+                  you're ready.
+                </p>
+                <button
+                  type="button"
+                  onClick={onRefreshSession}
+                  className="mt-4 h-9 px-4 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150"
+                >
+                  Start research
                 </button>
               </>
             ) : (

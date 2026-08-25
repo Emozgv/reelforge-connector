@@ -135,10 +135,20 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, []);
 
+  // Always leaves the UI in a genuinely neutral state, not just a cleared
+  // ref — this is what makes "End research" (and the no-account/inactive-
+  // account branch) actually show a clean start state instead of a stale
+  // last reel with no session behind it. Harmless when startSession calls
+  // this as its own first step too: the "idle" flash is immediately
+  // overwritten by "connecting" a moment later.
   const endSession = useCallback(async () => {
     const session = sessionRef.current;
     sessionRef.current = null;
     stopHeartbeat();
+    setCurrentReel(null);
+    setHasPrev(false);
+    setError(null);
+    setStatus("idle");
     if (!session) return;
     try {
       await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/end`, {

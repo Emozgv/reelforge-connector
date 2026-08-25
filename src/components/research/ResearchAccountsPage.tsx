@@ -383,15 +383,26 @@ export function ResearchAccountsPage({
   // away from it ends that session. Nothing here is reconstructed from
   // client_os.research_feed_items — that table remains, but only as
   // Archive's history, never as what the active swipe queue is built from.
+  //
+  // Deliberately no cleanup-triggered endSession here anymore — only one
+  // live session (one real Chromium context) should ever be running, and a
+  // separate fire-and-forget endSession() from this effect's cleanup used
+  // to race with startSession()'s own internal `await endSession()` for
+  // the new account: the cleanup nulled the session ref synchronously,
+  // so by the time startSession's own end-call ran it saw nothing left to
+  // actually wait on, and moved straight to opening the new session —
+  // meaning the old one's real Connector-side close and the new one's
+  // open could briefly overlap. Leaving startSession as the ONLY thing
+  // that ever ends the previous session on a switch means it genuinely
+  // awaits the old session's real shutdown before starting the next one
+  // — true sequential close-then-open, using the exact lifecycle that
+  // already exists rather than a second mechanism.
   useEffect(() => {
     if (!currentAccount || currentAccount.status !== "active") {
       void liveSession.endSession();
       return;
     }
     void liveSession.startSession(currentAccount.id, currentAccount.platform);
-    return () => {
-      void liveSession.endSession();
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAccount?.id, currentAccount?.status]);
 
@@ -650,6 +661,7 @@ export function ResearchAccountsPage({
                   onBlockCreator={handleBlockCreator}
                   blockStatus={blockStatus}
                   onRefreshSession={() => void liveSession.startSession(currentAccount.id, currentAccount.platform)}
+                  onEndResearch={() => void liveSession.endSession()}
                   onRetryWake={() => {
                     // needs_connector -> the wake path (must run from this
                     // real click); a plain error -> just start over.
