@@ -275,6 +275,11 @@ async function startSession(accountId, token) {
   }
 
   const { reel } = await session.next();
+  // Makes the first reel's real provenance independently checkable from the
+  // log alone — this is a brand-new page.goto() + scroll on a fresh
+  // browser/context created above, never a replay of any prior session's
+  // history (each Session instance's history/pending/seenIds start empty).
+  console.log(`[session] ${id} first reel: ${reel ? `${reel.id} ${reel.sourceUrl}` : "(none — feed returned nothing)"}`);
   return { session, reel };
 }
 

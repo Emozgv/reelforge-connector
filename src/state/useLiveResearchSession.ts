@@ -10,6 +10,7 @@ import type { Platform, ReelVideo } from "../types";
 const SESSION_SERVER_URL = "http://127.0.0.1:48211";
 const HEARTBEAT_MS = 15_000;
 const WAKE_TIMEOUT_MS = 15_000;
+const BEGIN_SESSION_TIMEOUT_MS = 20_000;
 
 interface RawLiveReel {
   id: string;
@@ -106,6 +107,11 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   const heartbeatRef = useRef<number | null>(null);
   const busyRef = useRef(false);
   const pendingRef = useRef<{ accountId: string; platform: Platform } | null>(null);
+  // Bumped on every startSession/retryWithWake call. beginSession captures
+  // its own value and checks it before every state write, so a slow/hung
+  // attempt that's since been superseded (or a timeout that already forced
+  // a fallback) can never clobber newer state after the fact.
+  const attemptRef = useRef(0);
 
   const stopHeartbeat = useCallback(() => {
     if (heartbeatRef.current) {
@@ -131,24 +137,51 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, [stopHeartbeat]);
 
+  // Marks Connector unreachable mid-session (heartbeat failure, or a
+  // beginSession attempt that never resolved) and puts the UI back into the
+  // one state it can always recover from with a real click.
+  const fallBackToNeedsConnector = useCallback(
+    (accountId: string, platform: Platform) => {
+      sessionRef.current = null;
+      stopHeartbeat();
+      pendingRef.current = { accountId, platform };
+      setCurrentReel(null);
+      setError(null);
+      setStatus("needs_connector");
+    },
+    [stopHeartbeat]
+  );
+
   // Does the actual work of talking to Connector once it's confirmed
   // reachable — shared by the silent automatic path (Connector already
   // running) and the explicit, click-triggered retry path (Connector needed
   // waking up first).
   const beginSession = useCallback(
     async (accountId: string, platform: Platform) => {
-      const { data, error: invokeError } = await supabase.functions.invoke<{
-        token?: string;
-        error?: string;
-      }>("start-research-live-session", { body: { workspaceId, accountId } });
+      const attemptId = ++attemptRef.current;
+      const isStale = () => attemptRef.current !== attemptId;
 
-      if (invokeError || !data?.token) {
-        setStatus("error");
-        setError(data?.error ?? "Couldn't start a research session.");
-        return;
-      }
+      let timedOut = false;
+      const timeoutId = window.setTimeout(() => {
+        if (isStale()) return;
+        timedOut = true;
+        fallBackToNeedsConnector(accountId, platform);
+      }, BEGIN_SESSION_TIMEOUT_MS);
 
       try {
+        const { data, error: invokeError } = await supabase.functions.invoke<{
+          token?: string;
+          error?: string;
+        }>("start-research-live-session", { body: { workspaceId, accountId } });
+
+        if (isStale() || timedOut) return;
+
+        if (invokeError || !data?.token) {
+          setStatus("error");
+          setError(data?.error ?? "Couldn't start a research session.");
+          return;
+        }
+
         const res = await fetch(`${SESSION_SERVER_URL}/sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -156,6 +189,18 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error ?? "Couldn't start a research session.");
+
+        if (isStale() || timedOut) {
+          // A newer attempt (or the timeout fallback) already took over —
+          // don't let this late response resurrect a session nothing is
+          // tracking anymore.
+          void fetch(`${SESSION_SERVER_URL}/sessions/${body.sessionId}/end`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionSecret: body.sessionSecret }),
+          }).catch(() => {});
+          return;
+        }
 
         sessionRef.current = { accountId, sessionId: body.sessionId, sessionSecret: body.sessionSecret };
         setCurrentReel(body.reel ? liveReelToVideo(body.reel, platform) : null);
@@ -166,18 +211,28 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         heartbeatRef.current = window.setInterval(() => {
           const s = sessionRef.current;
           if (!s) return;
-          void fetch(`${SESSION_SERVER_URL}/sessions/${s.sessionId}/heartbeat`, {
+          fetch(`${SESSION_SERVER_URL}/sessions/${s.sessionId}/heartbeat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sessionSecret: s.sessionSecret }),
-          }).catch(() => {});
+          }).catch(() => {
+            // Connector died (or became unreachable) while this tab stayed
+            // open — the old behavior silently swallowed this, leaving the
+            // UI stuck showing a session that no longer exists anywhere.
+            // Detect it here and fall back to the one recoverable state.
+            if (sessionRef.current !== s) return;
+            fallBackToNeedsConnector(accountId, platform);
+          });
         }, HEARTBEAT_MS);
       } catch (err) {
+        if (isStale() || timedOut) return;
         setStatus("error");
         setError(err instanceof Error ? err.message : "Couldn't start a research session.");
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     },
-    [workspaceId]
+    [workspaceId, fallBackToNeedsConnector]
   );
 
   // Opening a Research Account calls this automatically — it never attempts
