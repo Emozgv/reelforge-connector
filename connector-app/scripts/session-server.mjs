@@ -76,7 +76,12 @@ function parseInstagramMedia(node) {
       videoUrl,
       caption: typeof node.caption?.text === "string" ? node.caption.text : null,
       username: node.user?.username ?? node.owner?.username ?? null,
-      viewsRaw: typeof node.play_count === "number" ? node.play_count : (typeof node.view_count === "number" ? node.view_count : 0),
+      // Confirmed via live capture: Instagram's own Reels response regularly
+      // sends view_count as an explicit null (not merely absent) rather than
+      // a real number — this endpoint often just doesn't expose a view
+      // count for a Reel at all. null here means exactly that: no real
+      // count was available, never faked as 0.
+      viewsRaw: typeof node.play_count === "number" ? node.play_count : (typeof node.view_count === "number" ? node.view_count : null),
       likes: typeof node.like_count === "number" ? node.like_count : null,
       comments: typeof node.comment_count === "number" ? node.comment_count : null,
       durationSec: typeof node.video_duration === "number" ? Math.round(node.video_duration) : 0,
@@ -130,7 +135,9 @@ function parseTikTokMedia(node) {
       videoUrl,
       caption: typeof node.desc === "string" ? node.desc : null,
       username,
-      viewsRaw: typeof stats.playCount === "number" ? stats.playCount : 0,
+      // Same rule as Instagram's parser above: only a real number counts —
+      // never fabricated as 0 when TikTok's own stats object doesn't carry it.
+      viewsRaw: typeof stats.playCount === "number" ? stats.playCount : null,
       likes: typeof stats.diggCount === "number" ? stats.diggCount : null,
       comments: typeof stats.commentCount === "number" ? stats.commentCount : null,
       durationSec: typeof video.duration === "number" ? Math.round(video.duration) : 0,

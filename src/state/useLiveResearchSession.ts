@@ -19,7 +19,7 @@ interface RawLiveReel {
   videoUrl: string | null;
   caption: string | null;
   username: string | null;
-  viewsRaw: number;
+  viewsRaw: number | null;
   likes: number | null;
   comments: number | null;
   durationSec: number;
@@ -35,7 +35,11 @@ function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
     thumbnailUrl: raw.thumbnailUrl ?? undefined,
     videoUrl: raw.videoUrl ?? undefined,
     caption: raw.caption ?? undefined,
-    views: formatViews(raw.viewsRaw ?? 0),
+    // No real platform-provided view count for this reel — the live player
+    // hides the metric instead of showing a misleading 0 (see
+    // SwipeResearchPlayer). viewsRaw still needs a number to satisfy
+    // ReelVideo's shared shape, but it's never rendered for a live reel.
+    views: raw.viewsRaw != null ? formatViews(raw.viewsRaw) : "",
     viewsRaw: raw.viewsRaw ?? 0,
     likes: raw.likes ?? undefined,
     comments: raw.comments ?? undefined,

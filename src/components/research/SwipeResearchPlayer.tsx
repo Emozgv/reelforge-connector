@@ -116,7 +116,10 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
           </button>
         )}
         <div className="mt-2 flex items-center gap-3 text-[11.5px] text-white/70 tabular-nums">
-          <span>{video.views} views</span>
+          {/* Live reels: no real platform view count means no view count
+              shown — never a misleading 0 (see useLiveResearchSession's
+              liveReelToVideo, which leaves views as "" for exactly this). */}
+          {video.views && <span>{video.views} views</span>}
           {video.likes !== undefined && <span>{video.likes.toLocaleString()} likes</span>}
         </div>
       </div>
