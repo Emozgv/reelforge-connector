@@ -47,6 +47,101 @@ async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
+// Instagram's web client loads the real, personalized home feed via its own
+// internal JSON API calls (not a public API) rather than fully server-
+// rendered HTML — so instead of scraping the page, this listens to every
+// JSON response the page itself makes while the feed loads, and picks out
+// anything shaped like a real media item. That shape (a "code" shortcode
+// plus image_versions2/video_versions candidates) has stayed the stable
+// part of Instagram's internal media object across the many endpoint/field
+// renames the surrounding response wrappers go through, so sniffing for it
+// structurally is more durable here than hardcoding one endpoint URL.
+function looksLikeMedia(node) {
+  return (
+    node &&
+    typeof node === "object" &&
+    typeof node.code === "string" &&
+    (node.image_versions2?.candidates?.length || node.video_versions?.length)
+  );
+}
+
+function parseMedia(node) {
+  try {
+    const videoVersions = node.video_versions;
+    const videoUrl = Array.isArray(videoVersions) && videoVersions.length ? videoVersions[0].url : null;
+    const thumbCandidates = node.image_versions2?.candidates;
+    const thumbnailUrl = Array.isArray(thumbCandidates) && thumbCandidates.length ? thumbCandidates[0].url : null;
+    if (!videoUrl && !thumbnailUrl) return null;
+
+    const takenAt = typeof node.taken_at === "number" ? node.taken_at : null;
+    const postedDaysAgo = takenAt ? Math.max(0, Math.floor((Date.now() / 1000 - takenAt) / 86400)) : null;
+
+    return {
+      id: node.code,
+      sourceUrl: `https://www.instagram.com/reel/${node.code}/`,
+      thumbnailUrl,
+      videoUrl,
+      caption: typeof node.caption?.text === "string" ? node.caption.text : null,
+      username: node.user?.username ?? node.owner?.username ?? null,
+      viewsRaw: typeof node.play_count === "number" ? node.play_count : (typeof node.view_count === "number" ? node.view_count : 0),
+      likes: typeof node.like_count === "number" ? node.like_count : null,
+      comments: typeof node.comment_count === "number" ? node.comment_count : null,
+      durationSec: typeof node.video_duration === "number" ? Math.round(node.video_duration) : 0,
+      postedDaysAgo,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function collectMediaFrom(node, out, depth = 0) {
+  if (depth > 8 || out.size >= 40 || !node) return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectMediaFrom(item, out, depth + 1);
+    return;
+  }
+  if (typeof node !== "object") return;
+  if (looksLikeMedia(node)) {
+    const parsed = parseMedia(node);
+    if (parsed) out.set(parsed.id, parsed);
+  }
+  for (const key of Object.keys(node)) collectMediaFrom(node[key], out, depth + 1);
+}
+
+// Best-effort — a real login is what makes the account "connected"
+// regardless of whether this captures anything, so every failure here is
+// swallowed rather than allowed to fail the connection itself.
+async function captureInstagramFeed(context, page) {
+  const collected = new Map();
+
+  context.on("response", async (response) => {
+    try {
+      const url = response.url();
+      if (!url.includes("instagram.com")) return;
+      const contentType = response.headers()["content-type"] || "";
+      if (!contentType.includes("json")) return;
+      const body = await response.json().catch(() => null);
+      if (body) collectMediaFrom(body, collected);
+    } catch {
+      // ignore
+    }
+  });
+
+  try {
+    await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
+  } catch {
+    return [];
+  }
+
+  for (let i = 0; i < 6 && collected.size < 24; i++) {
+    await sleep(1200);
+    await page.mouse.wheel(0, 1600).catch(() => {});
+  }
+  await sleep(1000);
+
+  return Array.from(collected.values());
+}
+
 async function main() {
   const { platform, account, token } = parseArgs();
   if (!platform || !account || !token || !LOGIN_URL[platform]) {
@@ -93,6 +188,12 @@ async function main() {
     process.exit(1);
   }
 
+  let feedItems = [];
+  if (platform === "instagram") {
+    emit("loading_feed");
+    feedItems = await captureInstagramFeed(context, page);
+  }
+
   const storageState = await context.storageState();
   await browser.close();
 
@@ -103,7 +204,7 @@ async function main() {
     res = await fetch(SUBMIT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId: account, token, platform, storageState }),
+      body: JSON.stringify({ accountId: account, token, platform, storageState, feedItems }),
     });
   } catch {
     emit("error", { message: "Logged in, but couldn't reach ReelForge to finish connecting. Check your internet connection and press Reconnect." });
@@ -117,7 +218,7 @@ async function main() {
     process.exit(1);
   }
 
-  emit("connected");
+  emit("connected", { feedItemsStored: body.feedItemsStored ?? 0 });
 }
 
 main().catch((err) => {

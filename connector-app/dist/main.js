@@ -34,12 +34,20 @@ function handleProgress(event) {
     case "waiting":
       setState("spinner", "Waiting for you to finish logging in…", "Complete any verification step the platform asks for — this closes itself once you're in.");
       break;
+    case "loading_feed":
+      setState("spinner", "Loading your real feed…", "Pulling in a first batch of this account's actual feed content.");
+      break;
     case "submitting":
       setState("spinner", "Finishing up…", "Sending your session back to ReelForge.");
       break;
-    case "connected":
-      setState("check", "Connected!", "You can close this window and go back to ReelForge — the account is now active.");
+    case "connected": {
+      const count = event.feedItemsStored || 0;
+      const feedText = count > 0
+        ? `${count} real reel${count === 1 ? "" : "s"} from its feed synced in — you can close this and go back to ReelForge.`
+        : "You can close this window and go back to ReelForge — the account is now active.";
+      setState("check", "Connected!", feedText);
       break;
+    }
     case "error":
       setState("err", "Couldn't finish connecting", event.message || "Something went wrong. Go back to ReelForge and try again.");
       break;
