@@ -17,7 +17,7 @@ export function computeCreatorStats(creatorId: string, collections: Collection[]
   const unused = allConcepts.filter((c) => c.status === "Unused").length;
   const activeSubmissions = own
     .flatMap((c) => c.submissions)
-    .filter((s) => s.status !== "Finished").length;
+    .filter((s) => s.status !== "Finished" && s.status !== "Cancelled").length;
 
   return {
     collectionsCount: own.length,

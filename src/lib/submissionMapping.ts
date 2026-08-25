@@ -11,6 +11,7 @@ export interface SubmissionRow {
   index: number;
   status: SubmissionStatus;
   note: string | null;
+  eta: string | null;
   delivery_url: string | null;
   submitted_at: string;
   updated_at: string;
@@ -33,6 +34,7 @@ export function submissionFromRow(row: SubmissionRow, conceptIds: string[]): Sub
     sentAt: formatTimestampFromIso(row.submitted_at),
     note: row.note ?? undefined,
     status: row.status,
+    eta: row.eta ?? undefined,
     deliveryUrl: row.delivery_url ?? undefined,
     favorited: row.favorited,
     approvedAt: row.approved_at ?? undefined,

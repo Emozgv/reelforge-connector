@@ -14,7 +14,8 @@ export type ActivityEventType =
   | "concept_marked_unused"
   | "concept_rejected"
   | "submission_created"
-  | "regeneration_requested";
+  | "regeneration_requested"
+  | "delivery_eta_set";
 
 // Shape of a row from client_os.activity_events. Append-only from the client's
 // perspective — SELECT + INSERT only, no UPDATE/DELETE grant at all.

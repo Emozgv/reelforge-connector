@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Clock, RotateCcw, PackageCheck, Inbox, ArchiveRestore, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, Clock, RotateCcw, PackageCheck, Inbox, ArchiveRestore, Loader2, Ban } from "lucide-react";
 import type {
   Collection,
   CollectionConcept,
@@ -28,6 +28,7 @@ const SUBMISSION_STATUS_STYLES: Record<SubmissionStatus, string> = {
   Sent: "text-neutral-400 bg-white/[0.05]",
   "In Progress": "text-amber-300/80 bg-amber-400/10",
   "Check Inbox": "text-[#D39448] bg-[#D39448]/20",
+  Cancelled: "text-neutral-500 bg-white/[0.04]",
   Finished: "text-emerald-300/80 bg-emerald-400/10",
 };
 
@@ -367,6 +368,9 @@ export function CollectionWorkspace({
                           </p>
                           <p className="text-[10.5px] text-neutral-600">
                             {s.conceptIds.length} concepts · {s.sentAt}
+                            {s.eta && s.status !== "Finished" && s.status !== "Cancelled" && (
+                              <> · ETA {s.eta}</>
+                            )}
                           </p>
                         </div>
 
@@ -385,6 +389,7 @@ export function CollectionWorkspace({
                           ].join(" ")}
                         >
                           {s.status === "Check Inbox" && <Inbox size={10} />}
+                          {s.status === "Cancelled" && <Ban size={10} />}
                           {s.status}
                         </button>
                       </div>

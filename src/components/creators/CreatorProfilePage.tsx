@@ -292,6 +292,9 @@ export function CreatorProfilePage({
                       </p>
                       <p className="text-[11px] text-neutral-500">
                         {s.conceptIds.length} concepts · {s.sentAt}
+                        {s.eta && s.status !== "Finished" && s.status !== "Cancelled" && (
+                          <> · ETA {s.eta}</>
+                        )}
                       </p>
                     </div>
                     <div className="flex items-center gap-2.5 shrink-0">

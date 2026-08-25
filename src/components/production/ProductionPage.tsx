@@ -1,4 +1,4 @@
-import { Clapperboard, Inbox, PackageCheck } from "lucide-react";
+import { Ban, Clapperboard, Inbox, PackageCheck } from "lucide-react";
 import type { Collection, Creator, SubmissionStatus } from "../../types";
 import { DriveGlyph } from "../collections/DriveGlyph";
 
@@ -6,6 +6,7 @@ const SUBMISSION_STATUS_STYLES: Record<SubmissionStatus, string> = {
   Sent: "text-neutral-400 bg-white/[0.05]",
   "In Progress": "text-amber-300/80 bg-amber-400/10",
   "Check Inbox": "text-[#D39448] bg-[#D39448]/20",
+  Cancelled: "text-neutral-500 bg-white/[0.04]",
   Finished: "text-emerald-300/80 bg-emerald-400/10",
 };
 
@@ -14,6 +15,7 @@ interface ProductionRow {
   index: number;
   status: SubmissionStatus;
   sentAt: string;
+  eta?: string;
   conceptCount: number;
   deliveryUrl?: string;
   collectionId: string;
@@ -37,6 +39,7 @@ export function ProductionPage({
         index: s.index,
         status: s.status,
         sentAt: s.sentAt,
+        eta: s.eta,
         conceptCount: s.conceptIds.length,
         deliveryUrl: s.deliveryUrl,
         collectionId: c.id,
@@ -46,8 +49,9 @@ export function ProductionPage({
     )
     .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
 
-  const active = rows.filter((r) => r.status !== "Finished");
+  const active = rows.filter((r) => r.status !== "Finished" && r.status !== "Cancelled");
   const finished = rows.filter((r) => r.status === "Finished");
+  const cancelled = rows.filter((r) => r.status === "Cancelled");
 
   return (
     <div className="h-full overflow-y-auto">
@@ -96,6 +100,20 @@ export function ProductionPage({
             </div>
           </div>
         )}
+
+        {cancelled.length > 0 && (
+          <div className="mt-7">
+            <h2 className="text-[13px] font-medium text-neutral-500 mb-2 flex items-center gap-1.5">
+              <Ban size={13} className="text-neutral-500" />
+              Cancelled
+            </h2>
+            <div className="rounded-xl surface-panel divide-y divide-white/[0.05] [&>*:first-child]:rounded-t-xl [&>*:last-child]:rounded-b-xl">
+              {cancelled.map((r) => (
+                <ProductionRowItem key={r.submissionId} row={r} onOpenCollection={onOpenCollection} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -130,6 +148,9 @@ function ProductionRowItem({
         <p className="text-[11px] text-neutral-500">
           {row.creator?.name ?? "Unknown creator"} · {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"} ·{" "}
           {row.sentAt}
+          {row.eta && row.status !== "Finished" && row.status !== "Cancelled" && (
+            <> · ETA {row.eta}</>
+          )}
         </p>
       </div>
       {row.status === "Finished" && row.deliveryUrl && (
@@ -151,6 +172,7 @@ function ProductionRowItem({
         ].join(" ")}
       >
         {row.status === "Check Inbox" && <Inbox size={10} />}
+        {row.status === "Cancelled" && <Ban size={10} />}
         {row.status}
       </span>
     </button>

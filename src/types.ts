@@ -173,11 +173,11 @@ export interface CollectionConcept {
 
 // Production progress for one real Submission (client_os.submissions). "Check
 // Inbox" simulates ReelForge needing feedback/info from the client.
-export type SubmissionStatus = "Sent" | "In Progress" | "Check Inbox" | "Finished";
+export type SubmissionStatus = "Sent" | "In Progress" | "Check Inbox" | "Cancelled" | "Finished";
 
 // A specific batch sent to ReelForge. A Collection can have many Submissions over
 // its lifetime — sending again later creates a new one rather than overwriting.
-// Production status and deliveryUrl are system-controlled: only a future
+// Production status, eta and deliveryUrl are system-controlled: only a future
 // ReelForge Internal connection (via service_role, never the browser) can
 // write them — the client can create a Submission and read its status, never
 // update it. conceptIds is a read projection of client_os.submission_concepts,
@@ -189,6 +189,10 @@ export interface Submission {
   sentAt: string;
   note?: string;
   status: SubmissionStatus;
+  // Free-text turnaround estimate set by the operator in ReelForge Internal
+  // when the request is accepted (e.g. "2 Days") — not a structured
+  // date/duration, since that's genuinely how Internal captures it today.
+  eta?: string;
   // Present only once this specific submission is Finished — each batch gets its
   // own delivery folder, never one shared link for the whole Collection.
   deliveryUrl?: string;

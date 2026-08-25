@@ -17,7 +17,7 @@ import type { ActivityEventType } from "../../lib/activityMapping";
 
 // The bell is for things worth interrupting the client for — not a mirror of
 // every log line (that full trail lives in Dashboard/Collection history).
-const NOTABLE_EVENT_TYPES: ActivityEventType[] = ["submission_created", "regeneration_requested"];
+const NOTABLE_EVENT_TYPES: ActivityEventType[] = ["submission_created", "regeneration_requested", "delivery_eta_set"];
 
 // Read state is a per-browser affordance (localStorage), not a synced backend
 // concept — matches the single-workspace-per-browser assumption elsewhere.

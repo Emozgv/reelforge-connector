@@ -101,6 +101,7 @@ const CONCEPT_STAGE_STYLES: Record<string, string> = {
   Saved: "text-neutral-400 bg-white/[0.05]",
   "In Review": "text-sky-300/85 bg-sky-400/10",
   "In Production": "text-[#D39448] bg-[#D39448]/15",
+  Cancelled: "text-neutral-500 bg-white/[0.04]",
   Delivered: "text-emerald-300/85 bg-emerald-400/10",
 };
 
@@ -112,6 +113,7 @@ function collectionStage(c: Collection): string {
   if (c.status === "Draft") return "Saved";
   const latest = c.submissions[c.submissions.length - 1];
   if (latest && (latest.status === "In Progress" || latest.status === "Check Inbox")) return "In Production";
+  if (latest && latest.status === "Cancelled") return "Cancelled";
   return "In Review";
 }
 
@@ -141,7 +143,7 @@ export function DashboardPage({
   onOpenBilling: () => void;
 }) {
   const allSubmissions = collections.flatMap((c) => c.submissions.map((s) => ({ ...s, collection: c })));
-  const activeSubmissions = allSubmissions.filter((s) => s.status !== "Finished");
+  const activeSubmissions = allSubmissions.filter((s) => s.status !== "Finished" && s.status !== "Cancelled");
   const needsAttention = allSubmissions.filter((s) => s.status === "Check Inbox");
   const finishedCount = allSubmissions.filter((s) => s.status === "Finished").length;
   const savedTotal = collections.reduce((sum, c) => sum + c.concepts.length, 0);
