@@ -5,6 +5,7 @@ import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { formatDuration } from "../../lib/researchFeedMapping";
+import { DownloadConnectorLink } from "./DownloadConnectorButton";
 
 export type LikeStatus = "pending" | "liked" | "failed";
 
@@ -373,6 +374,9 @@ export function SwipeResearchPlayer({
                 >
                   Start ReelForge Connector
                 </button>
+                <p className="mt-3 text-[11px] text-neutral-600">
+                  Don't have it yet? <DownloadConnectorLink className="text-neutral-400 hover:text-neutral-200 underline underline-offset-2 transition-colors" />
+                </p>
               </>
             ) : sessionStatus === "error" ? (
               <>

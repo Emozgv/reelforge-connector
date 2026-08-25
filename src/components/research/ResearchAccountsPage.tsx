@@ -13,6 +13,7 @@ import { VideoGrid } from "../hub/VideoGrid";
 import { SavePanel } from "../hub/SavePanel";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
 import { SwipeResearchPlayer, type LikeStatus } from "./SwipeResearchPlayer";
+import { DownloadConnectorButton } from "./DownloadConnectorButton";
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: "IG Research", tiktok: "TikTok Research" };
 
@@ -415,19 +416,24 @@ export function ResearchAccountsPage({
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
-        <div className="flex items-center gap-2.5 mb-1">
-          <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
-          <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448]/85 font-medium">
-            Research Accounts
-          </span>
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1">
+              <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
+              <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448]/85 font-medium">
+                Research Accounts
+              </span>
+            </div>
+            <h1 className="text-[26px] font-serif font-medium text-neutral-50">
+              Research from your own trained feeds
+            </h1>
+            <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
+              Swipe through a Creator's own Instagram/TikTok research account, then save straight into the same
+              Collections you already use.
+            </p>
+          </div>
+          <DownloadConnectorButton />
         </div>
-        <h1 className="text-[26px] font-serif font-medium text-neutral-50">
-          Research from your own trained feeds
-        </h1>
-        <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
-          Swipe through a Creator's own Instagram/TikTok research account, then save straight into the same
-          Collections you already use.
-        </p>
 
         {/* context toolbar */}
         <div className="mt-6 flex items-center gap-3 flex-wrap">
