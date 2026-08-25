@@ -472,11 +472,11 @@ export function SwipeResearchPlayer({
         <button
           type="button"
           onClick={onRefreshSession}
-          disabled={sessionStatus === "connecting"}
+          disabled={sessionStatus === "connecting" || sessionStatus === "checking"}
           title="End this live session and start a brand-new one — a fresh FYP, not a replay of this session's history"
           className="flex items-center gap-1 text-neutral-400 hover:text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-default"
         >
-          <RotateCw size={11} className={sessionStatus === "connecting" ? "animate-spin" : ""} />
+          <RotateCw size={11} className={sessionStatus === "connecting" || sessionStatus === "checking" ? "animate-spin" : ""} />
           Refresh feed
         </button>
         {sessionStatus === "active" && (
@@ -564,18 +564,25 @@ export function SwipeResearchPlayer({
                   Try again
                 </button>
               </>
-            ) : sessionStatus === "idle" ? (
+            ) : sessionStatus === "idle" || sessionStatus === "checking" ? (
               <>
-                <Square size={16} className="text-neutral-600 mb-1" />
-                <p className="text-[13px] text-neutral-300">Research session ended.</p>
+                {sessionStatus === "checking" ? (
+                  <Loader2 size={16} className="text-neutral-500 animate-spin mb-1" />
+                ) : (
+                  <Square size={16} className="text-neutral-600 mb-1" />
+                )}
+                <p className="text-[13px] text-neutral-300">
+                  {sessionStatus === "checking" ? "Checking Research status…" : "Research session ended."}
+                </p>
                 <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">
                   Archive, saves, and this account's connection are untouched — start a new live session whenever
                   you're ready.
                 </p>
                 <button
                   type="button"
+                  disabled={sessionStatus === "checking"}
                   onClick={onRefreshSession}
-                  className="mt-4 h-9 px-4 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150"
+                  className="mt-4 h-9 px-4 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 disabled:cursor-default"
                 >
                   Start research
                 </button>

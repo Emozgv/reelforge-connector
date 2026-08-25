@@ -96,7 +96,15 @@ function isSessionGoneStatus(status: number) {
   return status === 403 || status === 404;
 }
 
-export type LiveSessionStatus = "idle" | "connecting" | "active" | "error" | "needs_connector";
+// "checking" is deliberately its own state, distinct from both "idle" and
+// "connecting" — it's the brief window where Connector's reachability
+// simply isn't known yet (mid checkHealth() call). Folding it into "idle"
+// or "connecting" is exactly what let the UI show a misleading state
+// during that window before (a stale neutral screen, or a "Loading your
+// feed" spinner implying a feed fetch that hadn't actually started yet).
+// "connecting" is now reserved for the part that's actually true of it:
+// Connector is confirmed reachable and a real session is being created.
+export type LiveSessionStatus = "idle" | "checking" | "connecting" | "active" | "error" | "needs_connector";
 
 interface ActiveSession {
   accountId: string;
@@ -302,6 +310,11 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       setError(null);
       setCurrentReel(null);
       setHasPrev(false);
+      // Reachability isn't known yet — say so, rather than defaulting to
+      // "idle" (looks like nothing is happening) or "connecting" (implies
+      // a session is already being created) for the ~1.5s checkHealth()
+      // can genuinely take.
+      setStatus("checking");
 
       if (await checkHealth()) {
         setStatus("connecting");
