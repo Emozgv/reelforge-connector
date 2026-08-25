@@ -7,6 +7,7 @@ use std::{
 };
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_updater::UpdaterExt;
 
 // Resolves the Node runtime ReelForge Connector bundles with itself — VAs
 // never need Node/npm/Playwright installed; this is the exact copy of the
@@ -148,6 +149,47 @@ fn spawn_session_server(handle: &AppHandle) {
     if let Err(e) = command.spawn() {
         eprintln!("Could not start ReelForge Connector's session server: {e}");
     }
+}
+
+// Checked exactly once, right at startup (never on any recurring timer) —
+// a VA's Connector is meant to just sit there and stay current without
+// anyone having to remember to re-download it by hand. Startup is the only
+// safe moment to restart the whole process afterward: no research session
+// has had a chance to begin yet, so there's nothing running to interrupt.
+// A later background check would risk killing a live session mid-swipe,
+// which is worse than shipping a fix a little late.
+fn spawn_update_check(handle: &AppHandle) {
+    let handle = handle.clone();
+    tauri::async_runtime::spawn(async move {
+        let updater = match handle.updater() {
+            Ok(updater) => updater,
+            Err(e) => {
+                eprintln!("ReelForge Connector: updater unavailable: {e}");
+                return;
+            }
+        };
+
+        let update = match updater.check().await {
+            Ok(Some(update)) => update,
+            Ok(None) => return,
+            Err(e) => {
+                eprintln!("ReelForge Connector: update check failed (offline or update server unreachable): {e}");
+                return;
+            }
+        };
+
+        eprintln!(
+            "ReelForge Connector: update {} -> {} found, downloading",
+            update.current_version, update.version
+        );
+        if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
+            eprintln!("ReelForge Connector: update download/install failed: {e}");
+            return;
+        }
+
+        eprintln!("ReelForge Connector: update installed, restarting");
+        handle.request_restart();
+    });
 }
 
 // Runs the real login (a real, visible Chromium window the VA logs into
@@ -334,8 +376,10 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             spawn_session_server(app.handle());
+            spawn_update_check(app.handle());
 
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {

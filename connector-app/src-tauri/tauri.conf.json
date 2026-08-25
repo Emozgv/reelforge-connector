@@ -28,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "resources": {
       "../scripts/connect-worker.mjs": "connect-worker.mjs",
       "../scripts/session-server.mjs": "session-server.mjs",
@@ -54,6 +55,13 @@
       "desktop": {
         "schemes": ["reelforge-connect"]
       }
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/Emozgv/reelforge-connector/releases/download/connector-latest/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIxNjZFNzc2QjkxQTM3N0EKUldSNk54cTVkdWRtSWU4d0s4clp5OE15WGROTzFNZmU1b2NLSFF4SHN6dXc1cVBiOXdaTlFTckgK"
     }
   }
 }
