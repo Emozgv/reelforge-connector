@@ -16,6 +16,8 @@ const FETCH_SESSION_URL = process.env.REELFORGE_FETCH_SESSION_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/fetch-research-account-session";
 const SUBMIT_SYNC_URL = process.env.REELFORGE_SUBMIT_SYNC_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/submit-research-feed-sync";
+const SUBMIT_ACTION_URL = process.env.REELFORGE_SUBMIT_ACTION_URL
+  ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/submit-research-reel-action";
 
 const LOGIN_URL = {
   instagram: "https://www.instagram.com/accounts/login/",
@@ -313,14 +315,108 @@ async function resyncMain(accountId, token) {
   emit("connected", { feedItemsStored: body.feedItemsStored ?? 0 });
 }
 
+// Performs a REAL like on the account's REAL Instagram session — this is
+// the actual product ask behind "don't fake engagement signals": clicking
+// ReelForge's Like button drives a real, authenticated browser to the real
+// reel URL and clicks Instagram's own Like control, the same way the human
+// account owner would. Success is only ever reported if the click provably
+// changed the real button's state (its aria-label flips from "Like" to
+// "Unlike") — never assumed just because a click was dispatched.
+async function likeMain(accountId, token, targetUrl) {
+  emit("opening", { platform: "instagram" });
+
+  let sessionRes;
+  try {
+    sessionRes = await fetch(FETCH_SESSION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, token }),
+    });
+  } catch {
+    emit("error", { message: "Couldn't reach ReelForge to start this action. Check your internet connection and try again." });
+    process.exit(1);
+  }
+  const sessionBody = await sessionRes.json().catch(() => ({}));
+  if (!sessionRes.ok) {
+    emit("error", { message: sessionBody.error ?? "Couldn't load this account's session." });
+    process.exit(1);
+  }
+
+  const { storageState } = sessionBody;
+  emit("liking");
+
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ storageState });
+  const page = await context.newPage();
+
+  let liked = false;
+  let failureReason = null;
+  try {
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await sleep(2500);
+
+    // Instagram's web client labels the like control's accessible name
+    // "Like" (unliked) / "Unlike" (already liked) — the one part of its
+    // otherwise-obfuscated class names that's stayed stable and is
+    // meaningful to target on purpose, since it's the same thing a screen
+    // reader user relies on. If the reel is already liked, this is already
+    // a genuine positive signal — nothing more to do.
+    const likeButton = page.getByRole("button", { name: "Like", exact: true }).first();
+    const alreadyLiked = await page.getByRole("button", { name: "Unlike", exact: true }).first().isVisible().catch(() => false);
+
+    if (alreadyLiked) {
+      liked = true;
+    } else if (await likeButton.isVisible().catch(() => false)) {
+      await likeButton.click();
+      await sleep(1500);
+      liked = await page.getByRole("button", { name: "Unlike", exact: true }).first().isVisible().catch(() => false);
+      if (!liked) failureReason = "Clicked Like, but Instagram's real button didn't confirm it.";
+    } else {
+      failureReason = "Couldn't find a real Like button on this reel's page.";
+    }
+  } catch (err) {
+    failureReason = err?.message ?? "Something went wrong while liking this reel.";
+  }
+
+  await browser.close();
+
+  emit("submitting");
+
+  let res;
+  try {
+    res = await fetch(SUBMIT_ACTION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, token, ok: liked, error: failureReason ?? undefined }),
+    });
+  } catch {
+    emit("error", { message: "The like may have gone through on Instagram, but ReelForge couldn't be notified. Check your internet connection." });
+    process.exit(1);
+  }
+  await res.json().catch(() => ({}));
+
+  if (!liked) {
+    emit("error", { message: failureReason ?? "Couldn't verify the like on Instagram." });
+    process.exit(1);
+  }
+
+  emit("connected", { liked: true });
+}
+
 async function main() {
-  const { mode, platform, account, token } = parseArgs();
+  const { mode, platform, account, token, targetUrl } = parseArgs();
   if (!account || !token) {
     emit("error", { message: "ReelForge Connector was opened with an invalid connection link." });
     process.exit(1);
   }
   if (mode === "resync") {
     await resyncMain(account, token);
+  } else if (mode === "like") {
+    if (!targetUrl) {
+      emit("error", { message: "ReelForge Connector was opened with an invalid like link." });
+      process.exit(1);
+    }
+    await likeMain(account, token, decodeURIComponent(targetUrl));
   } else {
     await connectMain(platform, account, token);
   }

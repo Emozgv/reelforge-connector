@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2 } from "lucide-react";
+import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
+export type LikeStatus = "pending" | "liked" | "failed";
+
 // One video, full-bleed within its slot, autoplaying when active and paused
 // otherwise — the same play/fallback pattern ReelDetailModal already uses,
 // just without the surrounding modal chrome.
-function SwipeSlide({ video, active, onSaveClick, onAddToCollection }: {
+function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick, likeStatus, canLike }: {
   video: ReelVideo;
   active: boolean;
   onSaveClick: () => void;
   onAddToCollection: () => void;
+  onLikeClick: () => void;
+  likeStatus?: LikeStatus;
+  canLike: boolean;
 }) {
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -89,9 +94,45 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection }: {
         </div>
       </div>
 
-      {/* right action rail — the same Save / Add-to-Collection actions the
-          rest of the app uses, just laid out TikTok-style */}
+      {/* right action rail. Like is a real action on the actual Instagram
+          account (see connect-worker.mjs's likeMain) — kept visually
+          separate, above a divider, from Save / Add-to-Collection below,
+          which are ReelForge-only actions and never touch the real account. */}
       <div className="absolute bottom-6 right-3 flex flex-col items-center gap-4">
+        {canLike && (
+          <>
+            <button
+              onClick={onLikeClick}
+              disabled={likeStatus === "pending" || likeStatus === "liked"}
+              className="flex flex-col items-center gap-1 text-white group disabled:cursor-default"
+              title={
+                likeStatus === "liked"
+                  ? "Liked on the real Instagram account"
+                  : likeStatus === "pending"
+                    ? "Liking on Instagram…"
+                    : likeStatus === "failed"
+                      ? "Couldn't confirm the like — try again"
+                      : "Like on the real Instagram account"
+              }
+            >
+              <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/65 transition-colors">
+                {likeStatus === "pending" ? (
+                  <Loader2 size={19} className="animate-spin text-white/80" />
+                ) : (
+                  <Heart
+                    size={19}
+                    fill={likeStatus === "liked" ? "currentColor" : "none"}
+                    className={likeStatus === "liked" ? "text-rose-400" : likeStatus === "failed" ? "text-rose-400/70" : ""}
+                  />
+                )}
+              </span>
+              <span className="text-[9.5px] text-white/80">
+                {likeStatus === "liked" ? "Liked" : likeStatus === "pending" ? "Liking…" : likeStatus === "failed" ? "Retry" : "Like"}
+              </span>
+            </button>
+            <span className="w-6 h-px bg-white/15" />
+          </>
+        )}
         <button
           onClick={onSaveClick}
           className="flex flex-col items-center gap-1 text-white group"
@@ -135,6 +176,8 @@ export function SwipeResearchPlayer({
   onSaveClick,
   onAddToCollection,
   onExitToArchive,
+  onLikeClick,
+  likeStatus,
 }: {
   account: ResearchAccount;
   videos: ReelVideo[];
@@ -145,6 +188,8 @@ export function SwipeResearchPlayer({
   onSaveClick: (video: ReelVideo) => void;
   onAddToCollection: (video: ReelVideo) => void;
   onExitToArchive: () => void;
+  onLikeClick: (video: ReelVideo) => void;
+  likeStatus: Record<string, LikeStatus>;
 }) {
   const connecting = account.status === "connecting";
   const wheelAccum = useRef(0);
@@ -234,6 +279,9 @@ export function SwipeResearchPlayer({
             active
             onSaveClick={() => onSaveClick(current)}
             onAddToCollection={() => onAddToCollection(current)}
+            onLikeClick={() => onLikeClick(current)}
+            likeStatus={likeStatus[current.id]}
+            canLike={current.platform === "instagram"}
           />
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center bg-[#0d0d0f] text-center px-6">

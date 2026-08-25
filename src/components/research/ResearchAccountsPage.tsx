@@ -53,6 +53,15 @@ function syncDeepLink(platform: Platform, start: ConnectStart): string {
   return `reelforge-connect://resync?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}`;
 }
 
+// A real Like: Connector reuses the account's existing session to open the
+// actual reel and click Instagram's own Like control — see likeMain in
+// connect-worker.mjs. This is a genuine action on the real account, not a
+// local UI toggle; ReelForge only ever shows it as liked once Connector
+// reports back that the real button's state actually changed.
+function likeDeepLink(platform: Platform, start: ConnectStart, targetUrl: string): string {
+  return `reelforge-connect://like?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}&targetUrl=${encodeURIComponent(targetUrl)}`;
+}
+
 // The real "Connect Research Account" flow, in two steps. Step 1 (this
 // modal's form) only asks for a label + the account's public username — no
 // password, because a stored password could never reliably get through a
@@ -263,6 +272,7 @@ export function ResearchAccountsPage({
   const [syncError, setSyncError] = useState<string | null>(null);
   const syncInFlightRef = useRef(false);
   const lastAutoSyncRef = useRef<{ accountId: string; at: number } | null>(null);
+  const [likeStatus, setLikeStatus] = useState<Record<string, "pending" | "liked" | "failed">>({});
 
   useEffect(() => {
     if (!creators.some((c) => c.id === selectedCreator?.id)) setSelectedCreator(creators[0] ?? null);
@@ -422,14 +432,18 @@ export function ResearchAccountsPage({
     await runSync(currentAccount, true);
   }
 
-  // Keeps the swipe experience feeling continuous: once the VA is within a
-  // handful of reels of the end of what's loaded, quietly start pulling in
-  // more of the account's real Reels recommendations from its existing
-  // session — well before they'd actually hit the end. The cooldown stops
-  // this from re-firing on every single swipe once it's already running or
-  // just ran.
-  const AUTO_SYNC_REMAINING_THRESHOLD = 5;
-  const AUTO_SYNC_COOLDOWN_MS = 90_000;
+  // Keeps the swipe experience feeling continuous. A real resync — a real
+  // headless browser opening Reels and capturing a batch — realistically
+  // takes tens of seconds, not milliseconds, so a small "5 remaining"
+  // buffer got outrun by normal swipe speed (confirmed: a real test still
+  // hit a hard 17/17 end). The buffer target is deliberately generous so a
+  // sync in progress has time to land before the VA actually catches up to
+  // it. The cooldown is now just a debounce against firing twice in the
+  // same tick — real pacing comes from syncInFlightRef plus the fact that a
+  // completed sync's new items change swipeQueue.length, which re-runs this
+  // effect and immediately chains another cycle if still under the target.
+  const AUTO_SYNC_REMAINING_THRESHOLD = 20;
+  const AUTO_SYNC_COOLDOWN_MS = 5_000;
   useEffect(() => {
     if (!currentAccount || currentAccount.status !== "active" || currentAccount.platform !== "instagram") return;
     if (syncInFlightRef.current) return;
@@ -441,6 +455,50 @@ export function ResearchAccountsPage({
     void runSync(currentAccount, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swipeIndex, swipeQueue.length, currentAccount?.id, currentAccount?.status, currentAccount?.platform]);
+
+  // A real Like — this is a genuine action on the real Instagram account
+  // (see likeMain in connect-worker.mjs), never a local toggle. Shares
+  // syncInFlightRef with the feed sync above so a like and a background
+  // prefetch can never collide over Connector's one operation-per-account
+  // token slot; if a prefetch happens to be running, this waits briefly for
+  // it to finish rather than racing it.
+  async function handleLikeClick(video: ReelVideo) {
+    if (!currentAccount || currentAccount.platform !== "instagram") return;
+    if (likeStatus[video.id] === "pending" || likeStatus[video.id] === "liked") return;
+
+    for (let waited = 0; syncInFlightRef.current && waited < 20_000; waited += 500) {
+      await new Promise((r) => window.setTimeout(r, 500));
+    }
+    if (syncInFlightRef.current) return;
+
+    setLikeStatus((prev) => ({ ...prev, [video.id]: "pending" }));
+    syncInFlightRef.current = true;
+
+    const { start } = await researchAccountsStore.likeReel(currentAccount.id, currentAccount.platform, video.sourceUrl);
+    if (!start) {
+      setLikeStatus((prev) => ({ ...prev, [video.id]: "failed" }));
+      syncInFlightRef.current = false;
+      return;
+    }
+
+    window.location.href = likeDeepLink(currentAccount.platform, start, video.sourceUrl);
+
+    const startedAt = Date.now();
+    const deadline = startedAt + 45_000;
+    let result: "liked" | "failed" = "failed";
+    while (Date.now() < deadline) {
+      await new Promise((r) => window.setTimeout(r, 1500));
+      const latest = await researchAccountsStore.refetch();
+      const updated = latest.find((a) => a.id === currentAccount.id);
+      if (updated?.actionCompletedAt && new Date(updated.actionCompletedAt).getTime() >= startedAt) {
+        result = updated.actionStatus === "done" ? "liked" : "failed";
+        break;
+      }
+    }
+
+    setLikeStatus((prev) => ({ ...prev, [video.id]: result }));
+    syncInFlightRef.current = false;
+  }
 
   if (!selectedCreator) {
     return (
@@ -654,6 +712,8 @@ export function ResearchAccountsPage({
                   }}
                   onAddToCollection={setSavePanelVideo}
                   onExitToArchive={() => setMode("archive")}
+                  onLikeClick={handleLikeClick}
+                  likeStatus={likeStatus}
                 />
               ) : (
                 <VideoGrid

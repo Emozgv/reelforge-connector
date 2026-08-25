@@ -33,6 +33,8 @@ function handleProgress(event) {
     case "opening":
       if (currentMode === "resync") {
         setState("spinner", "Reconnecting to its saved session…", "No login needed — reusing the account's existing session.");
+      } else if (currentMode === "like") {
+        setState("spinner", "Reconnecting to its saved session…", "No login needed — this reuses the account's existing session.");
       } else {
         setState("spinner", `Opening ${name} login…`, "A real login window is about to open. Log in as you normally would.");
       }
@@ -47,10 +49,21 @@ function handleProgress(event) {
         "Reading this account's actual feed content."
       );
       break;
+    case "liking":
+      setState("spinner", "Liking on Instagram…", "Opening the real reel in this account's real session.");
+      break;
     case "submitting":
-      setState("spinner", "Finishing up…", currentMode === "resync" ? "Saving the new reels to ReelForge." : "Sending your session back to ReelForge.");
+      setState(
+        "spinner",
+        "Finishing up…",
+        currentMode === "resync" ? "Saving the new reels to ReelForge." : currentMode === "like" ? "Confirming with ReelForge." : "Sending your session back to ReelForge."
+      );
       break;
     case "connected": {
+      if (currentMode === "like") {
+        setState("check", "Liked!", "Confirmed on the real Instagram account. You can close this.");
+        break;
+      }
       const count = event.feedItemsStored || 0;
       const feedText = count > 0
         ? `${count} real reel${count === 1 ? "" : "s"} synced in — you can close this and go back to ReelForge.`
@@ -61,27 +74,31 @@ function handleProgress(event) {
       break;
     }
     case "error":
-      setState("err", "Couldn't finish connecting", event.message || "Something went wrong. Go back to ReelForge and try again.");
+      setState(
+        "err",
+        currentMode === "like" ? "Couldn't confirm the like" : "Couldn't finish connecting",
+        event.message || "Something went wrong. Go back to ReelForge and try again."
+      );
       break;
   }
 }
 
-function startConnect(mode, platform, account, token) {
+function startConnect(mode, platform, account, token, targetUrl) {
   // Both the live event and the poll loop can observe the very same URL —
   // the poll consuming it right after a live event already handled it, or
   // vice versa — so skip only an exact repeat of the last one, never a
-  // genuinely new connect/reconnect/sync request (different account or token).
+  // genuinely new connect/reconnect/sync/like request (different account or token).
   const key = `${mode}|${platform}|${account}|${token}`;
   if (key === lastStartedKey) return;
   lastStartedKey = key;
   currentMode = mode;
   currentPlatform = platform || "instagram";
   setState("spinner", "Getting ready…", "One moment.");
-  void invoke("start_connect", { mode, platform: currentPlatform, account, token });
+  void invoke("start_connect", { mode, platform: currentPlatform, account, token, targetUrl: targetUrl || null });
 }
 
 listen("connect-progress", (e) => handleProgress(e.payload));
-listen("reelforge-connect-url", (e) => startConnect(e.payload.mode, e.payload.platform, e.payload.account, e.payload.token));
+listen("reelforge-connect-url", (e) => startConnect(e.payload.mode, e.payload.platform, e.payload.account, e.payload.token, e.payload.targetUrl));
 
 // Cold start (the app was just launched BY the deep link): the OS delivers
 // that URL asynchronously (a separate Apple Event on macOS, argv on
@@ -93,7 +110,7 @@ async function pollPendingConnectUrl() {
   for (let i = 0; i < 15; i++) {
     const pending = await invoke("take_pending_connect_url");
     if (pending) {
-      startConnect(pending.mode, pending.platform, pending.account, pending.token);
+      startConnect(pending.mode, pending.platform, pending.account, pending.token, pending.targetUrl);
       return;
     }
     await new Promise((r) => setTimeout(r, 400));

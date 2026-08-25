@@ -13,6 +13,11 @@ interface ResearchAccountRow {
   last_opened_at: string | null;
   last_shown_synced_at: string | null;
   session_verified_at: string | null;
+  action_kind: string | null;
+  action_target_url: string | null;
+  action_status: string | null;
+  action_error: string | null;
+  action_completed_at: string | null;
 }
 
 // Up to 5 per Creator per platform — same cap style as the 5-reference-photo
@@ -32,6 +37,11 @@ function fromRow(row: ResearchAccountRow): ResearchAccount {
     lastOpenedAt: row.last_opened_at ?? undefined,
     lastShownSyncedAt: row.last_shown_synced_at ?? undefined,
     sessionVerifiedAt: row.session_verified_at ?? undefined,
+    actionKind: row.action_kind === "like" ? "like" : undefined,
+    actionTargetUrl: row.action_target_url ?? undefined,
+    actionStatus: row.action_status === "done" || row.action_status === "failed" ? row.action_status : undefined,
+    actionError: row.action_error ?? undefined,
+    actionCompletedAt: row.action_completed_at ?? undefined,
   };
 }
 
@@ -233,6 +243,27 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     return { start: { id: accountId, token: data.token, platform }, error: null };
   }
 
+  // Step 1 of a real Like: issues a short-lived token scoped to this one
+  // reel URL. ReelForge Connector uses it to reuse the account's existing
+  // session and click the actual Like control on the actual Instagram page
+  // — see submit-research-reel-action for where the real, verified result
+  // (not an assumption) lands back on this account's row.
+  async function likeReel(accountId: string, platform: Platform, targetUrl: string): Promise<{ start: ConnectStart | null; error: string | null }> {
+    if (!workspaceId) return { start: null, error: "No active workspace." };
+
+    const { data, error: invokeError } = await supabase.functions.invoke<{
+      accountId?: string;
+      platform?: string;
+      token?: string;
+      error?: string;
+    }>("start-research-reel-action", { body: { workspaceId, accountId, targetUrl, kind: "like" } });
+
+    if (invokeError || !data?.token) {
+      return { start: null, error: await parseInvokeError(invokeError, data ?? null) };
+    }
+    return { start: { id: accountId, token: data.token, platform }, error: null };
+  }
+
   // Advances the swipe-mode watermark as a VA swipes past reels — workspace-
   // shared, so nobody (including a different authorized VA later) re-sees
   // the same reel. Only ever moves forward.
@@ -264,6 +295,7 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     deleteAccount,
     markOpened,
     syncAccountFeed,
+    likeReel,
   };
 }
 

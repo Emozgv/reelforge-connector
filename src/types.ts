@@ -296,6 +296,15 @@ export interface ResearchAccount {
   // Set only when submit-research-account-session verified a real
   // authenticated session — the actual "genuinely connected" proof.
   sessionVerifiedAt?: string;
+  // The most recent real action attempted on the account's actual session
+  // (currently only "like") — set when Connector reports back whether it
+  // genuinely verified the action took effect on the real platform, not
+  // when ReelForge merely dispatched a request for one.
+  actionKind?: "like";
+  actionTargetUrl?: string;
+  actionStatus?: "done" | "failed";
+  actionError?: string;
+  actionCompletedAt?: string;
 }
 
 export interface Collection {
