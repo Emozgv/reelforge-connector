@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart } from "lucide-react";
+import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
@@ -21,34 +21,48 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [captionExpanded, setCaptionExpanded] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     setVideoError(false);
     setCaptionExpanded(false);
+    setPaused(false);
   }, [video.id]);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (active) void el.play().catch(() => {});
+    if (active && !paused) void el.play().catch(() => {});
     else el.pause();
-  }, [active]);
+  }, [active, paused]);
+
+  function togglePlayback() {
+    setPaused((p) => !p);
+  }
 
   const platformLabel = video.platform === "tiktok" ? "TikTok" : "Instagram";
 
   return (
     <div className="relative h-full w-full bg-black">
       {video.videoUrl && !videoError ? (
-        <video
-          ref={videoRef}
-          src={video.videoUrl}
-          poster={video.thumbnailUrl}
-          loop
-          playsInline
-          controls
-          className="absolute inset-0 w-full h-full object-cover"
-          onError={() => setVideoError(true)}
-        />
+        <div className="absolute inset-0" onClick={togglePlayback}>
+          <video
+            ref={videoRef}
+            src={video.videoUrl}
+            poster={video.thumbnailUrl}
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setVideoError(true)}
+          />
+          {paused && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+              <span className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                <PlayIcon size={22} className="text-white/90 ml-1" fill="currentColor" />
+              </span>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           {video.thumbnailUrl ? (
@@ -248,10 +262,6 @@ export function SwipeResearchPlayer({
         <PlatformIcon platform={account.platform} size={12} />
         <span className="text-neutral-300 font-medium">{account.label}</span>
         <span>·</span>
-        <span className="tabular-nums">
-          {videos.length > 0 ? `${index + 1} of ${videos.length} loaded` : "No reels loaded"}
-        </span>
-        <span>·</span>
         <button onClick={onExitToArchive} className="text-[#D39448] hover:brightness-110 transition-[filter]">
           View archive
         </button>
@@ -297,12 +307,7 @@ export function SwipeResearchPlayer({
                 </p>
               </>
             ) : (
-              <>
-                <p className="text-[13px] text-neutral-300">Nothing new to research yet.</p>
-                <p className="mt-1.5 text-[11.5px] text-neutral-600">
-                  Press Refresh feed (in the archive view) to request a new sync for this account.
-                </p>
-              </>
+              <Loader2 size={20} className="text-[#D39448] animate-spin" />
             )}
           </div>
         )}

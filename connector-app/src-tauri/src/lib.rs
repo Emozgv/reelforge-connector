@@ -149,6 +149,18 @@ async fn start_connect(
                 );
             }
         }
+
+        // The window is only ever shown for a real login (see
+        // handle_connect_url) — once that's actually finished, there's
+        // nothing left for the VA to look at, so it shouldn't keep sitting
+        // on screen as leftover clutter during the research session that
+        // follows.
+        if mode == "connect" {
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            if let Some(window) = handle.get_webview_window("main") {
+                let _ = window.hide();
+            }
+        }
     });
 
     Ok(())
@@ -205,17 +217,26 @@ fn parse_connect_url(raw: &str) -> Option<ParsedConnectUrl> {
 // already-running-app case where the frontend is definitely already loaded
 // and listening by the time a second link arrives.
 fn handle_connect_url(app: &AppHandle, raw: &str) {
-    if let Some(parsed) = parse_connect_url(raw) {
-        if let Some(state) = app.try_state::<Mutex<Option<ParsedConnectUrl>>>() {
-            if let Ok(mut guard) = state.lock() {
-                *guard = Some(parsed.clone());
-            }
+    let Some(parsed) = parse_connect_url(raw) else { return };
+
+    if let Some(state) = app.try_state::<Mutex<Option<ParsedConnectUrl>>>() {
+        if let Ok(mut guard) = state.lock() {
+            *guard = Some(parsed.clone());
         }
-        let _ = app.emit("reelforge-connect-url", &parsed);
     }
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
+    let _ = app.emit("reelforge-connect-url", &parsed);
+
+    // A real login is the one case that genuinely needs the VA's attention
+    // (a real browser window they have to interact with) — everything else
+    // (resync, like) runs a real but headless browser and should never pull
+    // focus or even become visible. Confirmed as a real product complaint:
+    // Connector's window popping up during ordinary background prefetching
+    // interrupted research sessions that had nothing for the VA to do.
+    if parsed.mode == "connect" {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
     }
 }
 

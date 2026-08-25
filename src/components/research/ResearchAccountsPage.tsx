@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, RefreshCw, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
@@ -12,7 +12,6 @@ import { VideoGrid } from "../hub/VideoGrid";
 import { SavePanel } from "../hub/SavePanel";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
 import { SwipeResearchPlayer } from "./SwipeResearchPlayer";
-import { formatRelativeTime } from "../../lib/relativeTime";
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: "IG Research", tiktok: "TikTok Research" };
 
@@ -188,7 +187,7 @@ function ConnectAccountModal({
                 Connected — this is now a genuine, authenticated session.
               </div>
               <p className="mt-1.5 text-[11.5px] text-neutral-500 leading-relaxed">
-                Its real research feed will appear under {initialLabel ?? "this account"} as it syncs.
+                Its real feed will start appearing under {initialLabel ?? "this account"}.
               </p>
               <button
                 onClick={onClose}
@@ -262,14 +261,12 @@ export function ResearchAccountsPage({
   const [rawItems, setRawItems] = useState<ResearchFeedItemRow[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [feedError, setFeedError] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [swipeIndex, setSwipeIndex] = useState(0);
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
   const syncInFlightRef = useRef(false);
   const lastAutoSyncRef = useRef<{ accountId: string; at: number } | null>(null);
   const [likeStatus, setLikeStatus] = useState<Record<string, "pending" | "liked" | "failed">>({});
@@ -372,34 +369,26 @@ export function ResearchAccountsPage({
     return `${PLATFORM_LABEL[account.platform]} — ${account.label}`;
   }
 
-  // A real sync run — shared by the manual "Refresh feed" button and the
-  // silent auto-prefetch below. `visible` only controls whether it drives
-  // the button's spinner/error text; the actual work (issue a token, hand
-  // off to Connector, poll until a fresh batch actually lands) is identical
-  // either way, so a background prefetch is exactly as real as a manual one.
-  // syncInFlightRef prevents the two paths from ever overlapping.
-  async function runSync(account: ResearchAccount, visible: boolean) {
+  // Pulls in more of the account's real feed, entirely in the background —
+  // there's no manual "Refresh feed" affordance by design: the VA should
+  // never need to think about syncing at all. syncInFlightRef keeps this
+  // from overlapping with a Like action reusing the same Connector session.
+  async function runSync(account: ResearchAccount) {
     if (syncInFlightRef.current) return;
     syncInFlightRef.current = true;
-    if (visible) {
-      setSyncing(true);
-      setSyncError(null);
-    }
 
-    const { start, error } = await researchAccountsStore.syncAccountFeed(account.id, account.platform);
+    const { start } = await researchAccountsStore.syncAccountFeed(account.id, account.platform);
     if (!start) {
-      if (visible) {
-        setSyncError(error);
-        setSyncing(false);
-      }
       syncInFlightRef.current = false;
       return;
     }
 
-    // For a background prefetch this is invisible in practice: a custom
-    // URL scheme handoff doesn't navigate the page away, and when
+    // This is invisible in practice: a custom URL scheme handoff doesn't
+    // navigate the page away, Connector's window never shows itself for a
+    // background operation (see handle_connect_url in lib.rs), and when
     // Connector is already running (the normal case while a VA is mid-
-    // session) the OS delivers it with no relaunch or permission prompt.
+    // session) the OS delivers it with no relaunch or permission prompt —
+    // nothing for the VA to notice.
     window.location.href = syncDeepLink(account.platform, start);
 
     // Poll for the real sync to land — last_synced_at only moves once
@@ -408,28 +397,15 @@ export function ResearchAccountsPage({
     // fixed timer standing in for it.
     const before = account.lastSyncedAt;
     const deadline = Date.now() + 60_000;
-    let synced = false;
     while (Date.now() < deadline) {
       await new Promise((r) => window.setTimeout(r, 2000));
       const latest = await researchAccountsStore.refetch();
       const updated = latest.find((a) => a.id === account.id);
-      if (updated?.lastSyncedAt && updated.lastSyncedAt !== before) {
-        synced = true;
-        break;
-      }
-    }
-    if (visible && !synced) {
-      setSyncError("This is taking longer than expected — make sure ReelForge Connector opened, then try again.");
+      if (updated?.lastSyncedAt && updated.lastSyncedAt !== before) break;
     }
 
     if (accountId === account.id) await loadFeed(account.id);
-    if (visible) setSyncing(false);
     syncInFlightRef.current = false;
-  }
-
-  async function handleRefresh() {
-    if (!currentAccount) return;
-    await runSync(currentAccount, true);
   }
 
   // Keeps the swipe experience feeling continuous. A real resync — a real
@@ -452,7 +428,7 @@ export function ResearchAccountsPage({
     const last = lastAutoSyncRef.current;
     if (last && last.accountId === currentAccount.id && Date.now() - last.at < AUTO_SYNC_COOLDOWN_MS) return;
     lastAutoSyncRef.current = { accountId: currentAccount.id, at: Date.now() };
-    void runSync(currentAccount, false);
+    void runSync(currentAccount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swipeIndex, swipeQueue.length, currentAccount?.id, currentAccount?.status, currentAccount?.platform]);
 
@@ -613,7 +589,6 @@ export function ResearchAccountsPage({
           </button>
         </div>
         {reconnectError && <p className="mt-2 text-[11.5px] text-rose-300/85">{reconnectError}</p>}
-        {syncError && <p className="mt-2 text-[11.5px] text-rose-300/85">{syncError}</p>}
 
         {connectFlow && (
           <ConnectAccountModal
@@ -651,45 +626,34 @@ export function ResearchAccountsPage({
                 <PlatformIcon platform={currentAccount.platform} size={12} />
                 <span className="text-neutral-300 font-medium">{currentAccount.label}</span>
                 {currentAccount.username && <span className="text-neutral-600">@{currentAccount.username}</span>}
-                <span>·</span>
-                <span className={currentAccount.status === "connecting" ? "text-amber-400/90" : ""}>
-                  {currentAccount.status === "connecting" && "Connecting — "}
-                  {currentAccount.lastSyncedAt
-                    ? `Synced ${formatRelativeTime(currentAccount.lastSyncedAt)}`
-                    : "Not synced yet"}
-                </span>
+                {currentAccount.status === "connecting" && (
+                  <>
+                    <span>·</span>
+                    <span className="text-amber-400/90">Connecting…</span>
+                  </>
+                )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex items-center h-9 p-1 rounded-full glass-panel">
-                  <button
-                    onClick={() => setMode("swipe")}
-                    className={[
-                      "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
-                      mode === "swipe" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
-                    ].join(" ")}
-                  >
-                    <Play size={11} />
-                    Swipe
-                  </button>
-                  <button
-                    onClick={() => setMode("archive")}
-                    className={[
-                      "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
-                      mode === "archive" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
-                    ].join(" ")}
-                  >
-                    <LayoutGrid size={11} />
-                    Archive
-                  </button>
-                </div>
+              <div className="flex items-center h-9 p-1 rounded-full glass-panel">
                 <button
-                  onClick={() => void handleRefresh()}
-                  disabled={syncing}
-                  className="flex items-center gap-1.5 h-9 px-3.5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors duration-150 text-[12.5px] text-neutral-300 disabled:opacity-50"
+                  onClick={() => setMode("swipe")}
+                  className={[
+                    "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
+                    mode === "swipe" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
+                  ].join(" ")}
                 >
-                  <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
-                  {syncing ? "Syncing more content…" : "Refresh feed"}
+                  <Play size={11} />
+                  Swipe
+                </button>
+                <button
+                  onClick={() => setMode("archive")}
+                  className={[
+                    "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
+                    mode === "archive" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
+                  ].join(" ")}
+                >
+                  <LayoutGrid size={11} />
+                  Archive
                 </button>
               </div>
             </div>
@@ -725,16 +689,16 @@ export function ResearchAccountsPage({
                   onOpenDetail={(video) => setDetailVideoId(video.id)}
                   spacious
                   loading={loadingFeed}
-                  loadingLabel="Loading this account's research feed…"
+                  loadingLabel="Loading this account's feed…"
                   emptyTitle={
                     currentAccount.status === "connecting"
                       ? "This account is still connecting."
-                      : "No synced reels yet."
+                      : "Nothing here yet."
                   }
                   emptyHint={
                     currentAccount.status === "connecting"
-                      ? "Once ReelForge finishes setting up its session, its real feed will start appearing here."
-                      : "Press Refresh feed to request a sync for this account."
+                      ? "Its real feed will start appearing here once it's ready."
+                      : "Switch to Swipe — its feed loads there first."
                   }
                 />
               )}
