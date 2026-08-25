@@ -8,9 +8,12 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+/dist
 dist-ssr
 *.local
+
+# connector-app/dist is committed source (a hand-written static frontend),
+# not a build artifact — unlike the root Vite dist/ above.
 
 # Env files — none exist yet, but keep them out of git if added later
 .env

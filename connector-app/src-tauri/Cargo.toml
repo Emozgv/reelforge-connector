@@ -1,0 +1,22 @@
+[package]
+name = "reelforge-connector"
+version = "0.1.0"
+description = "ReelForge Connector — completes real Instagram/TikTok logins for Research Accounts"
+authors = ["ReelForge"]
+edition = "2021"
+
+[lib]
+name = "reelforge_connector_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.4.1", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.5", features = [] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+url = "2.5.7"
+
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = "2"

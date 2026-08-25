@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ReelForge Connector",
+  "version": "0.1.0",
+  "identifier": "net.reelforge.connector",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "ReelForge Connector",
+        "width": 420,
+        "height": 340,
+        "minWidth": 380,
+        "minHeight": 300,
+        "resizable": false,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": {
+      "../scripts/connect-worker.mjs": "connect-worker.mjs",
+      "../node_modules/playwright": "node_modules/playwright",
+      "../node_modules/playwright-core": "node_modules/playwright-core",
+      "../runtime/node": "runtime/node"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["reelforge-connect"]
+      }
+    }
+  }
+}

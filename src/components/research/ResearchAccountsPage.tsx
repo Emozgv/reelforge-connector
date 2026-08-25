@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, X, Users, LayoutGrid, Play, Copy, Check, Loader2, Terminal, RotateCw } from "lucide-react";
+import { Plus, RefreshCw, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
@@ -35,17 +35,26 @@ const STATUS_DOT: Record<ResearchAccount["status"], string> = {
   disconnected: "bg-neutral-600",
 };
 
+// reelforge-connect:// is registered by the ReelForge Connector desktop app
+// (connector-app/) — a small, self-contained helper (bundles its own Node +
+// Playwright, no install for the VA beyond the app itself) that opens a
+// real, visible Instagram/TikTok login window and waits for the VA to
+// actually finish logging in, including whatever verification the platform
+// asks for. Nothing in this web app or that link ever sees a password.
+function connectDeepLink(platform: Platform, start: ConnectStart): string {
+  return `reelforge-connect://connect?platform=${platform}&account=${encodeURIComponent(start.id)}&token=${encodeURIComponent(start.token)}`;
+}
+
 // The real "Connect Research Account" flow, in two steps. Step 1 (this
 // modal's form) only asks for a label + the account's public username — no
 // password, because a stored password could never reliably get through a
 // real Instagram/TikTok login on its own (2FA, SMS codes, checkpoints, and
 // CAPTCHAs are the norm, not the exception). Submitting the form issues a
-// one-time token; step 2 is a command the user runs locally, which opens a
-// real, visible browser to the real platform login page and waits for a
-// human to actually finish logging in — including whatever verification the
-// platform asks for. Only once that script detects a genuine session cookie
-// and hands it back does the account go "Active" here — this modal just
-// reflects that live status, it never sets it.
+// one-time token and hands off to the ReelForge Connector desktop app via a
+// reelforge-connect:// link — the actual login happens there, in a real
+// browser window, not inside ReelForge. Only once Connector detects a
+// genuine session cookie and hands it back does the account go "Active"
+// here — this modal just reflects that live status, it never sets it.
 function ConnectAccountModal({
   platform,
   mode,
@@ -68,8 +77,24 @@ function ConnectAccountModal({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [start, setStart] = useState<ConnectStart | null>(initialStart);
-  const [copied, setCopied] = useState(false);
+  const [helperNotDetected, setHelperNotDetected] = useState(false);
   const platformName = platform === "instagram" ? "Instagram" : "TikTok";
+
+  function openConnector(nextStart: ConnectStart) {
+    setHelperNotDetected(false);
+    window.location.href = connectDeepLink(platform, nextStart);
+    window.setTimeout(() => {
+      if (!document.hidden) setHelperNotDetected(true);
+    }, 1400);
+  }
+
+  // Hands off to the desktop helper the moment we have a token — for
+  // "new", that's right after the form submits; for "reconnect", start is
+  // already present when the modal opens.
+  useEffect(() => {
+    if (start) openConnector(start);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,17 +104,10 @@ function ConnectAccountModal({
     const { start: newStart, error: connectError } = await onSubmitNew(label.trim() || username.trim(), username.trim());
     setSubmitting(false);
     if (connectError) setFormError(connectError);
-    else setStart(newStart);
-  }
-
-  const command = start
-    ? `npm run connect -- --platform=${platform} --account=${start.id} --token=${start.token}`
-    : "";
-
-  function handleCopy() {
-    void navigator.clipboard.writeText(command);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    else if (newStart) {
+      setStart(newStart);
+      openConnector(newStart);
+    }
   }
 
   const status = liveAccount?.status;
@@ -165,29 +183,34 @@ function ConnectAccountModal({
           ) : (
             <div className="mt-4">
               <p className="text-[11.5px] text-neutral-500 leading-relaxed">
-                Run this in a terminal, in the <span className="text-neutral-300">ReelForge-Client-OS/connector</span> folder
-                (<span className="text-neutral-300">npm install</span> first time only). A real, visible {platformName} login
-                window will open — log in as you normally would, including any verification step {platformName} asks for.
-                It closes itself the moment you're actually logged in.
+                ReelForge Connector should be opening now. A real, visible {platformName} login window will appear there —
+                log in as you normally would, including any verification step {platformName} asks for. It closes itself
+                the moment you're actually logged in, and this page updates on its own.
               </p>
-              <div className="mt-3 flex items-center gap-2 rounded-lg surface-field px-3 py-2.5">
-                <Terminal size={13} className="text-neutral-500 shrink-0" />
-                <code className="text-[11px] text-neutral-300 break-all leading-snug">{command}</code>
-                <button
-                  onClick={handleCopy}
-                  className="shrink-0 text-neutral-500 hover:text-neutral-200 transition-colors duration-150"
-                  title="Copy command"
-                >
-                  {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                </button>
-              </div>
 
               <div className="mt-4 flex items-center gap-2 text-[12px] text-amber-300/90">
                 <Loader2 size={13} className="animate-spin" />
-                Waiting for you to finish logging in…
+                Waiting for ReelForge Connector…
               </div>
+
+              {helperNotDetected && (
+                <div className="mt-3 rounded-lg surface-field px-3 py-2.5">
+                  <p className="text-[11.5px] text-neutral-400 leading-relaxed">
+                    Nothing opened? You may not have ReelForge Connector installed yet, or your browser blocked it — ask
+                    your ReelForge admin for the installer, or retry below once it's installed.
+                  </p>
+                  <button
+                    onClick={() => start && openConnector(start)}
+                    className="mt-2 flex items-center gap-1.5 text-[12px] text-[#D39448] hover:text-[#e3a75f] transition-colors duration-150"
+                  >
+                    <RotateCw size={11} />
+                    Try opening ReelForge Connector again
+                  </button>
+                </div>
+              )}
+
               {status === "needs_attention" && (
-                <p className="mt-2 text-[11.5px] text-amber-300/80">
+                <p className="mt-3 text-[11.5px] text-amber-300/80">
                   This is taking a while, or a previous attempt didn't finish. You can close this and press Reconnect
                   to get a fresh link.
                 </p>

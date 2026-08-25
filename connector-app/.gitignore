@@ -1,0 +1,5 @@
+node_modules/
+runtime/
+src-tauri/target/
+src-tauri/gen/
+.DS_Store
