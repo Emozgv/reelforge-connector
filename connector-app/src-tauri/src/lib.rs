@@ -1,10 +1,11 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
     process::Command,
+    sync::Mutex,
 };
-use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
+use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 // Resolves the Node runtime ReelForge Connector bundles with itself — VAs
@@ -142,7 +143,7 @@ async fn start_connect(handle: AppHandle, platform: String, account: String, tok
     Ok(())
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ParsedConnectUrl {
     platform: String,
     account: String,
@@ -170,25 +171,47 @@ fn parse_connect_url(raw: &str) -> Option<ParsedConnectUrl> {
     })
 }
 
-fn emit_connect_url(handle: &AppHandle, raw: &str) {
+// On a cold start (the app launched *by* the deep link) the OS delivers the
+// URL — and this fires — before the webview has finished loading main.js,
+// so a plain fire-and-forget event gets emitted into the void with no
+// listener attached yet and is lost forever. Confirmed as the real cause of
+// a live test where Connector opened but never received the connection
+// request: the window painted its default idle state because that's
+// genuinely all it ever received. Storing the URL here and having the
+// frontend *pull* it once on load (see take_pending_connect_url) makes this
+// correct regardless of load timing. The live event stays too, for the
+// already-running-app case where the frontend is definitely already loaded
+// and listening by the time a second link arrives.
+fn handle_connect_url(app: &AppHandle, raw: &str) {
     if let Some(parsed) = parse_connect_url(raw) {
-        let _ = handle.emit(
+        if let Some(state) = app.try_state::<Mutex<Option<ParsedConnectUrl>>>() {
+            if let Ok(mut guard) = state.lock() {
+                *guard = Some(parsed.clone());
+            }
+        }
+        let _ = app.emit(
             "reelforge-connect-url",
             serde_json::json!({ "platform": parsed.platform, "account": parsed.account, "token": parsed.token }),
         );
     }
-    if let Some(window) = handle.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
     }
 }
 
+#[tauri::command]
+fn take_pending_connect_url(state: State<Mutex<Option<ParsedConnectUrl>>>) -> Option<ParsedConnectUrl> {
+    state.lock().ok().and_then(|mut guard| guard.take())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(Mutex::new(None::<ParsedConnectUrl>))
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(url) = argv.iter().find(|a| a.starts_with("reelforge-connect://")) {
-                emit_connect_url(app, url);
+                handle_connect_url(app, url);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -196,20 +219,20 @@ pub fn run() {
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 for url in event.urls() {
-                    emit_connect_url(&handle, url.as_str());
+                    handle_connect_url(&handle, url.as_str());
                 }
             });
 
             // Cold start: the app was launched *by* the deep link itself.
             if let Ok(Some(urls)) = app.deep_link().get_current() {
                 for url in urls {
-                    emit_connect_url(app.handle(), url.as_str());
+                    handle_connect_url(app.handle(), url.as_str());
                 }
             }
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![start_connect])
+        .invoke_handler(tauri::generate_handler![start_connect, take_pending_connect_url])
         .run(tauri::generate_context!())
         .expect("error while running ReelForge Connector");
 }

@@ -24,6 +24,7 @@ function setState(kind, titleText, subtitleText) {
 }
 
 let currentPlatform = null;
+let lastStartedKey = null;
 
 function handleProgress(event) {
   const name = PLATFORM_NAME[currentPlatform] || "the account";
@@ -55,6 +56,13 @@ function handleProgress(event) {
 }
 
 function startConnect(platform, account, token) {
+  // Both the live event and the poll loop can observe the very same URL —
+  // the poll consuming it right after a live event already handled it, or
+  // vice versa — so skip only an exact repeat of the last one, never a
+  // genuinely new connect/reconnect request (different account or token).
+  const key = `${platform}|${account}|${token}`;
+  if (key === lastStartedKey) return;
+  lastStartedKey = key;
   currentPlatform = platform;
   setState("spinner", "Getting ready…", "One moment.");
   void invoke("start_connect", { platform, account, token });
@@ -62,3 +70,21 @@ function startConnect(platform, account, token) {
 
 listen("connect-progress", (e) => handleProgress(e.payload));
 listen("reelforge-connect-url", (e) => startConnect(e.payload.platform, e.payload.account, e.payload.token));
+
+// Cold start (the app was just launched BY the deep link): the OS delivers
+// that URL asynchronously (a separate Apple Event on macOS, argv on
+// Windows), which can arrive either before or after this script runs —
+// there's no guaranteed ordering. Poll briefly rather than pulling once, so
+// this is correct either way instead of depending on which side happens to
+// win the race on a given machine.
+async function pollPendingConnectUrl() {
+  for (let i = 0; i < 15; i++) {
+    const pending = await invoke("take_pending_connect_url");
+    if (pending) {
+      startConnect(pending.platform, pending.account, pending.token);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
+void pollPendingConnectUrl();
