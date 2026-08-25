@@ -247,7 +247,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     async (accountId: string, platform: Platform) => {
       await endSession();
 
-      if (platform !== "instagram") {
+      if (platform !== "instagram" && platform !== "tiktok") {
         setStatus("error");
         setError("Live research sessions aren't available for this platform yet.");
         setCurrentReel(null);

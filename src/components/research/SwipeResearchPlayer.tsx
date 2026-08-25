@@ -348,7 +348,7 @@ export function SwipeResearchPlayer({
             onAddToCollection={() => onAddToCollection(currentReel)}
             onLikeClick={() => onLikeClick(currentReel)}
             likeStatus={likeStatus[currentReel.id]}
-            canLike={currentReel.platform === "instagram"}
+            canLike={currentReel.platform === "instagram" || currentReel.platform === "tiktok"}
           />
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center bg-[#0d0d0f] text-center px-6">

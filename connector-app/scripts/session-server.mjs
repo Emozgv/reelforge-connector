@@ -34,7 +34,12 @@ const FETCH_SESSION_URL = process.env.REELFORGE_FETCH_SESSION_URL
 // (tab closed, beforeunload/pagehide didn't get a chance to fire) linger
 // for what feels to a returning VA like "it's still running."
 const SESSION_TIMEOUT_MS = 45 * 1000;
-const REEL_URL = { instagram: "https://www.instagram.com/reels/" };
+// Instagram/TikTok are otherwise identical from here down — this is the one
+// map that actually varies per platform: where the live For-You/Reels
+// surface lives, and which domain its own internal JSON responses come
+// from (used below to scope response-sniffing per session).
+const REEL_URL = { instagram: "https://www.instagram.com/reels/", tiktok: "https://www.tiktok.com/foryou" };
+const PLATFORM_DOMAIN = { instagram: "instagram.com", tiktok: "tiktok.com" };
 
 // Same reasoning as connect-worker.mjs: force English so the real Like
 // button's accessible name ("Like"/"Unlike") is actually there to find,
@@ -44,7 +49,7 @@ const AUTOMATION_CONTEXT_OPTIONS = {
   extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
 };
 
-function looksLikeMedia(node) {
+function looksLikeInstagramMedia(node) {
   return (
     node &&
     typeof node === "object" &&
@@ -53,7 +58,7 @@ function looksLikeMedia(node) {
   );
 }
 
-function parseMedia(node) {
+function parseInstagramMedia(node) {
   try {
     const videoVersions = node.video_versions;
     const videoUrl = Array.isArray(videoVersions) && videoVersions.length ? videoVersions[0].url : null;
@@ -82,23 +87,161 @@ function parseMedia(node) {
   }
 }
 
-function collectMediaFrom(node, out, seenIds, depth = 0) {
+// TikTok's web client loads its own For You feed the same way Instagram
+// does — internal JSON API calls (api/recommend/item_list and friends)
+// rather than server-rendered HTML — so this uses the exact same
+// sniff-the-response-traffic approach as Instagram above, just matched
+// against TikTok's own stable item shape: an `id` alongside a `video`
+// object carrying `playAddr`, and an `author` object carrying `uniqueId`.
+// That shape has stayed the durable part of TikTok's feed item across the
+// wrapper/endpoint churn the same way Instagram's `code` + version
+// candidates has.
+function looksLikeTikTokMedia(node) {
+  return (
+    node &&
+    typeof node === "object" &&
+    typeof node.id === "string" &&
+    node.video &&
+    typeof node.video === "object" &&
+    typeof node.video.playAddr === "string" &&
+    node.author &&
+    typeof node.author === "object" &&
+    typeof node.author.uniqueId === "string"
+  );
+}
+
+function parseTikTokMedia(node) {
+  try {
+    const video = node.video ?? {};
+    const author = node.author ?? {};
+    const stats = node.stats ?? {};
+    const videoUrl = typeof video.playAddr === "string" ? video.playAddr : null;
+    const thumbnailUrl = typeof video.cover === "string" ? video.cover : (typeof video.originCover === "string" ? video.originCover : null);
+    if (!videoUrl && !thumbnailUrl) return null;
+
+    const username = typeof author.uniqueId === "string" ? author.uniqueId : null;
+    const createTime = typeof node.createTime === "number" ? node.createTime : null;
+    const postedDaysAgo = createTime ? Math.max(0, Math.floor((Date.now() / 1000 - createTime) / 86400)) : null;
+
+    return {
+      id: `tiktok:${node.id}`,
+      sourceUrl: username ? `https://www.tiktok.com/@${username}/video/${node.id}` : `https://www.tiktok.com/video/${node.id}`,
+      thumbnailUrl,
+      videoUrl,
+      caption: typeof node.desc === "string" ? node.desc : null,
+      username,
+      viewsRaw: typeof stats.playCount === "number" ? stats.playCount : 0,
+      likes: typeof stats.diggCount === "number" ? stats.diggCount : null,
+      comments: typeof stats.commentCount === "number" ? stats.commentCount : null,
+      durationSec: typeof video.duration === "number" ? Math.round(video.duration) : 0,
+      postedDaysAgo,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const MEDIA_ADAPTER = {
+  instagram: { looksLikeMedia: looksLikeInstagramMedia, parseMedia: parseInstagramMedia },
+  tiktok: { looksLikeMedia: looksLikeTikTokMedia, parseMedia: parseTikTokMedia },
+};
+
+function collectMediaFrom(node, out, seenIds, adapter, depth = 0) {
   if (depth > 24 || !node) return;
   if (Array.isArray(node)) {
-    for (const item of node) collectMediaFrom(item, out, seenIds, depth + 1);
+    for (const item of node) collectMediaFrom(item, out, seenIds, adapter, depth + 1);
     return;
   }
   if (typeof node !== "object") return;
-  if (looksLikeMedia(node)) {
-    const parsed = parseMedia(node);
+  if (adapter.looksLikeMedia(node)) {
+    const parsed = adapter.parseMedia(node);
     if (parsed && !seenIds.has(parsed.id)) out.push(parsed);
   }
-  for (const key of Object.keys(node)) collectMediaFrom(node[key], out, seenIds, depth + 1);
+  for (const key of Object.keys(node)) collectMediaFrom(node[key], out, seenIds, adapter, depth + 1);
 }
 
 async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
+
+// Instagram's web client labels the like control's accessible name "Like"
+// (unliked) / "Unlike" (already liked) — the one part of its otherwise-
+// obfuscated class names that's stayed stable and is meaningful to target on
+// purpose, since it's the same thing a screen reader user relies on.
+// AUTOMATION_CONTEXT_OPTIONS forces English so that's actually true. The
+// attribute-selector fallback covers the case where the label lives
+// directly on the svg icon rather than propagating up to something
+// Playwright's role engine recognizes as a button. Success is only ever
+// reported once the click provably flipped the real button's state — never
+// assumed just because a click was dispatched.
+async function likeInstagram(page) {
+  async function isUnlikedVisible() {
+    if (await page.getByRole("button", { name: "Like", exact: true }).first().isVisible().catch(() => false)) return true;
+    return page.locator('svg[aria-label="Like" i]').first().isVisible().catch(() => false);
+  }
+  async function isLikedVisible() {
+    if (await page.getByRole("button", { name: "Unlike", exact: true }).first().isVisible().catch(() => false)) return true;
+    return page.locator('svg[aria-label="Unlike" i]').first().isVisible().catch(() => false);
+  }
+  async function clickLike() {
+    const roleButton = page.getByRole("button", { name: "Like", exact: true }).first();
+    if (await roleButton.isVisible().catch(() => false)) {
+      await roleButton.click();
+      return true;
+    }
+    const svgIcon = page.locator('svg[aria-label="Like" i]').first();
+    if (await svgIcon.isVisible().catch(() => false)) {
+      await svgIcon.locator("xpath=ancestor::*[@role='button' or self::button][1]").first().click().catch(async () => {
+        await svgIcon.click();
+      });
+      return true;
+    }
+    return false;
+  }
+
+  if (await isLikedVisible()) return { liked: true };
+  if (!(await isUnlikedVisible())) return { liked: false, error: "Couldn't find a real Like button on this reel's page." };
+  if (!(await clickLike())) return { liked: false, error: "Couldn't find a real Like button on this reel's page." };
+  await sleep(1500);
+  const liked = await isLikedVisible();
+  return liked ? { liked: true } : { liked: false, error: "Clicked Like, but Instagram's real button didn't confirm it." };
+}
+
+// TikTok's web client doesn't swap a clean "Like"/"Unlike" accessible name
+// the way Instagram does — the like control keeps the same "Like video"
+// label either way, and its liked state shows up as a class/style change on
+// the icon plus the visible like count ticking up by one. Verifying via the
+// count (rather than trying to read a CSS class, which is far more likely
+// to silently break across a TikTok frontend deploy) is the more durable
+// signal here, mirroring the same "only report success once the real state
+// provably changed" rule Instagram's handler follows. data-e2e attributes
+// are TikTok's own QA hooks and have stayed stable far longer than their
+// obfuscated class names.
+async function likeTikTok(page) {
+  const likeButton = page.locator('[data-e2e="like-icon"], [data-e2e="browse-like-icon"]').first();
+  const countEl = page.locator('[data-e2e="like-count"], [data-e2e="browse-like-count"]').first();
+
+  if (!(await likeButton.isVisible().catch(() => false))) {
+    return { liked: false, error: "Couldn't find a real Like button on this video's page." };
+  }
+
+  const ariaPressedBefore = await likeButton.getAttribute("aria-pressed").catch(() => null);
+  if (ariaPressedBefore === "true") return { liked: true };
+  const countBefore = await countEl.textContent().catch(() => null);
+
+  await likeButton.click().catch(() => {});
+  await sleep(1500);
+
+  const ariaPressedAfter = await likeButton.getAttribute("aria-pressed").catch(() => null);
+  if (ariaPressedAfter === "true") return { liked: true };
+
+  const countAfter = await countEl.textContent().catch(() => null);
+  if (countAfter !== null && countAfter !== countBefore) return { liked: true };
+
+  return { liked: false, error: "Clicked Like, but TikTok's real button didn't confirm it." };
+}
+
+const LIKE_HANDLER = { instagram: likeInstagram, tiktok: likeTikTok };
 
 // This process must never outlive Connector itself — otherwise quitting the
 // app (by any means: normal quit, force-quit, crash) stops actually meaning
@@ -124,10 +267,11 @@ if (PARENT_PID) {
 const sessions = new Map();
 
 class Session {
-  constructor(id, secret, accountId, browser, context, page) {
+  constructor(id, secret, accountId, platform, browser, context, page) {
     this.id = id;
     this.secret = secret;
     this.accountId = accountId;
+    this.platform = platform;
     this.browser = browser;
     this.context = context;
     this.page = page;
@@ -138,14 +282,16 @@ class Session {
     this.lastHeartbeat = Date.now();
     this.closed = false;
 
+    const domain = PLATFORM_DOMAIN[platform];
+    const adapter = MEDIA_ADAPTER[platform];
     context.on("response", async (response) => {
       try {
         const url = response.url();
-        if (!url.includes("instagram.com")) return;
+        if (!url.includes(domain)) return;
         const body = await response.json().catch(() => null);
         if (!body) return;
         const found = [];
-        collectMediaFrom(body, found, this.seenIds);
+        collectMediaFrom(body, found, this.seenIds, adapter);
         for (const item of found) {
           this.seenIds.add(item.id);
           this.pending.push(item);
@@ -199,61 +345,22 @@ class Session {
     if (!reel) return { liked: false, error: "No reel is currently in view." };
 
     // A real, separate page in the SAME authenticated context — this
-    // reuses the session's real cookies without disturbing the Reels tab's
-    // own scroll position (liking a reel the VA has scrolled back to review
-    // shouldn't move the live feed out from under them).
+    // reuses the session's real cookies without disturbing the Reels/For-You
+    // tab's own scroll position (liking a reel the VA has scrolled back to
+    // review shouldn't move the live feed out from under them).
     const likePage = await this.context.newPage();
-    let liked = false;
-    let failureReason = null;
+    let result;
     try {
       await likePage.goto(reel.sourceUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
       await sleep(2000);
-
-      async function isUnlikedVisible() {
-        if (await likePage.getByRole("button", { name: "Like", exact: true }).first().isVisible().catch(() => false)) return true;
-        return likePage.locator('svg[aria-label="Like" i]').first().isVisible().catch(() => false);
-      }
-      async function isLikedVisible() {
-        if (await likePage.getByRole("button", { name: "Unlike", exact: true }).first().isVisible().catch(() => false)) return true;
-        return likePage.locator('svg[aria-label="Unlike" i]').first().isVisible().catch(() => false);
-      }
-      async function clickLike() {
-        const roleButton = likePage.getByRole("button", { name: "Like", exact: true }).first();
-        if (await roleButton.isVisible().catch(() => false)) {
-          await roleButton.click();
-          return true;
-        }
-        const svgIcon = likePage.locator('svg[aria-label="Like" i]').first();
-        if (await svgIcon.isVisible().catch(() => false)) {
-          await svgIcon.locator("xpath=ancestor::*[@role='button' or self::button][1]").first().click().catch(async () => {
-            await svgIcon.click();
-          });
-          return true;
-        }
-        return false;
-      }
-
-      if (await isLikedVisible()) {
-        liked = true;
-      } else if (await isUnlikedVisible()) {
-        const clicked = await clickLike();
-        if (!clicked) {
-          failureReason = "Couldn't find a real Like button on this reel's page.";
-        } else {
-          await sleep(1500);
-          liked = await isLikedVisible();
-          if (!liked) failureReason = "Clicked Like, but Instagram's real button didn't confirm it.";
-        }
-      } else {
-        failureReason = "Couldn't find a real Like button on this reel's page.";
-      }
+      result = await LIKE_HANDLER[this.platform](likePage);
     } catch (err) {
-      failureReason = err?.message ?? "Something went wrong while liking this reel.";
+      result = { liked: false, error: err?.message ?? "Something went wrong while liking this reel." };
     } finally {
       await likePage.close().catch(() => {});
     }
 
-    return { liked, error: liked ? undefined : failureReason };
+    return result;
   }
 
   async close() {
@@ -282,9 +389,9 @@ async function startSession(accountId, token) {
 
   const id = randomUUID();
   const secret = randomUUID();
-  const session = new Session(id, secret, accountId, browser, context, page);
+  const session = new Session(id, secret, accountId, platform, browser, context, page);
   sessions.set(id, session);
-  console.log(`[session] started ${id} for account ${accountId}`);
+  console.log(`[session] started ${id} for account ${accountId} (${platform})`);
 
   try {
     await page.goto(REEL_URL[platform], { waitUntil: "domcontentloaded", timeout: 30000 });
