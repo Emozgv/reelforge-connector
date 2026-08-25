@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw } from "lucide-react";
+import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
@@ -30,12 +30,23 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
   // left this at 0 more often than not. The real, always-correct source is
   // the actual playing <video> element itself once its metadata loads.
   const [liveDurationSec, setLiveDurationSec] = useState<number | null>(null);
+  // Drives the thin progress line at the bottom — real playback position
+  // read straight off the <video> element via its own timeupdate event,
+  // never a separate hand-rolled clock that could drift from what's
+  // actually on screen.
+  const [progress, setProgress] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setVideoError(false);
     setCaptionExpanded(false);
     setPaused(false);
     setLiveDurationSec(null);
+    setProgress(0);
+    setMenuOpen(false);
+    setLinkCopied(false);
   }, [video.id]);
 
   useEffect(() => {
@@ -45,8 +56,23 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
     else el.pause();
   }, [active, paused]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    }
+    window.addEventListener("mousedown", onClickOutside);
+    return () => window.removeEventListener("mousedown", onClickOutside);
+  }, [menuOpen]);
+
   function togglePlayback() {
     setPaused((p) => !p);
+  }
+
+  async function handleCopyLink() {
+    await navigator.clipboard.writeText(video.sourceUrl).catch(() => {});
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 1500);
   }
 
   const platformLabel = video.platform === "tiktok" ? "TikTok" : "Instagram";
@@ -66,6 +92,11 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
             onLoadedMetadata={() => {
               const d = videoRef.current?.duration;
               if (typeof d === "number" && isFinite(d) && d > 0) setLiveDurationSec(Math.round(d));
+            }}
+            onTimeUpdate={() => {
+              const el = videoRef.current;
+              if (!el || !isFinite(el.duration) || el.duration <= 0) return;
+              setProgress(el.currentTime / el.duration);
             }}
           />
           {paused && (
@@ -109,6 +140,7 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
         <p className="text-[14px] text-white font-medium">@{video.username}</p>
         {video.caption && (
           <button
+            type="button"
             onClick={() => setCaptionExpanded((v) => !v)}
             className={["mt-1 text-left text-[12.5px] text-white/85 leading-snug", captionExpanded ? "" : "line-clamp-2"].join(" ")}
           >
@@ -133,6 +165,7 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
         {canLike && (
           <>
             <button
+              type="button"
               onClick={onLikeClick}
               disabled={likeStatus === "pending" || likeStatus === "liked"}
               className="flex flex-col items-center gap-1 text-white group disabled:cursor-default"
@@ -165,6 +198,7 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
           </>
         )}
         <button
+          type="button"
           onClick={onSaveClick}
           className="flex flex-col items-center gap-1 text-white group"
           title={video.saved ? "Saved" : "Quick Save"}
@@ -174,7 +208,7 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
           </span>
           <span className="text-[9.5px] text-white/80">{video.saved ? "Saved" : "Save"}</span>
         </button>
-        <button onClick={onAddToCollection} className="flex flex-col items-center gap-1 text-white group" title="Add to collection">
+        <button type="button" onClick={onAddToCollection} className="flex flex-col items-center gap-1 text-white group" title="Add to collection">
           <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/65 transition-colors">
             <FolderPlus size={19} />
           </span>
@@ -191,6 +225,45 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
             {formatDuration(liveDurationSec)}
           </span>
         )}
+      </div>
+
+      {/* Three-dot menu — kept small on purpose. Copy link is a real, local
+          action (it just reads video.sourceUrl); a genuine "Block creator"
+          would need to actually act on the real connected account the same
+          way Like does, and that isn't built/verified yet — better to leave
+          it out entirely than ship a button that fakes a block locally. */}
+      <div ref={menuRef} className="absolute top-3 right-3">
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          title="More"
+          className="w-7 h-7 rounded-full bg-black/45 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/65 transition-colors"
+        >
+          <MoreHorizontal size={14} />
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-9 z-20 w-40 rounded-xl bg-[#141416] border border-white/[0.09] shadow-2xl p-1.5 animate-fade-in">
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="w-full flex items-center gap-2 h-8 px-2.5 rounded-lg text-[12px] text-neutral-300 hover:bg-white/[0.06] hover:text-neutral-100 transition-colors duration-150"
+            >
+              {linkCopied ? <Check size={12} className="text-[#D39448]" /> : <LinkIcon size={12} />}
+              {linkCopied ? "Copied" : "Copy link"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Thin Reels/TikTok-style progress line — visual feedback only, not
+          a scrubber: no handle, not draggable, not clickable. Starts fresh
+          from the left on every new reel (progress resets to 0 in the
+          video.id-keyed effect above). */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/15">
+        <div
+          className="h-full bg-white"
+          style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
+        />
       </div>
     </div>
   );
@@ -313,11 +386,12 @@ export function SwipeResearchPlayer({
         <PlatformIcon platform={account.platform} size={12} />
         <span className="text-neutral-300 font-medium">{account.label}</span>
         <span>·</span>
-        <button onClick={onExitToArchive} className="text-[#D39448] hover:brightness-110 transition-[filter]">
+        <button type="button" onClick={onExitToArchive} className="text-[#D39448] hover:brightness-110 transition-[filter]">
           View archive
         </button>
         <span>·</span>
         <button
+          type="button"
           onClick={onRefreshSession}
           disabled={sessionStatus === "connecting"}
           title="End this live session and start a brand-new one — a fresh FYP, not a replay of this session's history"
@@ -372,6 +446,7 @@ export function SwipeResearchPlayer({
                   It isn't running right now — press below to start it and begin researching.
                 </p>
                 <button
+                  type="button"
                   onClick={onRetryWake}
                   className="mt-4 h-9 px-4 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150"
                 >
@@ -386,6 +461,7 @@ export function SwipeResearchPlayer({
                 <p className="text-[13px] text-neutral-300">Couldn't start this research session.</p>
                 {sessionError && <p className="mt-1.5 text-[11.5px] text-neutral-600">{sessionError}</p>}
                 <button
+                  type="button"
                   onClick={onRetryWake}
                   className="mt-4 h-9 px-4 rounded-full glass-panel text-[12.5px] text-neutral-300 hover:bg-white/[0.06] transition-colors duration-150"
                 >
@@ -393,13 +469,17 @@ export function SwipeResearchPlayer({
                 </button>
               </>
             ) : (
-              <Loader2 size={20} className="text-[#D39448] animate-spin" />
+              <>
+                <Loader2 size={20} className="text-[#D39448] animate-spin" />
+                <p className="mt-3 text-[12.5px] text-neutral-400">Loading your feed…</p>
+              </>
             )}
           </div>
         )}
 
         {hasPrev && (
           <button
+            type="button"
             onClick={goPrev}
             title="Previous"
             className="absolute top-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-colors"
@@ -409,6 +489,7 @@ export function SwipeResearchPlayer({
         )}
         {currentReel && (
           <button
+            type="button"
             onClick={goNext}
             title="Next"
             className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-colors disabled:opacity-40"

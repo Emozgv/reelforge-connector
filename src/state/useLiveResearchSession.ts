@@ -85,6 +85,17 @@ async function waitForConnector(maxMs: number): Promise<boolean> {
   return false;
 }
 
+// A 403/404 from the session server means Connector itself is fine but this
+// specific session no longer exists there anymore (reaped after a
+// heartbeat gap — e.g. a backgrounded tab getting its timers throttled —
+// or Connector restarted) — distinct from a network failure, which means
+// Connector itself is unreachable. Worth telling apart: one needs a fresh
+// session (automatic, no VA action needed), the other needs Connector
+// actually started again.
+function isSessionGoneStatus(status: number) {
+  return status === 403 || status === 404;
+}
+
 export type LiveSessionStatus = "idle" | "connecting" | "active" | "error" | "needs_connector";
 
 interface ActiveSession {
@@ -219,14 +230,28 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sessionSecret: s.sessionSecret }),
-          }).catch(() => {
-            // Connector died (or became unreachable) while this tab stayed
-            // open — the old behavior silently swallowed this, leaving the
-            // UI stuck showing a session that no longer exists anywhere.
-            // Detect it here and fall back to the one recoverable state.
-            if (sessionRef.current !== s) return;
-            fallBackToNeedsConnector(accountId, platform);
-          });
+          })
+            .then((res) => {
+              // The old code only had a .catch() here, so a non-2xx
+              // response (this session doesn't exist anymore, but
+              // Connector itself answered just fine) was silently treated
+              // as a successful heartbeat — the UI kept believing a
+              // session that the server had already reaped was still
+              // alive, right up until the VA's next click failed with no
+              // explanation. A live tab, backgrounded and later resumed,
+              // is exactly when this happened: browsers throttle
+              // setInterval while hidden, heartbeats arrive late, the
+              // server reaps the session, and the tab returns none the
+              // wiser until this check catches it.
+              if (res.ok || sessionRef.current !== s) return;
+              if (isSessionGoneStatus(res.status)) void beginSession(accountId, platform);
+              else fallBackToNeedsConnector(accountId, platform);
+            })
+            .catch(() => {
+              // A real network failure — Connector itself is unreachable.
+              if (sessionRef.current !== s) return;
+              fallBackToNeedsConnector(accountId, platform);
+            });
         }, HEARTBEAT_MS);
       } catch (err) {
         if (isStale() || timedOut) return;
@@ -298,6 +323,19 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     await beginSession(pending.accountId, pending.platform);
   }, [beginSession]);
 
+  // Shared by next/prev: a dead-session response (Connector's fine, this
+  // particular session just isn't there anymore — see isSessionGoneStatus)
+  // shouldn't just surface an error and leave the VA stuck on a swipe that
+  // silently does nothing forever. Starting a fresh session recovers the
+  // feed automatically; the specific reel the VA was swiping toward is
+  // lost, but a live, working feed beats an endless dead end.
+  const recoverFromDeadSession = useCallback(
+    (accountId: string) => {
+      void beginSession(accountId, platformRef.current);
+    },
+    [beginSession]
+  );
+
   const next = useCallback(async () => {
     const session = sessionRef.current;
     if (!session || busyRef.current) return;
@@ -309,7 +347,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         body: JSON.stringify({ sessionSecret: session.sessionSecret }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Couldn't load the next reel.");
+      if (!res.ok) {
+        if (isSessionGoneStatus(res.status)) {
+          recoverFromDeadSession(session.accountId);
+          return;
+        }
+        throw new Error(body.error ?? "Couldn't load the next reel.");
+      }
       if (body.reel) setCurrentReel(liveReelToVideo(body.reel, platformRef.current));
       setHasPrev(!!body.hasPrev);
     } catch (err) {
@@ -317,7 +361,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     } finally {
       busyRef.current = false;
     }
-  }, []);
+  }, [recoverFromDeadSession]);
 
   const prev = useCallback(async () => {
     const session = sessionRef.current;
@@ -330,7 +374,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         body: JSON.stringify({ sessionSecret: session.sessionSecret }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Couldn't go back.");
+      if (!res.ok) {
+        if (isSessionGoneStatus(res.status)) {
+          recoverFromDeadSession(session.accountId);
+          return;
+        }
+        throw new Error(body.error ?? "Couldn't go back.");
+      }
       if (body.reel) setCurrentReel(liveReelToVideo(body.reel, platformRef.current));
       setHasPrev(!!body.hasPrev);
     } catch (err) {
@@ -338,7 +388,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     } finally {
       busyRef.current = false;
     }
-  }, []);
+  }, [recoverFromDeadSession]);
 
   const like = useCallback(async (): Promise<{ liked: boolean; error?: string }> => {
     const session = sessionRef.current;
@@ -375,6 +425,37 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       window.removeEventListener("pagehide", handleUnload);
     };
   }, [endSession]);
+
+  // The fast path back from a backgrounded tab — don't just wait for the
+  // next (possibly still-throttled right after becoming visible again)
+  // heartbeat tick. The moment the tab is actually visible again, check the
+  // session immediately: if it's gone, recover right away instead of
+  // leaving the VA looking at a stale reel (or a stuck loader, if a
+  // navigation was already in flight) for however long it takes the
+  // regular interval to notice.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      const s = sessionRef.current;
+      if (!s) return;
+      fetch(`${SESSION_SERVER_URL}/sessions/${s.sessionId}/heartbeat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionSecret: s.sessionSecret }),
+      })
+        .then((res) => {
+          if (res.ok || sessionRef.current !== s) return;
+          if (isSessionGoneStatus(res.status)) void beginSession(s.accountId, platformRef.current);
+          else fallBackToNeedsConnector(s.accountId, platformRef.current);
+        })
+        .catch(() => {
+          if (sessionRef.current !== s) return;
+          fallBackToNeedsConnector(s.accountId, platformRef.current);
+        });
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [beginSession, fallBackToNeedsConnector]);
 
   useEffect(() => () => void endSession(), [endSession]);
 

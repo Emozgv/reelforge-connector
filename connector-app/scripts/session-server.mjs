@@ -29,11 +29,19 @@ const PORT = Number(process.env.REELFORGE_SESSION_SERVER_PORT ?? 48211);
 const FETCH_SESSION_URL = process.env.REELFORGE_FETCH_SESSION_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/fetch-research-account-session";
 
-// The web app heartbeats every 15s; 45s tolerates a couple of missed beats
-// (a brief network hiccup) without making a genuinely abandoned session
-// (tab closed, beforeunload/pagehide didn't get a chance to fire) linger
-// for what feels to a returning VA like "it's still running."
-const SESSION_TIMEOUT_MS = 45 * 1000;
+// The web app heartbeats every 15s while the tab is active — but browsers
+// throttle setInterval in a *backgrounded* tab (Chrome can drop to roughly
+// one firing per minute after a few minutes hidden), which is the normal,
+// harmless case of a VA just switching tabs, not an abandoned session. A
+// too-tight timeout here was reaping perfectly live sessions out from under
+// a VA who'd only tabbed away — root cause of "the feed gets stuck after
+// switching tabs." 5 minutes comfortably outlasts realistic background
+// throttling while still closing a genuinely abandoned session (tab closed,
+// beforeunload/pagehide didn't get a chance to fire) in reasonable time.
+// The web app's own visibilitychange handler (see useLiveResearchSession)
+// is the fast path back for anything beyond this — it re-checks and
+// recovers the instant a tab becomes visible again, rather than waiting.
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 // Instagram/TikTok are otherwise identical from here down — this is the one
 // map that actually varies per platform: where the live For-You/Reels
 // surface lives, and which domain its own internal JSON responses come
