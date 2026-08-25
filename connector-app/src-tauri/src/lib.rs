@@ -116,7 +116,17 @@ fn spawn_session_server(handle: &AppHandle) {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    command.arg(&worker).env("PLAYWRIGHT_BROWSERS_PATH", "0");
+    // The session server must never outlive Connector — otherwise "quit
+    // Connector" stops meaning "no live feed available" the moment this
+    // child keeps running as an orphan after the parent process is gone
+    // (spawn() here doesn't tie the child's lifetime to ours in any way on
+    // its own). Passing our own pid lets the script poll for us instead:
+    // robust against a clean quit, a force-quit, and a crash alike, since
+    // it doesn't depend on us getting a chance to run any exit handler.
+    command
+        .arg(&worker)
+        .env("PLAYWRIGHT_BROWSERS_PATH", "0")
+        .env("REELFORGE_PARENT_PID", std::process::id().to_string());
 
     // Logged to a file (session start/end/timeout — see session-server.mjs)
     // rather than discarded, so a real session-lifecycle problem can

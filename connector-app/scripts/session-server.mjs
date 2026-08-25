@@ -100,6 +100,26 @@ async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
+// This process must never outlive Connector itself — otherwise quitting the
+// app (by any means: normal quit, force-quit, crash) stops actually meaning
+// "no live feed available," because a plain spawn() on the Rust side doesn't
+// tie this child's lifetime to its parent. Polling for the parent PID is
+// the robust way to enforce that regardless of *how* the parent went away:
+// `kill(pid, 0)` sends no signal, it only reports whether the process still
+// exists, and throws ESRCH the moment it doesn't.
+const PARENT_PID = process.env.REELFORGE_PARENT_PID ? Number(process.env.REELFORGE_PARENT_PID) : null;
+if (PARENT_PID) {
+  setInterval(() => {
+    try {
+      process.kill(PARENT_PID, 0);
+    } catch {
+      console.log(`[session] parent process ${PARENT_PID} is gone — shutting down`);
+      for (const session of sessions.values()) void session.close();
+      process.exit(0);
+    }
+  }, 4000).unref();
+}
+
 /** @type {Map<string, Session>} */
 const sessions = new Map();
 
