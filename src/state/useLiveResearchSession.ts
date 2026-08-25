@@ -9,15 +9,7 @@ import type { Platform, ReelVideo } from "../types";
 // next/prev/like while a research session is actually active.
 const SESSION_SERVER_URL = "http://127.0.0.1:48211";
 const HEARTBEAT_MS = 15_000;
-// A cold Connector launch (first run after install, macOS Gatekeeper
-// scanning it for the first time, or just a slower machine) can genuinely
-// take longer than a few seconds to have its session server actually
-// listening — 15s was cutting that close enough that the wake sometimes
-// gave up and reported "couldn't reach it" right as Connector was still
-// finishing starting, requiring a second click that then worked because
-// Connector had caught up by then. Purely a wider timeout — doesn't change
-// anything about the already-fast, common case.
-const WAKE_TIMEOUT_MS = 35_000;
+const WAKE_TIMEOUT_MS = 15_000;
 const BEGIN_SESSION_TIMEOUT_MS = 20_000;
 
 interface RawLiveReel {
