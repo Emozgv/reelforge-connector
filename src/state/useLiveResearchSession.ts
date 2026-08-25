@@ -8,7 +8,7 @@ import type { Platform, ReelVideo } from "../types";
 // app talks to it directly; no deep link, no relaunch, for every
 // next/prev/like while a research session is actually active.
 const SESSION_SERVER_URL = "http://127.0.0.1:48211";
-const HEARTBEAT_MS = 20_000;
+const HEARTBEAT_MS = 15_000;
 const WAKE_TIMEOUT_MS = 15_000;
 
 interface RawLiveReel {
@@ -57,18 +57,22 @@ async function checkHealth(): Promise<boolean> {
 }
 
 // A custom-scheme handoff doesn't navigate the page away, and when
-// Connector is already running (the normal case) the OS delivers it with
-// no relaunch/prompt — this is the same mechanism connecting/resyncing
-// already used, just for the sole purpose of "make sure the process (and
-// therefore its session server) is alive."
+// Connector is already running (the normal case) nothing here ever runs —
+// checkHealth() alone already succeeded. This is ONLY reached from
+// retryWithWake(), which is only ever called from a real click (see
+// SwipeResearchPlayer's "needs_connector" button) — confirmed by direct
+// testing that navigating to a custom scheme from anywhere else (a mount
+// effect, a timer) does not reliably reach Connector, either because the
+// browser suppresses it outright or shows a permission prompt the VA never
+// expected and has no reason to trust enough to approve. A real, deliberate
+// click is what makes that prompt (if the OS/browser shows one at all)
+// legible instead of a mysterious interruption.
 function wakeConnector() {
   window.location.href = "reelforge-connect://wake?account=wake&token=wake";
 }
 
-async function ensureConnectorReady(): Promise<boolean> {
-  if (await checkHealth()) return true;
-  wakeConnector();
-  const deadline = Date.now() + WAKE_TIMEOUT_MS;
+async function waitForConnector(maxMs: number): Promise<boolean> {
+  const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 800));
     if (await checkHealth()) return true;
@@ -76,7 +80,7 @@ async function ensureConnectorReady(): Promise<boolean> {
   return false;
 }
 
-export type LiveSessionStatus = "idle" | "connecting" | "active" | "error";
+export type LiveSessionStatus = "idle" | "connecting" | "active" | "error" | "needs_connector";
 
 interface ActiveSession {
   accountId: string;
@@ -101,6 +105,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   const platformRef = useRef<Platform>("instagram");
   const heartbeatRef = useRef<number | null>(null);
   const busyRef = useRef(false);
+  const pendingRef = useRef<{ accountId: string; platform: Platform } | null>(null);
 
   const stopHeartbeat = useCallback(() => {
     if (heartbeatRef.current) {
@@ -126,35 +131,12 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, [stopHeartbeat]);
 
-  const startSession = useCallback(
+  // Does the actual work of talking to Connector once it's confirmed
+  // reachable — shared by the silent automatic path (Connector already
+  // running) and the explicit, click-triggered retry path (Connector needed
+  // waking up first).
+  const beginSession = useCallback(
     async (accountId: string, platform: Platform) => {
-      await endSession();
-
-      if (platform !== "instagram") {
-        setStatus("error");
-        setError("Live research sessions aren't available for this platform yet.");
-        setCurrentReel(null);
-        return;
-      }
-      if (!workspaceId) {
-        setStatus("error");
-        setError("No active workspace.");
-        return;
-      }
-
-      platformRef.current = platform;
-      setStatus("connecting");
-      setError(null);
-      setCurrentReel(null);
-      setHasPrev(false);
-
-      const ready = await ensureConnectorReady();
-      if (!ready) {
-        setStatus("error");
-        setError("Couldn't reach ReelForge Connector. Make sure it's installed, then try again.");
-        return;
-      }
-
       const { data, error: invokeError } = await supabase.functions.invoke<{
         token?: string;
         error?: string;
@@ -179,6 +161,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         setCurrentReel(body.reel ? liveReelToVideo(body.reel, platform) : null);
         setHasPrev(false);
         setStatus("active");
+        pendingRef.current = null;
 
         heartbeatRef.current = window.setInterval(() => {
           const s = sessionRef.current;
@@ -194,8 +177,67 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         setError(err instanceof Error ? err.message : "Couldn't start a research session.");
       }
     },
-    [workspaceId, endSession]
+    [workspaceId]
   );
+
+  // Opening a Research Account calls this automatically — it never attempts
+  // to launch/wake Connector itself. If Connector is already running (the
+  // normal case, e.g. it never fully quit, or the VA is on their second
+  // account of the day), checkHealth() succeeds immediately and this is
+  // completely silent and automatic. Only when it genuinely isn't running
+  // does this stop and wait for a real click (see retryWithWake) — direct
+  // testing confirmed that trying to launch Connector from here instead
+  // (no user gesture behind it) does not reliably work.
+  const startSession = useCallback(
+    async (accountId: string, platform: Platform) => {
+      await endSession();
+
+      if (platform !== "instagram") {
+        setStatus("error");
+        setError("Live research sessions aren't available for this platform yet.");
+        setCurrentReel(null);
+        return;
+      }
+      if (!workspaceId) {
+        setStatus("error");
+        setError("No active workspace.");
+        return;
+      }
+
+      platformRef.current = platform;
+      setError(null);
+      setCurrentReel(null);
+      setHasPrev(false);
+
+      if (await checkHealth()) {
+        setStatus("connecting");
+        await beginSession(accountId, platform);
+        return;
+      }
+
+      pendingRef.current = { accountId, platform };
+      setStatus("needs_connector");
+    },
+    [workspaceId, endSession, beginSession]
+  );
+
+  // The ONLY place that ever navigates to reelforge-connect:// to wake
+  // Connector — must only ever be called directly from a real click (see
+  // SwipeResearchPlayer), not from an effect or a timer.
+  const retryWithWake = useCallback(async () => {
+    const pending = pendingRef.current;
+    if (!pending) return;
+    setStatus("connecting");
+    setError(null);
+    wakeConnector();
+    const ready = await waitForConnector(WAKE_TIMEOUT_MS);
+    if (!ready) {
+      setStatus("error");
+      setError("Couldn't reach ReelForge Connector. Make sure it's installed, then try again.");
+      return;
+    }
+    await beginSession(pending.accountId, pending.platform);
+  }, [beginSession]);
 
   const next = useCallback(async () => {
     const session = sessionRef.current;
@@ -256,17 +298,26 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   }, []);
 
   // A VA closing the tab (not just navigating within ReelForge) should end
-  // the session too — best-effort, since Connector's own heartbeat timeout
-  // is the real safety net if this doesn't get a chance to fire.
+  // the session too. Neither event is guaranteed to fire or to finish its
+  // fetch before the page is actually torn down (pagehide fires more
+  // reliably than beforeunload in some browsers, so both are wired), which
+  // is exactly why Connector's own heartbeat timeout — now 15s between
+  // beats, ~45s to close an unresponsive session — is the real backstop,
+  // not a nice-to-have: it's what actually guarantees "closing the tab ends
+  // the session soon" regardless of whether either of these fires.
   useEffect(() => {
     function handleUnload() {
       void endSession();
     }
     window.addEventListener("beforeunload", handleUnload);
-    return () => window.removeEventListener("beforeunload", handleUnload);
+    window.addEventListener("pagehide", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("pagehide", handleUnload);
+    };
   }, [endSession]);
 
   useEffect(() => () => void endSession(), [endSession]);
 
-  return { currentReel, hasPrev, status, error, startSession, endSession, next, prev, like };
+  return { currentReel, hasPrev, status, error, startSession, endSession, next, prev, like, retryWithWake };
 }

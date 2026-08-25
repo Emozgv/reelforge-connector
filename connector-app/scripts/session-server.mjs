@@ -29,7 +29,11 @@ const PORT = Number(process.env.REELFORGE_SESSION_SERVER_PORT ?? 48211);
 const FETCH_SESSION_URL = process.env.REELFORGE_FETCH_SESSION_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/fetch-research-account-session";
 
-const SESSION_TIMEOUT_MS = 90 * 1000;
+// The web app heartbeats every 15s; 45s tolerates a couple of missed beats
+// (a brief network hiccup) without making a genuinely abandoned session
+// (tab closed, beforeunload/pagehide didn't get a chance to fire) linger
+// for what feels to a returning VA like "it's still running."
+const SESSION_TIMEOUT_MS = 45 * 1000;
 const REEL_URL = { instagram: "https://www.instagram.com/reels/" };
 
 // Same reasoning as connect-worker.mjs: force English so the real Like
@@ -260,6 +264,7 @@ async function startSession(accountId, token) {
   const secret = randomUUID();
   const session = new Session(id, secret, accountId, browser, context, page);
   sessions.set(id, session);
+  console.log(`[session] started ${id} for account ${accountId}`);
 
   try {
     await page.goto(REEL_URL[platform], { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -280,6 +285,7 @@ setInterval(() => {
   const now = Date.now();
   for (const session of sessions.values()) {
     if (!session.closed && now - session.lastHeartbeat > SESSION_TIMEOUT_MS) {
+      console.log(`[session] ${session.id} timed out (no heartbeat for ${SESSION_TIMEOUT_MS}ms) — closing`);
       void session.close();
       sessions.delete(session.id);
     }
@@ -368,6 +374,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true });
       }
       if (action === "end") {
+        console.log(`[session] ${id} ended explicitly`);
         await session.close();
         sessions.delete(id);
         return json(res, 200, { ok: true });

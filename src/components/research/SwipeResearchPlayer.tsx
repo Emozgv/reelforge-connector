@@ -201,6 +201,7 @@ export function SwipeResearchPlayer({
   onExitToArchive,
   onLikeClick,
   likeStatus,
+  onRetryWake,
 }: {
   account: ResearchAccount;
   currentReel: ReelVideo | null;
@@ -215,6 +216,7 @@ export function SwipeResearchPlayer({
   onExitToArchive: () => void;
   onLikeClick: (video: ReelVideo) => void;
   likeStatus: Record<string, LikeStatus>;
+  onRetryWake: () => void;
 }) {
   const connecting = account.status === "connecting";
   const wheelAccum = useRef(0);
@@ -334,10 +336,29 @@ export function SwipeResearchPlayer({
                   automatically.
                 </p>
               </>
+            ) : sessionStatus === "needs_connector" ? (
+              <>
+                <p className="text-[13px] text-neutral-300">ReelForge Connector needs to start.</p>
+                <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">
+                  It isn't running right now — press below to start it and begin researching.
+                </p>
+                <button
+                  onClick={onRetryWake}
+                  className="mt-4 h-9 px-4 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150"
+                >
+                  Start ReelForge Connector
+                </button>
+              </>
             ) : sessionStatus === "error" ? (
               <>
                 <p className="text-[13px] text-neutral-300">Couldn't start this research session.</p>
                 {sessionError && <p className="mt-1.5 text-[11.5px] text-neutral-600">{sessionError}</p>}
+                <button
+                  onClick={onRetryWake}
+                  className="mt-4 h-9 px-4 rounded-full glass-panel text-[12.5px] text-neutral-300 hover:bg-white/[0.06] transition-colors duration-150"
+                >
+                  Try again
+                </button>
               </>
             ) : (
               <Loader2 size={20} className="text-[#D39448] animate-spin" />

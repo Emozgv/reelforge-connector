@@ -571,6 +571,12 @@ export function ResearchAccountsPage({
                   onExitToArchive={() => setMode("archive")}
                   onLikeClick={handleLikeClick}
                   likeStatus={likeStatus}
+                  onRetryWake={() => {
+                    // needs_connector -> the wake path (must run from this
+                    // real click); a plain error -> just start over.
+                    if (liveSession.status === "needs_connector") void liveSession.retryWithWake();
+                    else void liveSession.startSession(currentAccount.id, currentAccount.platform);
+                  }}
                 />
               ) : feedError ? (
                 <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">

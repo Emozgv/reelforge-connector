@@ -116,11 +116,24 @@ fn spawn_session_server(handle: &AppHandle) {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    command
-        .arg(&worker)
-        .env("PLAYWRIGHT_BROWSERS_PATH", "0")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+    command.arg(&worker).env("PLAYWRIGHT_BROWSERS_PATH", "0");
+
+    // Logged to a file (session start/end/timeout — see session-server.mjs)
+    // rather than discarded, so a real session-lifecycle problem can
+    // actually be diagnosed instead of guessed at.
+    if let Ok(log_dir) = handle.path().app_log_dir() {
+        let _ = std::fs::create_dir_all(&log_dir);
+        let log_path = log_dir.join("session-server.log");
+        if let Ok(log_file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+            if let Ok(log_file_err) = log_file.try_clone() {
+                command.stdout(log_file).stderr(log_file_err);
+            }
+        } else {
+            command.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        }
+    } else {
+        command.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    }
 
     if let Err(e) = command.spawn() {
         eprintln!("Could not start ReelForge Connector's session server: {e}");
