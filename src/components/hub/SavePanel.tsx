@@ -14,6 +14,7 @@ export function SavePanel({
   onQuickSave,
   onSaveToCollection,
   onCreateCollection,
+  mode = "full",
 }: {
   open: boolean;
   video: ReelVideo | null;
@@ -24,6 +25,13 @@ export function SavePanel({
   onQuickSave: (note: string, creatorOverrideId: string | undefined) => void;
   onSaveToCollection: (collectionId: string, note: string, creatorOverrideId: string | undefined) => void;
   onCreateCollection: (name: string, note: string, creatorOverrideId: string | undefined) => void;
+  // "full" (default) is the familiar Save entry point — Quick Save front
+  // and center, collection list underneath. "collectionOnly" is what
+  // pressing a dedicated Collection button means: skip Quick Save
+  // entirely and go straight to "pick one of your existing collections" —
+  // same component, same data, deliberately different first thing you see
+  // so the two actions don't feel identical.
+  mode?: "full" | "collectionOnly";
 }) {
   const [note, setNote] = useState("");
   const [creating, setCreating] = useState(false);
@@ -91,12 +99,14 @@ export function SavePanel({
                       onClick={() => setAssigneeMenuOpen((v) => !v)}
                       className="flex items-center gap-1.5 text-[15px] font-serif font-medium text-neutral-50 hover:text-neutral-200 transition-colors"
                     >
-                      Save for <span className="text-[#D39448]">{creatorName}</span>
+                      {mode === "collectionOnly" ? "Add to a collection for" : "Save for"}{" "}
+                      <span className="text-[#D39448]">{creatorName}</span>
                       <ChevronDown size={13} className="text-neutral-500" />
                     </button>
                   ) : (
                     <h2 className="text-[15px] font-serif font-medium text-neutral-50">
-                      Save for <span className="text-[#D39448]">{creatorName}</span>
+                      {mode === "collectionOnly" ? "Add to a collection for" : "Save for"}{" "}
+                      <span className="text-[#D39448]">{creatorName}</span>
                     </h2>
                   )}
 
@@ -154,25 +164,27 @@ export function SavePanel({
                 </div>
               </div>
 
-              <div className="px-5 pt-4">
-                <button
-                  onClick={() => {
-                    onQuickSave(note, overrideId);
-                    finish("Saved to Quick Saves");
-                  }}
-                  className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
-                >
-                  <Zap size={14} fill="currentColor" />
-                  Quick Save
-                </button>
-                <p className="mt-1.5 text-[10.5px] text-neutral-600 text-center">
-                  Saves into {creatorName}'s "Quick Saves" collection
-                </p>
-              </div>
+              {mode === "full" && (
+                <div className="px-5 pt-4">
+                  <button
+                    onClick={() => {
+                      onQuickSave(note, overrideId);
+                      finish("Saved to Quick Saves");
+                    }}
+                    className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium hover:bg-[#e2b57c] transition-colors press-feedback"
+                  >
+                    <Zap size={14} fill="currentColor" />
+                    Quick Save
+                  </button>
+                  <p className="mt-1.5 text-[10.5px] text-neutral-600 text-center">
+                    Saves into {creatorName}'s "Quick Saves" collection
+                  </p>
+                </div>
+              )}
 
-              <div className="px-5 pt-2 pb-1 flex items-center gap-2 text-[10.5px] tracking-wide uppercase text-neutral-500">
+              <div className={["px-5 pb-1 flex items-center gap-2 text-[10.5px] tracking-wide uppercase text-neutral-500", mode === "full" ? "pt-2" : "pt-4"].join(" ")}>
                 <FolderHeart size={11} />
-                Or choose a collection
+                {mode === "full" ? "Or choose a collection" : "Choose a collection"}
               </div>
 
               <div className="px-3 max-h-[168px] overflow-y-auto">

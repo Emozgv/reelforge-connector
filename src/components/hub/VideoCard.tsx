@@ -58,11 +58,13 @@ export function VideoCard({
               <Bookmark size={11} fill="currentColor" className="text-[#020508]" strokeWidth={2} />
             </div>
           )}
-          <span className="shrink-0 flex items-center gap-1 text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
-            {video.aiReady && <span className="text-[#D39448]">AI {video.aiScore}</span>}
-            {video.aiReady && <span className="text-white/30">·</span>}
-            {video.duration}
-          </span>
+          {(video.aiReady || video.duration) && (
+            <span className="shrink-0 flex items-center gap-1 text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
+              {video.aiReady && <span className="text-[#D39448]">AI {video.aiScore}</span>}
+              {video.aiReady && video.duration && <span className="text-white/30">·</span>}
+              {video.duration}
+            </span>
+          )}
         </div>
       </div>
 
@@ -123,10 +125,12 @@ export function VideoCard({
       <div className="absolute bottom-0 left-0 right-0 p-3">
         <div className="flex items-center justify-between gap-1.5">
           <span className="text-[12.5px] text-white font-medium truncate">@{video.username}</span>
-          <span className="flex items-center gap-1 text-[11.5px] text-white/85 font-medium shrink-0 tabular-nums">
-            <Eye size={11} className="text-white/50" />
-            {video.views}
-          </span>
+          {video.views && (
+            <span className="flex items-center gap-1 text-[11.5px] text-white/85 font-medium shrink-0 tabular-nums">
+              <Eye size={11} className="text-white/50" />
+              {video.views}
+            </span>
+          )}
         </div>
 
         {video.used && (

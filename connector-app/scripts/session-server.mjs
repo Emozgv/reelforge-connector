@@ -28,6 +28,8 @@ import { chromium } from "playwright";
 const PORT = Number(process.env.REELFORGE_SESSION_SERVER_PORT ?? 48211);
 const FETCH_SESSION_URL = process.env.REELFORGE_FETCH_SESSION_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/fetch-research-account-session";
+const SUBMIT_LIVE_REEL_URL = process.env.REELFORGE_SUBMIT_LIVE_REEL_URL
+  ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/submit-research-live-reel";
 
 // The web app heartbeats every 15s while the tab is active — but browsers
 // throttle setInterval in a *backgrounded* tab (Chrome can drop to roughly
@@ -258,6 +260,123 @@ async function likeTikTok(page) {
 
 const LIKE_HANDLER = { instagram: likeInstagram, tiktok: likeTikTok };
 
+// A genuine platform block — not a ReelForge-only blacklist. Runs on the
+// creator's real profile page (not the reel), because that's where
+// Instagram's/TikTok's own Block control actually lives. Same rule as
+// Like: only ever report success once the platform's own UI provably
+// confirms the block took effect, never just because a click was
+// dispatched — a block silently not landing would be worse than an honest
+// failure, since the VA would believe this creator's content is gone from
+// recommendations when it isn't.
+async function blockInstagram(page) {
+  // Verified live against a real account: the block itself takes effect
+  // immediately, but the confirm dialog's own state update lags slightly
+  // behind — an exact-match check right after clicking confirm can miss a
+  // genuinely-succeeded block. A case-insensitive fallback plus a longer
+  // settle window (see the sleep before the final check below) is what
+  // actually catches it reliably instead of reporting a false failure.
+  async function isBlockedVisible() {
+    if (await page.getByRole("button", { name: "Unblock", exact: true }).first().isVisible().catch(() => false)) return true;
+    if (await page.getByText("Unblock", { exact: true }).first().isVisible().catch(() => false)) return true;
+    return page.getByText(/unblock/i).first().isVisible().catch(() => false);
+  }
+  async function openOptionsMenu() {
+    const optionsButton = page.getByRole("button", { name: "Options", exact: true }).first();
+    if (await optionsButton.isVisible().catch(() => false)) {
+      await optionsButton.click();
+      return true;
+    }
+    const svgIcon = page.locator('svg[aria-label="Options" i]').first();
+    if (await svgIcon.isVisible().catch(() => false)) {
+      await svgIcon.locator("xpath=ancestor::*[@role='button' or self::button][1]").first().click().catch(async () => {
+        await svgIcon.click();
+      });
+      return true;
+    }
+    return false;
+  }
+
+  if (await isBlockedVisible()) return { blocked: true };
+  if (!(await openOptionsMenu())) return { blocked: false, error: "Couldn't find this profile's Options menu." };
+  await sleep(1000);
+
+  // The menu's own "Block" item opens a confirmation dialog whose own
+  // confirm button is also labeled "Block" — scoping to [role="dialog"]
+  // for the second click is what tells them apart.
+  const menuBlockItem = page.getByRole("button", { name: "Block", exact: true }).first();
+  if (!(await menuBlockItem.isVisible().catch(() => false))) {
+    return { blocked: false, error: "Couldn't find Block in this profile's Options menu." };
+  }
+  await menuBlockItem.click();
+  await sleep(1000);
+
+  const dialog = page.getByRole("dialog").first();
+  const confirmButton = dialog.getByRole("button", { name: "Block", exact: true }).first();
+  if (await confirmButton.isVisible().catch(() => false)) {
+    await confirmButton.click();
+  } else {
+    // Some variants ask for a second confirmation step ("Yes, I'm sure").
+    const secondConfirm = dialog.getByRole("button", { name: /yes|confirm/i }).first();
+    if (await secondConfirm.isVisible().catch(() => false)) await secondConfirm.click();
+    else return { blocked: false, error: "Couldn't find the Block confirmation button." };
+  }
+
+  await sleep(2500);
+  let blocked = await isBlockedVisible();
+  if (!blocked) {
+    // Belt-and-suspenders: a full reload reflects the real server-side
+    // state directly rather than waiting on the SPA's own re-render, which
+    // is what live testing showed lagging behind the block actually having
+    // already taken effect.
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
+    await sleep(1500);
+    blocked = await isBlockedVisible();
+  }
+  return blocked ? { blocked: true } : { blocked: false, error: "Clicked Block, but Instagram's real profile didn't confirm it." };
+}
+
+// Not yet verified against a real, connected TikTok account (see the
+// TikTok live-session work — no TikTok Research Account has actually been
+// connected and tested end-to-end yet). Written to the same real-action,
+// verify-before-reporting-success shape as Instagram's handler, using
+// TikTok's own stable data-e2e QA hooks where they're documented to exist,
+// but this needs a real account to confirm the selectors still match
+// TikTok's current profile page before it can be trusted.
+async function blockTikTok(page) {
+  async function isBlockedVisible() {
+    return page.getByText(/^unblock$/i).first().isVisible().catch(() => false);
+  }
+  async function openMoreMenu() {
+    const moreButton = page.locator('[data-e2e="user-more-menu"], [data-e2e="user-more"]').first();
+    if (await moreButton.isVisible().catch(() => false)) {
+      await moreButton.click();
+      return true;
+    }
+    return false;
+  }
+
+  if (await isBlockedVisible()) return { blocked: true };
+  if (!(await openMoreMenu())) return { blocked: false, error: "Couldn't find this profile's more-options menu." };
+  await sleep(1000);
+
+  const blockItem = page.locator('[data-e2e="block-icon"]').first().or(page.getByText(/^block$/i).first());
+  if (!(await blockItem.isVisible().catch(() => false))) {
+    return { blocked: false, error: "Couldn't find Block in this profile's menu." };
+  }
+  await blockItem.click();
+  await sleep(1000);
+
+  const confirmButton = page.getByRole("button", { name: /^block$/i }).first();
+  if (await confirmButton.isVisible().catch(() => false)) await confirmButton.click();
+  else return { blocked: false, error: "Couldn't find the Block confirmation button." };
+
+  await sleep(1500);
+  const blocked = await isBlockedVisible();
+  return blocked ? { blocked: true } : { blocked: false, error: "Clicked Block, but TikTok's real profile didn't confirm it." };
+}
+
+const BLOCK_HANDLER = { instagram: blockInstagram, tiktok: blockTikTok };
+
 // This process must never outlive Connector itself — otherwise quitting the
 // app (by any means: normal quit, force-quit, crash) stops actually meaning
 // "no live feed available," because a plain spawn() on the Rust side doesn't
@@ -281,12 +400,33 @@ if (PARENT_PID) {
 /** @type {Map<string, Session>} */
 const sessions = new Map();
 
+// Best-effort — archiving a reel the VA actually saw is a nice-to-have
+// history/cache write, never something that should be able to block or
+// slow down the live feed itself. A failure here is silently swallowed;
+// the reel was already shown either way.
+async function archiveLiveReel(accountId, token, reel) {
+  try {
+    await fetch(SUBMIT_LIVE_REEL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, token, reel }),
+    });
+  } catch {
+    // Archive is cache/history only — never load-bearing for the live feed.
+  }
+}
+
 class Session {
-  constructor(id, secret, accountId, platform, browser, context, page) {
+  constructor(id, secret, accountId, platform, token, browser, context, page) {
     this.id = id;
     this.secret = secret;
     this.accountId = accountId;
     this.platform = platform;
+    // Kept only to authenticate this session's own best-effort archive
+    // writes for its whole lifetime (see archiveLiveReel) — the live feed
+    // itself never depends on it again after the initial storageState
+    // fetch in startSession().
+    this.token = token;
     this.browser = browser;
     this.context = context;
     this.page = page;
@@ -347,6 +487,11 @@ class Session {
     const reel = this.pending.shift();
     this.history.push(reel);
     this.cursor = this.history.length - 1;
+    // The VA is now genuinely seeing this reel for the first time this
+    // session — exactly the moment Archive is supposed to pick it up.
+    // Fire-and-forget: never lets a slow/failed archive write hold up the
+    // live feed the VA is actually looking at.
+    void archiveLiveReel(this.accountId, this.token, reel);
     return { reel, fresh: true };
   }
 
@@ -378,6 +523,29 @@ class Session {
     return result;
   }
 
+  async block() {
+    const reel = this.current();
+    if (!reel || !reel.username) return { blocked: false, error: "No reel is currently in view." };
+
+    const profileUrl = this.platform === "instagram"
+      ? `https://www.instagram.com/${reel.username}/`
+      : `https://www.tiktok.com/@${reel.username}`;
+
+    const blockPage = await this.context.newPage();
+    let result;
+    try {
+      await blockPage.goto(profileUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await sleep(2000);
+      result = await BLOCK_HANDLER[this.platform](blockPage);
+    } catch (err) {
+      result = { blocked: false, error: err?.message ?? "Something went wrong while blocking this creator." };
+    } finally {
+      await blockPage.close().catch(() => {});
+    }
+
+    return result;
+  }
+
   async close() {
     if (this.closed) return;
     this.closed = true;
@@ -404,7 +572,7 @@ async function startSession(accountId, token) {
 
   const id = randomUUID();
   const secret = randomUUID();
-  const session = new Session(id, secret, accountId, platform, browser, context, page);
+  const session = new Session(id, secret, accountId, platform, token, browser, context, page);
   sessions.set(id, session);
   console.log(`[session] started ${id} for account ${accountId} (${platform})`);
 
@@ -498,7 +666,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|heartbeat|end)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|block|heartbeat|end)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
       const { sessionSecret } = await readBody(req);
@@ -515,6 +683,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (action === "like") {
         const result = await session.like();
+        return json(res, 200, result);
+      }
+      if (action === "block") {
+        const result = await session.block();
         return json(res, 200, result);
       }
       if (action === "heartbeat") {

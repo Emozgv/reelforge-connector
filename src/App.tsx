@@ -133,7 +133,29 @@ function App() {
           />
         </div>
 
-        {page !== "hub" && (
+        {/* Same reasoning as the Hub above: Research Accounts drives a real,
+            persistent live Instagram/TikTok session (see
+            useLiveResearchSession) that has nothing to do with which Client
+            OS section is on screen. Unmounting this on every navigation was
+            tearing that live session down and rebuilding a brand-new one on
+            return — the actual cause of "returns to reel #1" and the
+            occasional stale "Connector needs to start" right after a tab
+            switch (Connector was fine; the whole session had just been
+            thrown away and recreated). Kept mounted so stepping away to
+            Collections and back resumes exactly where the VA left off. */}
+        <div className={page === "research" ? "h-full animate-fade-in" : "hidden"}>
+          <ResearchAccountsPage
+            creators={creatorsStore.creators}
+            creatorsError={creatorsStore.error}
+            collectionsStore={collectionsStore}
+            researchAccountsStore={researchAccountsStore}
+            userId={user.id}
+            workspaceId={workspace?.id}
+            active={page === "research"}
+          />
+        </div>
+
+        {page !== "hub" && page !== "research" && (
           <div key={page} className="h-full animate-fade-in">
             {page === "dashboard" && (
               <DashboardPage
@@ -148,16 +170,6 @@ function App() {
                 onOpenCollections={() => setPage("collections")}
                 onOpenCreators={() => setPage("creators")}
                 onOpenBilling={() => setPage("billing")}
-              />
-            )}
-            {page === "research" && (
-              <ResearchAccountsPage
-                creators={creatorsStore.creators}
-                creatorsError={creatorsStore.error}
-                collectionsStore={collectionsStore}
-                researchAccountsStore={researchAccountsStore}
-                userId={user.id}
-                workspaceId={workspace?.id}
               />
             )}
             {page === "collections" && (

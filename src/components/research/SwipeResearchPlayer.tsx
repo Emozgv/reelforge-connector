@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check } from "lucide-react";
+import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
@@ -8,17 +8,28 @@ import { formatDuration } from "../../lib/researchFeedMapping";
 import { DownloadConnectorLink } from "./DownloadConnectorButton";
 
 export type LikeStatus = "pending" | "liked" | "failed";
+export type BlockStatus = "pending" | "done" | "failed";
 
-// One video, full-bleed within its slot, autoplaying when active and paused
-// otherwise — the same play/fallback pattern ReelDetailModal already uses,
-// just without the surrounding modal chrome.
-function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick, likeStatus, canLike }: {
+// One video, full-bleed within its slot, autoplaying when both this slide
+// and the whole page are active, paused otherwise — the same play/fallback
+// pattern ReelDetailModal already uses, just without the surrounding modal
+// chrome. `pageActive` (distinct from `active`, which today is always true
+// since only the current reel is ever rendered) is what keeps this from
+// still playing/decoding video and listening for keystrokes while the VA
+// has navigated to a different Client OS section — Research Accounts stays
+// mounted so its live session survives that navigation (see App.tsx), so
+// this has to police its own "is anyone actually looking at this" state
+// instead of relying on being unmounted.
+function SwipeSlide({ video, active, pageActive, onSaveClick, onAddToCollection, onLikeClick, likeStatus, onBlockCreator, blockStatus, canLike }: {
   video: ReelVideo;
   active: boolean;
+  pageActive: boolean;
   onSaveClick: () => void;
   onAddToCollection: () => void;
   onLikeClick: () => void;
   likeStatus?: LikeStatus;
+  onBlockCreator: () => void;
+  blockStatus?: BlockStatus;
   canLike: boolean;
 }) {
   const [videoError, setVideoError] = useState(false);
@@ -37,6 +48,7 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
   const [progress, setProgress] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [blockConfirming, setBlockConfirming] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,14 +59,15 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
     setProgress(0);
     setMenuOpen(false);
     setLinkCopied(false);
+    setBlockConfirming(false);
   }, [video.id]);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (active && !paused) void el.play().catch(() => {});
+    if (active && pageActive && !paused) void el.play().catch(() => {});
     else el.pause();
-  }, [active, paused]);
+  }, [active, pageActive, paused]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -228,10 +241,11 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
       </div>
 
       {/* Three-dot menu — kept small on purpose. Copy link is a real, local
-          action (it just reads video.sourceUrl); a genuine "Block creator"
-          would need to actually act on the real connected account the same
-          way Like does, and that isn't built/verified yet — better to leave
-          it out entirely than ship a button that fakes a block locally. */}
+          action (it just reads video.sourceUrl). Block creator is a real
+          platform action on the actual connected account (see
+          session-server.mjs's Session.block) — not a local hide — so it
+          gets one confirm step first, since it's genuinely consequential
+          and not easily reversible the way Like/Save are. */}
       <div ref={menuRef} className="absolute top-3 right-3">
         <button
           type="button"
@@ -242,15 +256,61 @@ function SwipeSlide({ video, active, onSaveClick, onAddToCollection, onLikeClick
           <MoreHorizontal size={14} />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-9 z-20 w-40 rounded-xl bg-[#141416] border border-white/[0.09] shadow-2xl p-1.5 animate-fade-in">
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="w-full flex items-center gap-2 h-8 px-2.5 rounded-lg text-[12px] text-neutral-300 hover:bg-white/[0.06] hover:text-neutral-100 transition-colors duration-150"
-            >
-              {linkCopied ? <Check size={12} className="text-[#D39448]" /> : <LinkIcon size={12} />}
-              {linkCopied ? "Copied" : "Copy link"}
-            </button>
+          <div className="absolute right-0 top-9 z-20 w-48 rounded-xl bg-[#141416] border border-white/[0.09] shadow-2xl p-1.5 animate-fade-in">
+            {blockConfirming ? (
+              <div className="px-2.5 py-2">
+                <p className="flex items-start gap-1.5 text-[11.5px] text-neutral-300 leading-snug">
+                  <AlertTriangle size={13} className="text-amber-400/90 shrink-0 mt-0.5" />
+                  Block @{video.username} on the real {platformLabel} account?
+                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBlockConfirming(false)}
+                    className="flex-1 h-7 rounded-lg text-[11.5px] text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.06] transition-colors duration-150"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBlockConfirming(false);
+                      setMenuOpen(false);
+                      onBlockCreator();
+                    }}
+                    className="flex-1 h-7 rounded-lg bg-rose-500/90 text-white text-[11.5px] font-medium hover:bg-rose-500 transition-colors duration-150"
+                  >
+                    Block
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="w-full flex items-center gap-2 h-8 px-2.5 rounded-lg text-[12px] text-neutral-300 hover:bg-white/[0.06] hover:text-neutral-100 transition-colors duration-150"
+                >
+                  {linkCopied ? <Check size={12} className="text-[#D39448]" /> : <LinkIcon size={12} />}
+                  {linkCopied ? "Copied" : "Copy link"}
+                </button>
+                <button
+                  type="button"
+                  disabled={blockStatus === "pending" || blockStatus === "done"}
+                  onClick={() => setBlockConfirming(true)}
+                  className="w-full flex items-center gap-2 h-8 px-2.5 rounded-lg text-[12px] text-rose-300/90 hover:bg-rose-500/10 hover:text-rose-200 transition-colors duration-150 disabled:opacity-40 disabled:cursor-default"
+                >
+                  {blockStatus === "pending" ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : blockStatus === "done" ? (
+                    <Check size={12} />
+                  ) : (
+                    <Ban size={12} />
+                  )}
+                  {blockStatus === "pending" ? "Blocking…" : blockStatus === "done" ? "Blocked" : blockStatus === "failed" ? "Couldn't block — retry" : "Block creator"}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -291,8 +351,11 @@ export function SwipeResearchPlayer({
   onExitToArchive,
   onLikeClick,
   likeStatus,
+  onBlockCreator,
+  blockStatus,
   onRetryWake,
   onRefreshSession,
+  active,
 }: {
   account: ResearchAccount;
   currentReel: ReelVideo | null;
@@ -307,8 +370,14 @@ export function SwipeResearchPlayer({
   onExitToArchive: () => void;
   onLikeClick: (video: ReelVideo) => void;
   likeStatus: Record<string, LikeStatus>;
+  onBlockCreator: (video: ReelVideo) => void;
+  blockStatus: Record<string, BlockStatus>;
   onRetryWake: () => void;
   onRefreshSession: () => void;
+  // Whether Research Accounts is the section actually on screen — the page
+  // itself stays mounted across navigation now (see App.tsx), so this is
+  // what gates video playback and the arrow-key shortcuts instead.
+  active: boolean;
 }) {
   const connecting = account.status === "connecting";
   const wheelAccum = useRef(0);
@@ -346,6 +415,11 @@ export function SwipeResearchPlayer({
   }
 
   useEffect(() => {
+    // Research Accounts stays mounted while another Client OS section is on
+    // screen (see App.tsx) — without this, its arrow-key shortcuts would
+    // keep firing globally the whole time, stealing keystrokes meant for
+    // wherever the VA actually navigated to.
+    if (!active) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "ArrowDown" || e.key === "ArrowRight") {
         e.preventDefault();
@@ -359,7 +433,7 @@ export function SwipeResearchPlayer({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPrev, loading]);
+  }, [hasPrev, loading, active]);
 
   function handleWheel(e: React.WheelEvent) {
     // Don't accumulate momentum while locked out — otherwise a fast flick's
@@ -422,10 +496,13 @@ export function SwipeResearchPlayer({
             key={currentReel.id}
             video={currentReel}
             active
+            pageActive={active}
             onSaveClick={() => onSaveClick(currentReel)}
             onAddToCollection={() => onAddToCollection(currentReel)}
             onLikeClick={() => onLikeClick(currentReel)}
             likeStatus={likeStatus[currentReel.id]}
+            onBlockCreator={() => onBlockCreator(currentReel)}
+            blockStatus={blockStatus[currentReel.id]}
             canLike={currentReel.platform === "instagram" || currentReel.platform === "tiktok"}
           />
         ) : (

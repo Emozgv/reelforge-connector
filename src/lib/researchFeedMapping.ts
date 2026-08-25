@@ -50,7 +50,14 @@ export function researchFeedItemToVideo(row: ResearchFeedItemRow): ReelVideo {
     thumbnailUrl: row.thumbnail_url ?? undefined,
     videoUrl: row.video_url ?? undefined,
     caption: row.caption ?? undefined,
-    views: formatViews(row.views_raw),
+    // views_raw/duration_sec are NOT NULL default 0 on this table, so a
+    // stored 0 can't be told apart from "a real zero" at the column level
+    // — but a Reel with genuinely zero views/duration essentially never
+    // happens for anything worth archiving, so treating 0 as "never
+    // captured" and hiding it (empty string, same convention live reels
+    // already use — see useLiveResearchSession's liveReelToVideo) is the
+    // honest choice: never show a fabricated number.
+    views: row.views_raw > 0 ? formatViews(row.views_raw) : "",
     viewsRaw: row.views_raw,
     likes: row.likes ?? undefined,
     comments: row.comments ?? undefined,
@@ -58,7 +65,7 @@ export function researchFeedItemToVideo(row: ResearchFeedItemRow): ReelVideo {
     tags: row.tags,
     saved: false,
     used: false,
-    duration: formatDuration(row.duration_sec),
+    duration: row.duration_sec > 0 ? formatDuration(row.duration_sec) : "",
     durationSec: row.duration_sec,
     postedDaysAgo: row.posted_days_ago ?? undefined,
   };

@@ -188,9 +188,11 @@ export function ReelDetailModal({
               <div className="w-6 h-6 rounded-full bg-black/45 backdrop-blur-md flex items-center justify-center border border-white/10">
                 <PlatformIcon platform={video.platform} size={11} />
               </div>
-              <span className="text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
-                {video.duration}
-              </span>
+              {video.duration && (
+                <span className="text-[10.5px] text-white/90 bg-black/45 backdrop-blur-md border border-white/10 rounded-full px-2 py-[2px] font-medium tabular-nums">
+                  {video.duration}
+                </span>
+              )}
             </div>
 
             {/* Secondary, deliberately small — playback inside the modal is
@@ -257,19 +259,27 @@ export function ReelDetailModal({
             </div>
 
             <div className="px-5 py-4 border-b border-white/[0.07] space-y-2">
-              <StatRow icon={<Eye size={12} />} label="Views" value={video.viewsRaw} />
+              {/* viewsRaw is a required number on ReelVideo (0 as a
+                  fallback, not "unknown"), but for a real reel a genuine
+                  zero essentially never happens — treating it as
+                  "not captured" here matches how the live player and
+                  Archive's own card already hide the same case rather
+                  than showing a fabricated 0. */}
+              <StatRow icon={<Eye size={12} />} label="Views" value={video.viewsRaw > 0 ? video.viewsRaw : undefined} />
               <StatRow icon={<Heart size={12} />} label="Likes" value={video.likes} />
               <StatRow icon={<MessageCircle size={12} />} label="Comments" value={video.comments} />
               <StatRow icon={<Share2 size={12} />} label="Shares" value={video.shares} />
-              <div className="flex items-center gap-2 pt-1">
-                <span className="w-6 h-6 rounded-full bg-white/[0.05] flex items-center justify-center text-neutral-500 shrink-0">
-                  <Clock size={12} />
-                </span>
-                <span className="text-[12.5px] text-neutral-300">Duration</span>
-                <span className="ml-auto text-[12.5px] text-neutral-100 font-medium tabular-nums">
-                  {video.duration}
-                </span>
-              </div>
+              {video.duration && (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="w-6 h-6 rounded-full bg-white/[0.05] flex items-center justify-center text-neutral-500 shrink-0">
+                    <Clock size={12} />
+                  </span>
+                  <span className="text-[12.5px] text-neutral-300">Duration</span>
+                  <span className="ml-auto text-[12.5px] text-neutral-100 font-medium tabular-nums">
+                    {video.duration}
+                  </span>
+                </div>
+              )}
               {video.postedDaysAgo !== undefined && (
                 <div className="flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-white/[0.05] flex items-center justify-center text-neutral-500 shrink-0">

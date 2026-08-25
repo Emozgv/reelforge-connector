@@ -406,6 +406,24 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, []);
 
+  // A real platform action on the real connected account (see
+  // session-server.mjs's Session.block) — never a local-only hide.
+  const block = useCallback(async (): Promise<{ blocked: boolean; error?: string }> => {
+    const session = sessionRef.current;
+    if (!session) return { blocked: false, error: "No active research session." };
+    try {
+      const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionSecret: session.sessionSecret }),
+      });
+      const body = await res.json();
+      return { blocked: !!body.blocked, error: body.error };
+    } catch (err) {
+      return { blocked: false, error: err instanceof Error ? err.message : "Couldn't block this creator." };
+    }
+  }, []);
+
   // A VA closing the tab (not just navigating within ReelForge) should end
   // the session too. Neither event is guaranteed to fire or to finish its
   // fetch before the page is actually torn down (pagehide fires more
@@ -459,5 +477,5 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
 
   useEffect(() => () => void endSession(), [endSession]);
 
-  return { currentReel, hasPrev, status, error, startSession, endSession, next, prev, like, retryWithWake };
+  return { currentReel, hasPrev, status, error, startSession, endSession, next, prev, like, block, retryWithWake };
 }

@@ -233,6 +233,7 @@ export function ResearchAccountsPage({
   researchAccountsStore,
   userId,
   workspaceId,
+  active,
 }: {
   creators: Creator[];
   creatorsError?: string | null;
@@ -240,6 +241,12 @@ export function ResearchAccountsPage({
   researchAccountsStore: ResearchAccountsStore;
   userId?: string;
   workspaceId?: string;
+  // This page now stays mounted (see App.tsx) so the live research session
+  // survives navigating to other Client OS sections and back — `active`
+  // is only "is this the section actually on screen right now," for
+  // gating things that should stop when it isn't (keyboard shortcuts,
+  // video playback), not the session's own lifecycle.
+  active: boolean;
 }) {
   const [selectedCreator, setSelectedCreator] = useState<Creator | null>(creators[0] ?? null);
   const [platform, setPlatform] = useState<Platform>("instagram");
@@ -251,10 +258,18 @@ export function ResearchAccountsPage({
   const [feedError, setFeedError] = useState(false);
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
   const [savePanelVideo, setSavePanelVideo] = useState<ReelVideo | null>(null);
+  // Save and Collection are deliberately different entry points into the
+  // same reusable picker (see SavePanel's own `mode` prop) rather than two
+  // separate components — Save opens straight to its familiar Quick Save
+  // shortcut, Collection skips that and goes straight to "pick one of your
+  // existing collections," which is genuinely what pressing Collection
+  // means. No new UI, just a different way into the one that exists.
+  const [savePanelMode, setSavePanelMode] = useState<"full" | "collectionOnly">("full");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [likeStatus, setLikeStatus] = useState<Record<string, LikeStatus>>({});
+  const [blockStatus, setBlockStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
   const liveSession = useLiveResearchSession(workspaceId);
 
   useEffect(() => {
@@ -345,6 +360,16 @@ export function ResearchAccountsPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAccount?.id]);
 
+  // Archive now fills in live as the VA actually scrolls through the real
+  // session (see session-server.mjs's next()), not just from the old
+  // connect-time/resync capture — refetching on switching into Archive
+  // picks up whatever's landed since this account was last opened, without
+  // needing a live subscription for what's still a history/cache view.
+  useEffect(() => {
+    if (mode === "archive" && currentAccount) void loadFeed(currentAccount.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   // The live research session itself — this is the actual architecture
   // change: opening a connected Instagram account starts a real, persistent
   // Reels session on the authenticated account (see useLiveResearchSession
@@ -394,6 +419,18 @@ export function ResearchAccountsPage({
     setLikeStatus((prev) => ({ ...prev, [video.id]: "pending" }));
     const { liked } = await liveSession.like();
     setLikeStatus((prev) => ({ ...prev, [video.id]: liked ? "liked" : "failed" }));
+  }
+
+  // A real platform action on the real connected account — the whole point
+  // is that Instagram's/TikTok's own recommendation algorithm actually
+  // stops surfacing this creator afterward, not a local ReelForge-only
+  // blacklist. Only ever reports "done" once Connector has confirmed the
+  // real block genuinely took effect (see session-server.mjs's Session.block).
+  async function handleBlockCreator(video: ReelVideo) {
+    if (blockStatus[video.id] === "pending" || blockStatus[video.id] === "done") return;
+    setBlockStatus((prev) => ({ ...prev, [video.id]: "pending" }));
+    const { blocked } = await liveSession.block();
+    setBlockStatus((prev) => ({ ...prev, [video.id]: blocked ? "done" : "failed" }));
   }
 
   if (!selectedCreator) {
@@ -598,12 +635,18 @@ export function ResearchAccountsPage({
                   onNext={() => void liveSession.next()}
                   onPrev={() => void liveSession.prev()}
                   onSaveClick={(video) => {
+                    setSavePanelMode("full");
                     if (!video.saved) setSavePanelVideo(video);
                   }}
-                  onAddToCollection={setSavePanelVideo}
+                  onAddToCollection={(video) => {
+                    setSavePanelMode("collectionOnly");
+                    setSavePanelVideo(video);
+                  }}
                   onExitToArchive={() => setMode("archive")}
                   onLikeClick={handleLikeClick}
                   likeStatus={likeStatus}
+                  onBlockCreator={handleBlockCreator}
+                  blockStatus={blockStatus}
                   onRefreshSession={() => void liveSession.startSession(currentAccount.id, currentAccount.platform)}
                   onRetryWake={() => {
                     // needs_connector -> the wake path (must run from this
@@ -611,6 +654,7 @@ export function ResearchAccountsPage({
                     if (liveSession.status === "needs_connector") void liveSession.retryWithWake();
                     else void liveSession.startSession(currentAccount.id, currentAccount.platform);
                   }}
+                  active={active}
                 />
               ) : feedError ? (
                 <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
@@ -620,9 +664,13 @@ export function ResearchAccountsPage({
                 <VideoGrid
                   videos={videos}
                   onSaveClick={(video) => {
+                    setSavePanelMode("full");
                     if (!video.saved) setSavePanelVideo(video);
                   }}
-                  onAddToCollection={setSavePanelVideo}
+                  onAddToCollection={(video) => {
+                    setSavePanelMode("collectionOnly");
+                    setSavePanelVideo(video);
+                  }}
                   onOpenDetail={(video) => setDetailVideoId(video.id)}
                   spacious
                   loading={loadingFeed}
@@ -646,6 +694,7 @@ export function ResearchAccountsPage({
 
       <SavePanel
         open={!!savePanelVideo}
+        mode={savePanelMode}
         video={savePanelVideo}
         creators={creators}
         defaultCreatorId={selectedCreator.id}
@@ -691,8 +740,12 @@ export function ResearchAccountsPage({
         open={!!detailVideoId}
         creator={selectedCreator}
         onClose={() => setDetailVideoId(null)}
-        onSaveClick={(video) => setSavePanelVideo(video)}
+        onSaveClick={(video) => {
+          setSavePanelMode("full");
+          setSavePanelVideo(video);
+        }}
         onAddToCollection={(video) => {
+          setSavePanelMode("collectionOnly");
           setSavePanelVideo(video);
           setDetailVideoId(null);
         }}
