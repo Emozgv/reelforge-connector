@@ -6,8 +6,11 @@ name: Build ReelForge Connector
 # same pattern ReelForge Internal already uses for its own releases.
 #
 # This does not sign or auto-publish anything yet (no code-signing
-# certificate or updater key configured for this app). It just produces real,
-# installable artifacts you can download from the run and test.
+# certificate or updater key configured for this app). It just produces
+# real, installable artifacts — both as workflow run artifacts and as
+# assets on a rolling "connector-latest" GitHub Release, so there's always
+# one stable, permanent link to the newest build of each platform's
+# installer rather than having to dig through individual run pages.
 
 on:
   push:
@@ -17,6 +20,9 @@ on:
       - ".github/workflows/connector-build.yml"
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -25,8 +31,12 @@ jobs:
         include:
           - os: macos-latest
             target: darwin
+            asset_name: ReelForge-Connector-macOS.dmg
+            built_glob: src-tauri/target/release/bundle/dmg/*.dmg
           - os: windows-latest
             target: windows
+            asset_name: ReelForge-Connector-Windows-Setup.exe
+            built_glob: src-tauri/target/release/bundle/nsis/*.exe
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -54,16 +64,48 @@ jobs:
       - name: Build ReelForge Connector (${{ matrix.target }})
         run: npm run build
 
-      - name: Upload macOS artifact
-        if: matrix.target == 'darwin'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ReelForge-Connector-macOS
-          path: connector-app/src-tauri/target/release/bundle/dmg/*.dmg
+      # The real Tauri-produced filename carries the version number
+      # (e.g. "ReelForge Connector_0.1.0_x64-setup.exe") — renaming to a
+      # fixed name here is what lets both the workflow artifact and the
+      # release asset (and, downstream, the Supabase-hosted copy the web
+      # app links to) stay at one unchanging filename across version bumps.
+      - name: Rename to fixed asset name (bash)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist-release
+          cp ${{ matrix.built_glob }} "dist-release/${{ matrix.asset_name }}"
 
-      - name: Upload Windows artifact
-        if: matrix.target == 'windows'
+      - name: Rename to fixed asset name (pwsh)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-release | Out-Null
+          $src = Get-ChildItem -Path "${{ matrix.built_glob }}"
+          Copy-Item $src.FullName "dist-release/${{ matrix.asset_name }}"
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReelForge-Connector-Windows
-          path: connector-app/src-tauri/target/release/bundle/nsis/*.exe
+          name: ${{ matrix.asset_name }}
+          path: connector-app/dist-release/${{ matrix.asset_name }}
+
+  publish-release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all built installers
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish rolling connector-latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: connector-latest
+          name: ReelForge Connector (latest)
+          body: Always the most recent build from main. Not versioned — download the installer for your OS below.
+          make_latest: true
+          files: release-assets/*
