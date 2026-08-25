@@ -282,6 +282,20 @@ export function ResearchAccountsPage({
     ? researchAccountsStore.accounts.find((a) => a.id === connectFlow.start!.id) ?? null
     : null;
 
+  // A connect/reconnect attempt can die outside this tab entirely — the VA
+  // closes the real login window, or it just times out — and
+  // connect-worker.mjs reports that back by flipping this row to
+  // needs_attention (see cancel-research-account-connect). Waiting for the
+  // VA to notice a hint buried in still-open "waiting" copy isn't a real
+  // recovery path, so this closes the modal itself the moment that lands —
+  // dropping back to the account rail, which already has a real Reconnect
+  // action, is the actual clean retry state.
+  useEffect(() => {
+    if (connectFlowAccount?.status !== "needs_attention") return;
+    setConnectFlow(null);
+    setReconnectError("Login didn't finish — it may have been closed or timed out. Press Reconnect to try again.");
+  }, [connectFlowAccount?.status]);
+
   // Switching Creator or platform re-picks whichever account was worked on
   // most recently — a real, DB-backed resume point, not device-local memory.
   useEffect(() => {

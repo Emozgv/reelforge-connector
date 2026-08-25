@@ -18,6 +18,8 @@ const SUBMIT_SYNC_URL = process.env.REELFORGE_SUBMIT_SYNC_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/submit-research-feed-sync";
 const SUBMIT_ACTION_URL = process.env.REELFORGE_SUBMIT_ACTION_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/submit-research-reel-action";
+const CANCEL_CONNECT_URL = process.env.REELFORGE_CANCEL_CONNECT_URL
+  ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/cancel-research-account-connect";
 
 const LOGIN_URL = {
   instagram: "https://www.instagram.com/accounts/login/",
@@ -189,6 +191,27 @@ async function captureInstagramFeed(context, page, { targetCount = 40, maxMs = 6
   return Array.from(collected.values());
 }
 
+// Best-effort — tells ReelForge the connect attempt is dead so the account
+// row doesn't sit at "connecting" forever with no way for Client OS (a
+// separate browser tab that never sees this worker's stdout/Tauri events)
+// to learn the attempt failed. Only ever flips a row that's still genuinely
+// "connecting" under this exact token — see cancel-research-account-connect
+// for why that makes this safe to fire even in a race with a login that
+// actually just succeeded (submit-research-account-session already cleared
+// the token by then, so this simply no-ops).
+async function notifyCancelled(accountId, token) {
+  try {
+    await fetch(CANCEL_CONNECT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, token }),
+    });
+  } catch {
+    // Nothing more to do — Client OS's own "this is taking a while" copy
+    // and the Reconnect action are still there as a manual fallback.
+  }
+}
+
 async function connectMain(platform, account, token) {
   if (!LOGIN_URL[platform]) {
     emit("error", { message: "ReelForge Connector was opened with an invalid connection link." });
@@ -201,12 +224,31 @@ async function connectMain(platform, account, token) {
   const context = await browser.newContext();
   const page = await context.newPage();
 
+  // The VA closing the login window is a real, expected way for this to
+  // end — not just "the browser process disconnected" (which, depending on
+  // Chromium's own last-window-closed behavior, isn't guaranteed to happen
+  // just because the one visible window did). Listening for the page's own
+  // close event is what actually catches "the window was closed" reliably,
+  // immediately, rather than depending on a slower/less certain signal.
+  let cancelled = false;
+  page.once("close", () => {
+    cancelled = true;
+  });
+  browser.once("disconnected", () => {
+    cancelled = true;
+  });
+
+  async function cancelAndExit(message) {
+    await browser.close().catch(() => {});
+    await notifyCancelled(account, token);
+    emit("error", { message });
+    process.exit(1);
+  }
+
   try {
     await page.goto(LOGIN_URL[platform], { waitUntil: "domcontentloaded", timeout: 60000 });
   } catch (err) {
-    await browser.close();
-    emit("error", { message: `Couldn't open the ${platform} login page. Check your internet connection and try again.` });
-    process.exit(1);
+    await cancelAndExit(`Couldn't open the ${platform} login page. Check your internet connection and try again.`);
   }
 
   emit("waiting");
@@ -216,9 +258,8 @@ async function connectMain(platform, account, token) {
   let connected = false;
 
   while (Date.now() - startedAt < TIMEOUT_MS) {
-    if (!browser.isConnected()) {
-      emit("error", { message: "The login window was closed before you finished logging in." });
-      process.exit(1);
+    if (cancelled || !browser.isConnected()) {
+      await cancelAndExit("The login window was closed before you finished logging in.");
     }
     const cookies = await context.cookies();
     if (hasRealSession(platform, cookies)) {
@@ -229,9 +270,7 @@ async function connectMain(platform, account, token) {
   }
 
   if (!connected) {
-    if (browser.isConnected()) await browser.close();
-    emit("error", { message: "This took too long. Go back to ReelForge and press Reconnect to try again." });
-    process.exit(1);
+    await cancelAndExit("This took too long. Go back to ReelForge and press Reconnect to try again.");
   }
 
   let feedItems = [];
