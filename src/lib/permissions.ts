@@ -15,6 +15,13 @@ export function canViewBilling(role: string | undefined): boolean {
   return role === "owner" || role === "manager";
 }
 
+// Off by default for every Manager — the Owner has to explicitly grant it
+// per member (see update_member_plan_permission), never something a
+// Manager can turn on for themselves.
+export function canChangePlan(role: string | undefined, canChangePlanFlag: boolean | undefined): boolean {
+  return role === "owner" || (role === "manager" && !!canChangePlanFlag);
+}
+
 export const ROLE_LABEL: Record<WorkspaceRole, string> = {
   owner: "Owner",
   manager: "Manager",

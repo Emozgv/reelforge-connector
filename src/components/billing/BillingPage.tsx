@@ -13,10 +13,12 @@ function CreatorPlanCard({
   creator,
   plan,
   collections,
+  canChangePlan,
 }: {
   creator: Creator;
   plan: CreatorPackage | undefined;
   collections: Collection[];
+  canChangePlan: boolean;
 }) {
   const usage = plan ? computeCreatorUsageStats(plan, collections) : null;
   const pct = usage && plan && plan.planTier !== "Enterprise" ? Math.min(100, (usage.reelsUsed / usage.reelsTotal) * 100) : 0;
@@ -77,25 +79,33 @@ function CreatorPlanCard({
               </span>
             )}
           </div>
-          <a
-            href={mailtoFor(`Change plan for ${creator.name}`)}
-            className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-neutral-400 hover:text-[#D39448] transition-colors duration-150"
-          >
-            <RefreshCw size={11} />
-            Change plan
-          </a>
+          {canChangePlan ? (
+            <a
+              href={mailtoFor(`Change plan for ${creator.name}`)}
+              className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-neutral-400 hover:text-[#D39448] transition-colors duration-150"
+            >
+              <RefreshCw size={11} />
+              Change plan
+            </a>
+          ) : (
+            <p className="mt-3 text-[11px] text-neutral-600">Ask the Owner to change this creator's plan.</p>
+          )}
         </div>
       ) : (
         <div className="mt-3.5 pt-3.5 border-t border-white/[0.06]">
           <p className="text-[11.5px] text-neutral-500 leading-relaxed">
             No active ReelForge plan — reels can't be produced for {creator.name.split(" ")[0]} until one is set up.
           </p>
-          <a
-            href={mailtoFor(`Set up a plan for ${creator.name}`)}
-            className="mt-2.5 inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#D39448] text-[#020508] text-[11.5px] font-medium hover:brightness-110 transition-[filter] duration-150"
-          >
-            Get started
-          </a>
+          {canChangePlan ? (
+            <a
+              href={mailtoFor(`Set up a plan for ${creator.name}`)}
+              className="mt-2.5 inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#D39448] text-[#020508] text-[11.5px] font-medium hover:brightness-110 transition-[filter] duration-150"
+            >
+              Get started
+            </a>
+          ) : (
+            <p className="mt-2.5 text-[11px] text-neutral-600">Ask the Owner to set up a plan.</p>
+          )}
         </div>
       )}
     </div>
@@ -120,10 +130,12 @@ export function BillingPage({
   creators,
   creatorPackages,
   collections,
+  canChangePlan,
 }: {
   creators: Creator[];
   creatorPackages: Map<string, CreatorPackage>;
   collections: Collection[];
+  canChangePlan: boolean;
 }) {
   const activeCount = creators.filter((c) => creatorPackages.has(c.id)).length;
   const monthlySpend = creators.reduce((sum, c) => {
@@ -173,7 +185,13 @@ export function BillingPage({
         ) : (
           <div className="mt-3 grid grid-cols-2 gap-3">
             {creators.map((c) => (
-              <CreatorPlanCard key={c.id} creator={c} plan={creatorPackages.get(c.id)} collections={collections} />
+              <CreatorPlanCard
+                key={c.id}
+                creator={c}
+                plan={creatorPackages.get(c.id)}
+                collections={collections}
+                canChangePlan={canChangePlan}
+              />
             ))}
           </div>
         )}

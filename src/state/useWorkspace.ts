@@ -7,6 +7,9 @@ export interface ActiveWorkspace {
   role: string;
   membershipId: string;
   displayName: string | null;
+  // Owner-granted, off by default for every Manager — see
+  // update_member_plan_permission and lib/permissions#canChangePlan.
+  canChangePlan: boolean;
 }
 
 /**
@@ -47,7 +50,7 @@ export function useWorkspace(userId: string | undefined) {
       let membership = await supabase
         .schema("client_os")
         .from("workspace_members")
-        .select("id, workspace_id, role, display_name")
+        .select("id, workspace_id, role, display_name, can_change_plan")
         .eq("user_id", userId)
         .limit(1)
         .maybeSingle();
@@ -71,7 +74,7 @@ export function useWorkspace(userId: string | undefined) {
           membership = await supabase
             .schema("client_os")
             .from("workspace_members")
-            .select("id, workspace_id, role, display_name")
+            .select("id, workspace_id, role, display_name, can_change_plan")
             .eq("user_id", userId)
             .limit(1)
             .maybeSingle();
@@ -115,6 +118,7 @@ export function useWorkspace(userId: string | undefined) {
           role: membership.data.role,
           membershipId: membership.data.id,
           displayName: membership.data.display_name,
+          canChangePlan: !!membership.data.can_change_plan,
         });
         setJustJoined(didAccept);
       }

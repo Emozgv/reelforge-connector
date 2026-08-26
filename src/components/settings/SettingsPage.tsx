@@ -124,7 +124,7 @@ export function SettingsPage({
               Invite teammates, assign roles, and control who can see Billing or manage the team.
             </p>
             <div className="mt-3">
-              <TeamSection workspaceId={workspaceId} currentUserId={userId} />
+              <TeamSection workspaceId={workspaceId} currentUserId={userId} callerRole={role} />
             </div>
           </>
         )}

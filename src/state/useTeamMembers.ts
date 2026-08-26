@@ -12,6 +12,7 @@ export interface TeamMember {
   role: WorkspaceRole;
   email: string | null;
   displayName: string | null;
+  canChangePlan: boolean;
 }
 
 export interface PendingInvite {
@@ -27,6 +28,7 @@ interface MemberRow {
   role: string;
   email: string | null;
   display_name: string | null;
+  can_change_plan: boolean;
 }
 
 interface InviteRow {
@@ -75,7 +77,7 @@ export function useTeamMembers(workspaceId: string | undefined) {
       supabase
         .schema("client_os")
         .from("workspace_members")
-        .select("id, user_id, role, email, display_name")
+        .select("id, user_id, role, email, display_name, can_change_plan")
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: true }),
       supabase
@@ -100,6 +102,7 @@ export function useTeamMembers(workspaceId: string | undefined) {
         role: r.role as WorkspaceRole,
         email: r.email,
         displayName: r.display_name,
+        canChangePlan: !!r.can_change_plan,
       }))
     );
     // A VA's RLS grant returns zero invite rows rather than an error — the
@@ -156,8 +159,31 @@ export function useTeamMembers(workspaceId: string | undefined) {
     return { error: null };
   }
 
+  // Owner-only server-side (see update_member_plan_permission) — only ever
+  // applies to a member currently in the Manager role.
+  async function updatePlanPermission(membershipId: string, canChangePlan: boolean): Promise<{ error: string | null }> {
+    const { error } = await supabase
+      .schema("client_os")
+      .rpc("update_member_plan_permission", { p_membership_id: membershipId, p_can_change_plan: canChangePlan });
+    if (error) return { error: error.message };
+    await load();
+    return { error: null };
+  }
+
   const additionalCount = members.filter((m) => m.role !== "owner").length + invites.length;
   const atMax = additionalCount >= MAX_ADDITIONAL_MEMBERS;
 
-  return { members, invites, loading, error, atMax, additionalCount, inviteMember, changeRole, removeMember, cancelInvite };
+  return {
+    members,
+    invites,
+    loading,
+    error,
+    atMax,
+    additionalCount,
+    inviteMember,
+    changeRole,
+    removeMember,
+    cancelInvite,
+    updatePlanPermission,
+  };
 }

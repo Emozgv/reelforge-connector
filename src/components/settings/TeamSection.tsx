@@ -13,9 +13,28 @@ const ROLE_BADGE_STYLE: Record<WorkspaceRole, string> = {
 // canManageTeam). Every mutation here is a thin wrapper over RPCs/an edge
 // function that independently re-checks the caller's role and the owner
 // protections server-side — this component enforces nothing on its own.
-export function TeamSection({ workspaceId, currentUserId }: { workspaceId: string; currentUserId: string }) {
-  const { members, invites, loading, error, atMax, additionalCount, inviteMember, changeRole, removeMember, cancelInvite } =
-    useTeamMembers(workspaceId);
+export function TeamSection({
+  workspaceId,
+  currentUserId,
+  callerRole,
+}: {
+  workspaceId: string;
+  currentUserId: string;
+  callerRole: string | undefined;
+}) {
+  const {
+    members,
+    invites,
+    loading,
+    error,
+    atMax,
+    additionalCount,
+    inviteMember,
+    changeRole,
+    removeMember,
+    cancelInvite,
+    updatePlanPermission,
+  } = useTeamMembers(workspaceId);
 
   const [inviting, setInviting] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -59,6 +78,12 @@ export function TeamSection({ workspaceId, currentUserId }: { workspaceId: strin
     setBusyId(null);
   }
 
+  async function handlePlanPermissionToggle(membershipId: string, next: boolean) {
+    setBusyId(membershipId);
+    await updatePlanPermission(membershipId, next);
+    setBusyId(null);
+  }
+
   return (
     <div className="rounded-xl surface-panel p-4">
       <div className="flex items-center justify-between gap-3">
@@ -76,45 +101,64 @@ export function TeamSection({ workspaceId, currentUserId }: { workspaceId: strin
       {!loading && (
         <div className="mt-3 space-y-1.5">
           {members.map((m) => (
-            <div key={m.id} className="flex items-center gap-2.5 rounded-lg surface-field px-3 py-2">
-              <div className="w-6 h-6 rounded-full bg-[#D39448]/20 flex items-center justify-center text-[10px] font-medium text-[#D39448] shrink-0">
-                {(m.displayName || m.email || "?").slice(0, 2).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] text-neutral-200 truncate">{m.displayName || m.email || "Member"}</p>
-                {m.displayName && m.email && <p className="text-[10.5px] text-neutral-600 truncate">{m.email}</p>}
+            <div key={m.id} className="rounded-lg surface-field px-3 py-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-full bg-[#D39448]/20 flex items-center justify-center text-[10px] font-medium text-[#D39448] shrink-0">
+                  {(m.displayName || m.email || "?").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] text-neutral-200 truncate">{m.displayName || m.email || "Member"}</p>
+                  {m.displayName && m.email && <p className="text-[10.5px] text-neutral-600 truncate">{m.email}</p>}
+                </div>
+
+                {m.role === "owner" ? (
+                  <span className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", ROLE_BADGE_STYLE.owner].join(" ")}>
+                    Owner
+                  </span>
+                ) : (
+                  <>
+                    <select
+                      value={m.role}
+                      disabled={busyId === m.id}
+                      onChange={(e) => void handleRoleChange(m.id, e.target.value as "manager" | "va")}
+                      className={[
+                        "shrink-0 text-[10.5px] font-medium rounded-[6px] px-1.5 py-1 outline-none border-0 disabled:opacity-50",
+                        ROLE_BADGE_STYLE[m.role],
+                      ].join(" ")}
+                    >
+                      {ASSIGNABLE_ROLES.map((r) => (
+                        <option key={r} value={r} className="bg-[#0b0f14] text-neutral-100">
+                          {ROLE_LABEL[r]}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => void handleRemove(m.id)}
+                      disabled={busyId === m.id || m.userId === currentUserId}
+                      title={m.userId === currentUserId ? "Sign out to leave the workspace" : "Remove"}
+                      className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 hover:text-rose-400 hover:bg-rose-400/[0.08] transition-colors duration-150 disabled:opacity-30 disabled:hover:text-neutral-600 disabled:hover:bg-transparent"
+                    >
+                      {busyId === m.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                    </button>
+                  </>
+                )}
               </div>
 
-              {m.role === "owner" ? (
-                <span className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", ROLE_BADGE_STYLE.owner].join(" ")}>
-                  Owner
-                </span>
-              ) : (
-                <>
-                  <select
-                    value={m.role}
+              {/* Off by default for every Manager — only the Owner can grant
+                  this, and only ever sees the toggle for their own review;
+                  a Manager viewing the team list never sees or controls it
+                  for anyone, including themselves. */}
+              {m.role === "manager" && callerRole === "owner" && (
+                <label className="mt-2 flex items-center gap-2 pl-9 text-[11px] text-neutral-500 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={m.canChangePlan}
                     disabled={busyId === m.id}
-                    onChange={(e) => void handleRoleChange(m.id, e.target.value as "manager" | "va")}
-                    className={[
-                      "shrink-0 text-[10.5px] font-medium rounded-[6px] px-1.5 py-1 outline-none border-0 disabled:opacity-50",
-                      ROLE_BADGE_STYLE[m.role],
-                    ].join(" ")}
-                  >
-                    {ASSIGNABLE_ROLES.map((r) => (
-                      <option key={r} value={r} className="bg-[#0b0f14] text-neutral-100">
-                        {ROLE_LABEL[r]}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => void handleRemove(m.id)}
-                    disabled={busyId === m.id || m.userId === currentUserId}
-                    title={m.userId === currentUserId ? "Sign out to leave the workspace" : "Remove"}
-                    className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 hover:text-rose-400 hover:bg-rose-400/[0.08] transition-colors duration-150 disabled:opacity-30 disabled:hover:text-neutral-600 disabled:hover:bg-transparent"
-                  >
-                    {busyId === m.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
-                  </button>
-                </>
+                    onChange={(e) => void handlePlanPermissionToggle(m.id, e.target.checked)}
+                    className="accent-[#D39448]"
+                  />
+                  Can change plan
+                </label>
               )}
             </div>
           ))}

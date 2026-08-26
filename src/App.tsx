@@ -26,6 +26,7 @@ import { FullScreenLoader } from "./components/auth/FullScreenLoader";
 import { NoWorkspaceAccess } from "./components/auth/NoWorkspaceAccess";
 import { SetPasswordPage } from "./components/auth/SetPasswordPage";
 import { supabase } from "./lib/supabase";
+import { canChangePlan } from "./lib/permissions";
 import { useCollectionsStore } from "./state/useCollectionsStore";
 import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
@@ -240,6 +241,7 @@ function App() {
                 creators={creatorsStore.creators}
                 creatorPackages={creatorPackages}
                 collections={collectionsStore.collections}
+                canChangePlan={canChangePlan(workspace.role, workspace.canChangePlan)}
               />
             )}
             {page === "settings" && (
