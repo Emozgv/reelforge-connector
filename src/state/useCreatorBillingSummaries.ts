@@ -113,6 +113,35 @@ export function useCreatorBillingSummaries(workspaceId: string | undefined) {
     void refetch();
   }, [refetch]);
 
+  // Refetch whenever the tab regains focus — covers returning from a Stripe
+  // Checkout tab (whether the browser redirected back or the user just
+  // switched/closed that tab) without requiring an exact URL match.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible") void refetch();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [refetch]);
+
+  // Landing back on #billing?stripe=success is a strong signal a payment
+  // just happened, but the webhook that actually writes the new plan state
+  // can lag the redirect by a second or more — a single refetch on mount can
+  // easily land before it. Poll a few times over the following seconds
+  // specifically for this case, then clean the URL so it doesn't repeat.
+  useEffect(() => {
+    if (!window.location.hash.includes("stripe=success")) return;
+    const delays = [1200, 2600, 4500];
+    const timers = delays.map((ms) => setTimeout(() => void refetch(), ms));
+    const cleaned = window.location.hash.replace(/\?stripe=success/, "");
+    window.history.replaceState(null, "", window.location.pathname + cleaned);
+    return () => timers.forEach(clearTimeout);
+  }, [refetch]);
+
   async function previewPlanChange(creatorId: string, newTier: string): Promise<{ preview: PlanChangePreview | null; error: string | null }> {
     const { data, error: e } = await supabase
       .schema("client_os")
