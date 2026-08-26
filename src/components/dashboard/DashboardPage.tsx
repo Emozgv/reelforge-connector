@@ -164,7 +164,7 @@ export function DashboardPage({
           dust) so it reads as a living scene instead of a still with effects
           bolted on. Every layer is transform/opacity only and pauses when the
           tab is hidden, same as the rest of the app's ambient animation. */}
-      <div className="relative overflow-hidden px-8 xl:px-12 pt-14 xl:pt-16 pb-6 h-[255px] xl:h-[270px] bg-[#020508]">
+      <div className="relative overflow-hidden px-8 xl:px-12 pt-14 xl:pt-16 pb-6 h-[255px] xl:h-[270px] bg-[#020508] animate-rise-in">
         <div
           className="hero-photo-layer"
           style={{
@@ -231,7 +231,10 @@ export function DashboardPage({
           <StarfieldBackground starCount={20} shootingStars={false} />
         </div>
         {needsAttention.length > 0 && (
-          <div className="mb-5 rounded-xl border border-[#D39448]/25 bg-[#D39448]/[0.06] p-4">
+          <div
+            className="mb-5 rounded-xl border border-[#D39448]/25 bg-[#D39448]/[0.06] p-4 animate-rise-in"
+            style={{ animationDelay: "40ms" }}
+          >
             <div className="flex items-center gap-1.5 mb-2.5">
               <Inbox size={13} className="text-[#D39448]" />
               <h2 className="text-[13px] font-medium text-neutral-100">Needs your attention</h2>
@@ -255,7 +258,10 @@ export function DashboardPage({
           </div>
         )}
 
-        <div className="rounded-xl surface-panel-strong flex divide-x divide-white/[0.06] overflow-hidden">
+        <div
+          className="rounded-xl surface-panel-strong flex divide-x divide-white/[0.06] overflow-hidden animate-rise-in"
+          style={{ animationDelay: "80ms" }}
+        >
           <StatChip icon={<Users size={16} />} label="Creators" sublabel="active" value={creators.length} />
           <StatChip
             icon={<FolderOpen size={16} />}
@@ -273,7 +279,7 @@ export function DashboardPage({
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-5 items-stretch">
-          <div className="rounded-xl surface-panel p-4">
+          <div className="rounded-xl surface-panel p-4 animate-rise-in" style={{ animationDelay: "110ms" }}>
             <PanelHeader title="Creators" onViewAll={onOpenCreators} />
             {creators.length === 0 ? (
               <p className="text-[12px] text-neutral-500">No creators yet.</p>
@@ -304,7 +310,10 @@ export function DashboardPage({
             )}
           </div>
 
-          <div className="rounded-xl surface-panel p-4 flex flex-col">
+          <div
+            className="rounded-xl surface-panel p-4 flex flex-col animate-rise-in"
+            style={{ animationDelay: "140ms" }}
+          >
             <PanelHeader title="Plans" onViewAll={onOpenBilling} cta="View billing" />
             {creators.length === 0 ? (
               <p className="text-[12px] text-neutral-500">Add a Creator to set up a plan.</p>
@@ -328,7 +337,7 @@ export function DashboardPage({
             )}
           </div>
 
-          <div className="rounded-xl surface-panel p-4">
+          <div className="rounded-xl surface-panel p-4 animate-rise-in" style={{ animationDelay: "170ms" }}>
             <PanelHeader title="Recent Concepts" onViewAll={onOpenCollections} />
             {recentCollections.length === 0 ? (
               <p className="text-[12px] text-neutral-500">Save your first concept from the Creativity Hub.</p>
@@ -376,7 +385,7 @@ export function DashboardPage({
             )}
           </div>
 
-          <div className="rounded-xl surface-panel p-4">
+          <div className="rounded-xl surface-panel p-4 animate-rise-in" style={{ animationDelay: "200ms" }}>
             <div className="flex items-center gap-1.5 mb-3">
               <Clock size={11} className="text-neutral-500" />
               <h2 className="text-[13px] font-medium text-neutral-200">Recent Activity</h2>
