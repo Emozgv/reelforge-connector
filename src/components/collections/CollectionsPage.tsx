@@ -65,6 +65,7 @@ export function CollectionsPage({
       <CollectionWorkspace
         collection={activeCollection}
         creators={creators}
+        allCollections={collections}
         saveError={collectionsStore.saveError}
         onBack={() => {
           collectionsStore.clearSaveError();
@@ -93,6 +94,12 @@ export function CollectionsPage({
           activeCollection.archivedAt
             ? () => void collectionsStore.restoreCollectionFamily(activeCollection.id)
             : undefined
+        }
+        onReassignConcept={(videoId, targetCreatorId, targetCollectionId) =>
+          collectionsStore.reassignConceptCreator(activeCollection.id, videoId, targetCreatorId, targetCollectionId)
+        }
+        onAssignConceptToAnother={(videoId, targetCreatorId, targetCollectionId) =>
+          collectionsStore.assignConceptToCreator(videoId, targetCreatorId, targetCollectionId)
         }
       />
     );

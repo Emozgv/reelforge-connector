@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Send, Eye, MessageSquarePlus } from "lucide-react";
-import type { CollectionConcept, ConceptStatus } from "../../types";
+import { X, Send, Eye, MessageSquarePlus, UserRoundCog } from "lucide-react";
+import type { Collection, CollectionConcept, ConceptStatus, Creator } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { PlatformIcon } from "../hub/PlatformIcon";
+import { AssignCreatorPopover } from "./AssignCreatorPopover";
 
 const STATUS_STYLES: Record<ConceptStatus, string> = {
   Unused: "text-neutral-400 bg-white/[0.06]",
@@ -15,19 +16,31 @@ const STATUS_OPTIONS: ConceptStatus[] = ["Unused", "Used", "Rejected"];
 export function ConceptCard({
   concept,
   submitted,
+  creators,
+  collections,
+  currentCreatorId,
   onStatusChange,
   onRemove,
   onNotesChange,
   onOpen,
+  onReassign,
+  onAssignToAnother,
 }: {
   concept: CollectionConcept;
   submitted: boolean;
+  creators: Creator[];
+  collections: Collection[];
+  currentCreatorId: string | undefined;
   onStatusChange: (status: ConceptStatus) => void;
   onRemove: () => void;
   onNotesChange: (notes: string) => void;
   onOpen: () => void;
+  onReassign: (targetCreatorId: string, targetCollectionId: string | undefined) => Promise<{ error: string | null }>;
+  onAssignToAnother: (targetCreatorId: string, targetCollectionId: string | undefined) => Promise<{ error: string | null }>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [assignMenuOpen, setAssignMenuOpen] = useState(false);
+  const [assignFeedback, setAssignFeedback] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState(concept.notes);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
@@ -37,9 +50,22 @@ export function ConceptCard({
     if (editingNote) noteInputRef.current?.focus();
   }, [editingNote]);
 
+  useEffect(() => {
+    if (!assignFeedback) return;
+    const t = setTimeout(() => setAssignFeedback(null), 2200);
+    return () => clearTimeout(t);
+  }, [assignFeedback]);
+
   function commitNote() {
     setEditingNote(false);
     if (noteDraft !== concept.notes) onNotesChange(noteDraft);
+  }
+
+  async function handleAssignConfirm(action: "copy" | "move", targetCreatorId: string, targetCollectionId?: string) {
+    setAssignMenuOpen(false);
+    const targetName = creators.find((c) => c.id === targetCreatorId)?.name ?? "another creator";
+    const res = action === "move" ? await onReassign(targetCreatorId, targetCollectionId) : await onAssignToAnother(targetCreatorId, targetCollectionId);
+    setAssignFeedback(res.error ?? (action === "move" ? `Moved to ${targetName}` : `Also assigned to ${targetName}`));
   }
 
   return (
@@ -93,6 +119,41 @@ export function ConceptCard({
       >
         <X size={12} />
       </button>
+
+      {/* assign/reassign creator — hover only, mirrors the remove button */}
+      <div className="absolute top-2 right-2 mt-12">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setAssignMenuOpen((v) => !v);
+          }}
+          title="Assign to another creator"
+          className="w-6 h-6 rounded-full bg-black/45 backdrop-blur-sm text-white/70 hover:text-white hover:bg-black/65 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        >
+          <UserRoundCog size={12} />
+        </button>
+        {assignMenuOpen && (
+          <AssignCreatorPopover
+            creators={creators}
+            collections={collections}
+            currentCreatorId={currentCreatorId}
+            canMove={!submitted}
+            onClose={() => setAssignMenuOpen(false)}
+            onConfirm={(action, targetCreatorId, targetCollectionId) =>
+              void handleAssignConfirm(action, targetCreatorId, targetCollectionId)
+            }
+          />
+        )}
+      </div>
+
+      {assignFeedback && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute top-2 left-2 right-2 mt-6 z-10 rounded-md bg-black/70 backdrop-blur-sm px-2 py-1 text-[10.5px] text-white/90 text-center animate-fade-in"
+        >
+          {assignFeedback}
+        </div>
+      )}
 
       {/* bottom content */}
       <div className="absolute bottom-0 left-0 right-0 p-2.5">

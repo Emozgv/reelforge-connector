@@ -677,6 +677,108 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     return { id: meta.id };
   }
 
+  // Moves a not-yet-submitted Concept into another creator's Collection
+  // (defaulting to their Quick Saves). Only safe before the first Submission
+  // — once a Concept has real production/billing history tied to it, its
+  // Collection can't change out from under that history, so this is blocked
+  // client-side (checked against already-loaded Submissions, same source of
+  // truth CollectionWorkspace uses for its own "submitted" badge) in favor
+  // of assignConceptToCreator below.
+  async function reassignConceptCreator(
+    sourceCollectionId: string,
+    videoId: string,
+    targetCreatorId: string,
+    targetCollectionId?: string
+  ): Promise<{ error: string | null }> {
+    const source = collectionsRef.current.find((c) => c.id === sourceCollectionId);
+    const concept = source?.concepts.find((k) => k.video.id === videoId);
+    if (!source || !concept) return { error: "Couldn't find that concept." };
+
+    const alreadySubmitted = source.submissions.some((s) => s.conceptIds.includes(videoId));
+    if (alreadySubmitted) {
+      return {
+        error: "This reel has already been sent to production — assign it to another creator instead to keep both production histories clean.",
+      };
+    }
+
+    const target =
+      (targetCollectionId && collectionsRef.current.find((c) => c.id === targetCollectionId)) ||
+      collectionsRef.current.find((c) => c.creatorId === targetCreatorId && c.name === "Quick Saves");
+    if (!target) return { error: "Couldn't find a collection for that creator." };
+
+    const { error: updateError } = await supabase
+      .schema("client_os")
+      .from("concepts")
+      .update({ collection_id: target.id, creator_id: null })
+      .eq("id", videoId)
+      .eq("collection_id", sourceCollectionId);
+
+    if (updateError) {
+      return {
+        error: isUniqueViolation(updateError)
+          ? `Already saved in ${target.name}.`
+          : "Couldn't move that concept — please try again.",
+      };
+    }
+
+    setCollections((prev) =>
+      prev.map((c) => {
+        if (c.id === sourceCollectionId) return { ...c, concepts: c.concepts.filter((k) => k.video.id !== videoId) };
+        if (c.id === target.id) return { ...c, concepts: [{ ...concept, creatorId: undefined }, ...c.concepts] };
+        return c;
+      })
+    );
+    void logActivity(sourceCollectionId, "concept_removed", `1 concept moved to ${target.name}`);
+    void logActivity(target.id, "concept_added", `1 concept moved from ${source.name}`);
+    return { error: null };
+  }
+
+  // Gives another creator their own independent copy of a reel/reference —
+  // the real mechanism behind "use this idea for more than one creator."
+  // Always allowed, even after the original has been produced/delivered,
+  // because it creates a brand-new Concept row with its own id, so each
+  // creator gets an independently trackable (and independently billable)
+  // production going forward. Notes are deliberately NOT copied — they're
+  // usually creator-specific creative direction that wouldn't apply to
+  // someone else; the new assignment starts with a clean slate.
+  async function assignConceptToCreator(
+    sourceVideoId: string,
+    targetCreatorId: string,
+    targetCollectionId?: string
+  ): Promise<{ error: string | null }> {
+    if (!workspaceId) return { error: "No active workspace." };
+    const source = collectionsRef.current.find((c) => c.concepts.some((k) => k.video.id === sourceVideoId));
+    const concept = source?.concepts.find((k) => k.video.id === sourceVideoId);
+    if (!source || !concept) return { error: "Couldn't find that concept." };
+
+    const target =
+      (targetCollectionId && collectionsRef.current.find((c) => c.id === targetCollectionId)) ||
+      collectionsRef.current.find((c) => c.creatorId === targetCreatorId && c.name === "Quick Saves");
+    if (!target) return { error: "Couldn't find a collection for that creator." };
+
+    if (target.concepts.some((k) => k.video.sourceUrl && k.video.sourceUrl === concept.video.sourceUrl)) {
+      return { error: `Already saved in ${target.name}.` };
+    }
+
+    const { data, error: insertError } = await supabase
+      .schema("client_os")
+      .from("concepts")
+      .insert(conceptToInsertRow(concept.video, target.id, workspaceId, undefined, undefined, concept.sourceLabel))
+      .select()
+      .single();
+
+    if (insertError || !data) {
+      return {
+        error: isUniqueViolation(insertError) ? `Already saved in ${target.name}.` : "Couldn't assign that concept — please try again.",
+      };
+    }
+
+    const newConcept = conceptFromRow(data as ConceptRow);
+    setCollections((prev) => prev.map((c) => (c.id === target.id ? { ...c, concepts: [newConcept, ...c.concepts] } : c)));
+    void logActivity(target.id, "concept_added", `1 concept assigned from ${source.name}`);
+    return { error: null };
+  }
+
   async function deleteCollection(collectionId: string) {
     const previous = collectionsRef.current;
     setCollections((prev) => prev.filter((c) => c.id !== collectionId));
@@ -777,6 +879,8 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     updateStatus,
     renameCollection,
     duplicateCollection,
+    reassignConceptCreator,
+    assignConceptToCreator,
     deleteCollection,
     archiveCollectionFamily,
     restoreCollectionFamily,

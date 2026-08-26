@@ -37,6 +37,7 @@ type ConceptFilter = "all" | "Used" | "Unused";
 export function CollectionWorkspace({
   collection,
   creators,
+  allCollections,
   saveError,
   siblingCollections,
   onBack,
@@ -50,9 +51,15 @@ export function CollectionWorkspace({
   onStartNext,
   onSwitchCollection,
   onRestore,
+  onReassignConcept,
+  onAssignConceptToAnother,
 }: {
   collection: Collection;
   creators: Creator[];
+  // Every creator's collections, workspace-wide — needed to offer real
+  // destination collections when assigning a concept to another creator
+  // (siblingCollections below is only this collection's own version family).
+  allCollections: Collection[];
   saveError?: string | null;
   siblingCollections: { id: string; name: string; status: CollectionStatus }[];
   onBack: () => void;
@@ -75,6 +82,8 @@ export function CollectionWorkspace({
   // Present only when viewing this Collection from the Archive — restores
   // the whole family (every version) back to the active list together.
   onRestore?: () => void;
+  onReassignConcept: (videoId: string, targetCreatorId: string, targetCollectionId: string | undefined) => Promise<{ error: string | null }>;
+  onAssignConceptToAnother: (videoId: string, targetCreatorId: string, targetCollectionId: string | undefined) => Promise<{ error: string | null }>;
 }) {
   const archived = !!collection.archivedAt;
   const [notes, setNotes] = useState(collection.notes);
@@ -299,10 +308,15 @@ export function CollectionWorkspace({
           <ConceptGrid
             concepts={visibleConcepts}
             submittedConceptIds={submittedConceptIds}
+            creators={creators}
+            collections={allCollections}
+            currentCreatorId={collection.creatorId}
             onStatusChange={onSetConceptStatus}
             onRemove={onRemoveVideo}
             onNotesChange={onSetConceptNotes}
             onOpen={openConceptDetail}
+            onReassign={onReassignConcept}
+            onAssignToAnother={onAssignConceptToAnother}
           />
 
           <div className="sticky top-0 space-y-3">
