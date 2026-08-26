@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, FolderHeart, ArrowUpRight } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
-import { COLLECTION_STATUS_STYLES } from "../collections/CollectionRow";
+import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "../collections/CollectionRow";
 import { CollectionVersionMenu } from "../collections/CollectionVersionMenu";
 import { groupCollectionsByFamily, isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
@@ -151,10 +151,10 @@ export function SavedCollectionsPopover({
                   <span
                     className={[
                       "shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]",
-                      COLLECTION_STATUS_STYLES[current.status],
+                      COLLECTION_STATUS_STYLES[effectiveCollectionStatus(current)],
                     ].join(" ")}
                   >
-                    {current.status}
+                    {effectiveCollectionStatus(current)}
                   </span>
                   <ArrowUpRight
                     size={13}

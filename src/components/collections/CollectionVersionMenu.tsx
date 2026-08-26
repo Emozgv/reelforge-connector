@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from "react";
 import { Check, Plus } from "lucide-react";
 import type { CollectionStatus } from "../../types";
-import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
+import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "./CollectionRow";
 
 export interface VersionEntry {
   id: string;
   name: string;
   status: CollectionStatus;
+  submissions: { status: string }[];
 }
 
 // One main folder, several numbered versions nested under it — hovering the
@@ -59,9 +60,12 @@ export function CollectionVersionMenu({
                 <span className="truncate">{f.name}</span>
                 <span className="flex items-center gap-1.5 shrink-0">
                   <span
-                    className={["text-[9.5px] font-medium px-1 py-[1px] rounded-[3px]", COLLECTION_STATUS_STYLES[f.status]].join(" ")}
+                    className={[
+                      "text-[9.5px] font-medium px-1 py-[1px] rounded-[3px]",
+                      COLLECTION_STATUS_STYLES[effectiveCollectionStatus(f)],
+                    ].join(" ")}
                   >
-                    {f.status}
+                    {effectiveCollectionStatus(f)}
                   </span>
                   {f.id === currentId && <Check size={11} className="text-[#D39448]" />}
                 </span>

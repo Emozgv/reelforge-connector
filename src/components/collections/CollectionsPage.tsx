@@ -84,7 +84,7 @@ export function CollectionsPage({
         onSendSubmission={(note) => collectionsStore.sendSubmission(activeCollection.id, note)}
         siblingCollections={collections
           .filter((c) => c.creatorId === activeCollection.creatorId && c.id !== activeCollection.id)
-          .map((c) => ({ id: c.id, name: c.name, status: c.status }))}
+          .map((c) => ({ id: c.id, name: c.name, status: c.status, submissions: c.submissions }))}
         onStartNext={async () => {
           const result = await collectionsStore.createNextVersion(activeCollection.id);
           if (result.id) setActiveCollectionId(result.id);

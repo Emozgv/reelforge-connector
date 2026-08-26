@@ -6,11 +6,27 @@ import { isVersionableCollection, nextCollectionName } from "../../lib/collectio
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
 
-export const COLLECTION_STATUS_STYLES: Record<Collection["status"], string> = {
+export const COLLECTION_STATUS_STYLES: Record<Collection["status"] | "Cancelled", string> = {
   Draft: "text-neutral-400 bg-white/[0.04]",
   Sent: "text-sky-300/80 bg-sky-400/10",
   Completed: "text-emerald-300/80 bg-emerald-400/10",
+  Cancelled: "text-neutral-500 bg-white/[0.04]",
 };
+
+// Collection.status only ever moves forward to "Sent" when a Submission goes
+// out — it has no "Cancelled" value of its own, and nothing rolls it back
+// when that Submission is later cancelled (cancellation is system-controlled,
+// not a client mutation). So the badge shown for a Collection reflects its
+// latest Submission's real outcome rather than the stale stored status
+// whenever that Submission was cancelled.
+export function effectiveCollectionStatus(collection: {
+  status: Collection["status"];
+  submissions: { status: string }[];
+}): Collection["status"] | "Cancelled" {
+  const latest = collection.submissions[collection.submissions.length - 1];
+  if (latest?.status === "Cancelled" && collection.status === "Sent") return "Cancelled";
+  return collection.status;
+}
 
 // Collection.status ("Draft"/"Sent"/"Completed") doesn't distinguish "just
 // sent, nothing happening yet" from "actively being worked on" — this reads
@@ -168,10 +184,10 @@ export function CollectionRow({
       <span
         className={[
           "shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] whitespace-nowrap",
-          COLLECTION_STATUS_STYLES[current.status],
+          COLLECTION_STATUS_STYLES[effectiveCollectionStatus(current)],
         ].join(" ")}
       >
-        {current.status}
+        {effectiveCollectionStatus(current)}
       </span>
 
       <span className="shrink-0 text-[10.5px] text-neutral-600 w-[92px] text-right">

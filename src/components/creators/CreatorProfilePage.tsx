@@ -6,7 +6,7 @@ import { CONTENT_STYLES } from "../../data/mockData";
 import { creatorSetupStatus } from "../../lib/creatorMapping";
 import { computeCreatorUsageStats } from "../../lib/creatorUsageStats";
 import { planBadgeLabel, planBadgeStyle, planPriceLabel } from "../../lib/planDisplay";
-import { COLLECTION_STATUS_STYLES } from "../collections/CollectionRow";
+import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "../collections/CollectionRow";
 import { DriveGlyph } from "../collections/DriveGlyph";
 import { NewCollectionPanel } from "../collections/NewCollectionPanel";
 import { computeCreatorStats } from "./creatorStats";
@@ -264,10 +264,10 @@ export function CreatorProfilePage({
                       <span
                         className={[
                           "text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]",
-                          COLLECTION_STATUS_STYLES[c.status],
+                          COLLECTION_STATUS_STYLES[effectiveCollectionStatus(c)],
                         ].join(" ")}
                       >
-                        {c.status}
+                        {effectiveCollectionStatus(c)}
                       </span>
                     </div>
                   </button>

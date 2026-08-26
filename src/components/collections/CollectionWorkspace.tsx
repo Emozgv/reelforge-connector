@@ -15,7 +15,7 @@ import { resolveReelVideo } from "../../lib/searchReels";
 import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
 import { DriveGlyph } from "./DriveGlyph";
-import { COLLECTION_STATUS_STYLES } from "./CollectionRow";
+import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "./CollectionRow";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
 
@@ -61,7 +61,7 @@ export function CollectionWorkspace({
   // (siblingCollections below is only this collection's own version family).
   allCollections: Collection[];
   saveError?: string | null;
-  siblingCollections: { id: string; name: string; status: CollectionStatus }[];
+  siblingCollections: { id: string; name: string; status: CollectionStatus; submissions: Collection["submissions"] }[];
   onBack: () => void;
   backLabel: string;
   onUpdateNotes: (notes: string) => void;
@@ -101,7 +101,7 @@ export function CollectionWorkspace({
   const [detailError, setDetailError] = useState<string | null>(null);
   const creator = creators.find((c) => c.id === collection.creatorId);
   const family = collectionFamily(collection.name, [
-    { id: collection.id, name: collection.name, status: collection.status },
+    { id: collection.id, name: collection.name, status: collection.status, submissions: collection.submissions },
     ...siblingCollections,
   ]);
   // Display preview only — the actual name is always recomputed fresh by the
@@ -253,10 +253,10 @@ export function CollectionWorkspace({
               <span
                 className={[
                   "text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]",
-                  COLLECTION_STATUS_STYLES[collection.status],
+                  COLLECTION_STATUS_STYLES[effectiveCollectionStatus(collection)],
                 ].join(" ")}
               >
-                {collection.status}
+                {effectiveCollectionStatus(collection)}
               </span>
 
               {!archived && collection.status === "Completed" && (
