@@ -424,6 +424,11 @@ export function CreativityHubPage({
     // it just cleared back to the Hub's home state.
     requestIdRef.current++;
     setRefreshSpinning(true);
+    // A cancel-search click during a still-in-flight fetch is the one caller
+    // of this function where `searching` is true — loadVideos' own
+    // setSearching(false) never runs for it, since the requestId bump just
+    // above makes it stale and loadVideos bails out early instead.
+    setSearching(false);
     setLastAction(null);
     setVideos([]);
     setSearchError(false);
@@ -778,6 +783,7 @@ export function CreativityHubPage({
               onOpenDetail={(video) => setDetailVideoId(video.id)}
               spacious
               loading={searching}
+              onCancelLoading={handleRefresh}
               loadingLabel={
                 shuffleSpinning
                   ? "ReelForge is shuffling in a fresh batch…"

@@ -31,7 +31,17 @@ function useLoadingStage(active: boolean): string {
 // visible during a new search reads as "did my click even register?" —
 // confirmed directly by the user watching a client try it. Clearing to this
 // panel the instant a new search starts removes that ambiguity completely.
-function SearchingPanel({ spacious, headline, hint }: { spacious: boolean; headline: string; hint?: string }) {
+function SearchingPanel({
+  spacious,
+  headline,
+  hint,
+  onCancel,
+}: {
+  spacious: boolean;
+  headline: string;
+  hint?: string;
+  onCancel?: () => void;
+}) {
   const stage = useLoadingStage(true);
   return (
     <div
@@ -52,6 +62,14 @@ function SearchingPanel({ spacious, headline, hint }: { spacious: boolean; headl
         {stage}
       </p>
       {hint && <p className="text-[11.5px] text-neutral-600 mt-2.5 max-w-xs">{hint}</p>}
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="mt-4 text-[11px] text-neutral-500 hover:text-neutral-300 underline underline-offset-2 transition-colors"
+        >
+          cancel search
+        </button>
+      )}
     </div>
   );
 }
@@ -64,6 +82,7 @@ export function VideoGrid({
   spacious = false,
   loading = false,
   loadingLabel = "ReelForge is finding new videos for you…",
+  onCancelLoading,
   emptyTitle = "No results match your search.",
   emptyHint = "Try a different keyword or platform.",
 }: {
@@ -77,6 +96,11 @@ export function VideoGrid({
   // "working" panel — see SearchingPanel above for why that's deliberate.
   loading?: boolean;
   loadingLabel?: string;
+  // Escape hatch for a lookup that's taking a long time (e.g. a profile
+  // that doesn't exist) — the header's own Refresh button is disabled for
+  // the whole time `loading` is true, so this is the only way out until the
+  // fetch itself resolves.
+  onCancelLoading?: () => void;
   emptyTitle?: string;
   emptyHint?: string;
 }) {
@@ -86,6 +110,7 @@ export function VideoGrid({
         spacious={spacious}
         headline={loadingLabel}
         hint="Good research can take a few seconds — hang tight."
+        onCancel={onCancelLoading}
       />
     );
   }
