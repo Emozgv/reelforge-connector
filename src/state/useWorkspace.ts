@@ -32,6 +32,11 @@ export function useWorkspace(userId: string | undefined) {
   // cancelled (see cancel_workspace_invite) — a distinct, honest message
   // rather than the generic "no workspace access" screen.
   const [inviteCancelled, setInviteCancelled] = useState(false);
+  // Set when the account's workspace was found (via my_workspace_status(),
+  // which deliberately bypasses the RLS that otherwise hides a
+  // suspended/removed workspace entirely) but isn't active — a specific
+  // message rather than the same generic "no access" one.
+  const [suspendedStatus, setSuspendedStatus] = useState<"suspended" | "removed" | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -94,10 +99,17 @@ export function useWorkspace(userId: string | undefined) {
       }
 
       if (!membership.data) {
+        // Could be "never invited" or "workspace suspended/removed" — RLS
+        // makes both look identical from here, so ask the one function
+        // that's allowed to see past that.
+        const { data: rawStatus } = await supabase.schema("client_os").rpc("my_workspace_status");
+        if (!active) return;
+        setSuspendedStatus(rawStatus === "suspended" || rawStatus === "removed" ? rawStatus : null);
         setWorkspace(null);
         setLoading(false);
         return;
       }
+      setSuspendedStatus(null);
 
       const { data: ws, error: workspaceError } = await supabase
         .schema("client_os")
@@ -156,6 +168,7 @@ export function useWorkspace(userId: string | undefined) {
     justJoined,
     dismissJustJoined: () => setJustJoined(false),
     inviteCancelled,
+    suspendedStatus,
     updateDisplayName,
   };
 }

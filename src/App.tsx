@@ -11,6 +11,7 @@ const PAGE_LABELS: Record<Page, string> = {
   library: "Library",
   billing: "Billing",
   settings: "Settings",
+  admin: "Admin Dashboard",
 };
 import { DashboardPage } from "./components/dashboard/DashboardPage";
 import { CreativityHubPage } from "./components/hub/CreativityHubPage";
@@ -21,6 +22,7 @@ import { LibraryPage } from "./components/library/LibraryPage";
 import { BillingPage } from "./components/billing/BillingPage";
 import { ResearchAccountsPage } from "./components/research/ResearchAccountsPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { AdminDashboardPage } from "./components/admin/AdminDashboardPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { FullScreenLoader } from "./components/auth/FullScreenLoader";
 import { NoWorkspaceAccess } from "./components/auth/NoWorkspaceAccess";
@@ -31,6 +33,7 @@ import { useCollectionsStore } from "./state/useCollectionsStore";
 import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
 import { useWorkspace } from "./state/useWorkspace";
+import { useAdminAccess } from "./state/useAdminAccess";
 import { useActivityFeed } from "./state/useActivityFeed";
 import { useCreatorPackages } from "./state/useCreatorPackages";
 import { useResearchAccounts } from "./state/useResearchAccounts";
@@ -76,8 +79,10 @@ function App() {
     justJoined,
     dismissJustJoined,
     inviteCancelled,
+    suspendedStatus,
     updateDisplayName,
   } = useWorkspace(user?.id);
+  const { isAdmin: isPlatformAdmin } = useAdminAccess(user?.id);
   const displayName = workspace?.displayName || user?.email;
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
@@ -98,7 +103,36 @@ function App() {
   }
 
   if (!workspace) {
-    return <NoWorkspaceAccess email={user.email} cancelled={inviteCancelled} onSignOut={signOut} />;
+    // A platform admin with no client workspace of their own still gets the
+    // full Admin Dashboard — this account exists to manage other clients,
+    // not to belong to one itself.
+    if (isPlatformAdmin) {
+      return (
+        <div className="relative flex h-screen w-screen bg-[#020508] text-neutral-200 font-sans overflow-hidden">
+          <div className="grain-overlay" />
+          <Sidebar
+            page="admin"
+            onNavigate={() => {}}
+            userEmail={user.email}
+            isPlatformAdmin
+            onSignOut={signOut}
+            activity={{ items: [], loading: false }}
+            onOpenCollection={() => {}}
+          />
+          <div className="relative z-10 flex-1 min-w-0 h-full">
+            <AdminDashboardPage />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <NoWorkspaceAccess
+        email={user.email}
+        cancelled={inviteCancelled}
+        suspendedStatus={suspendedStatus}
+        onSignOut={signOut}
+      />
+    );
   }
 
   if (justJoined) {
@@ -137,6 +171,7 @@ function App() {
         displayName={displayName}
         workspaceName={workspace.name}
         role={workspace.role}
+        isPlatformAdmin={isPlatformAdmin}
         onSignOut={signOut}
         activity={activity}
         onOpenCollection={navigateToCollection}
@@ -183,6 +218,7 @@ function App() {
 
         {page !== "hub" && page !== "research" && (
           <div key={page} className="h-full animate-fade-in">
+            {page === "admin" && isPlatformAdmin && <AdminDashboardPage />}
             {page === "dashboard" && (
               <DashboardPage
                 userName={displayName}

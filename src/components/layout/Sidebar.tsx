@@ -11,6 +11,7 @@ import {
   LogOut,
   Bell,
   Radar,
+  ShieldCheck,
 } from "lucide-react";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import type { ActivityEventType } from "../../lib/activityMapping";
@@ -39,7 +40,8 @@ export type Page =
   | "production"
   | "library"
   | "billing"
-  | "settings";
+  | "settings"
+  | "admin";
 
 const NAV_GROUPS: { label: string; items: { id: Page; label: string; icon: React.ReactNode }[] }[] = [
   {
@@ -75,6 +77,7 @@ export function Sidebar({
   displayName,
   workspaceName,
   role,
+  isPlatformAdmin,
   onSignOut,
   activity,
   onOpenCollection,
@@ -85,6 +88,10 @@ export function Sidebar({
   displayName?: string;
   workspaceName?: string;
   role?: string;
+  // Completely separate from `role` — a normal Agency Owner never sees
+  // this just because role === "owner" in their own workspace. Only true
+  // for an account in client_os.platform_admins (see useAdminAccess).
+  isPlatformAdmin?: boolean;
   onSignOut?: () => void;
   activity: { items: ActivityFeedItem[]; loading: boolean };
   onOpenCollection: (collectionId: string) => void;
@@ -207,6 +214,20 @@ export function Sidebar({
       </nav>
 
       <div className="p-3.5 xl:p-4 border-t border-white/[0.06]">
+        {isPlatformAdmin && (
+          <button
+            onClick={() => onNavigate("admin")}
+            className={[
+              "mb-1.5 w-full flex items-center gap-2 px-2.5 xl:px-3 py-2 rounded-lg text-[12.5px] transition-colors duration-150 border",
+              page === "admin"
+                ? "text-neutral-100 bg-[#D39448]/[0.1] border-[#D39448]/30"
+                : "text-neutral-500 border-transparent hover:text-neutral-200 hover:bg-white/[0.035]",
+            ].join(" ")}
+          >
+            <ShieldCheck size={14} className={page === "admin" ? "text-[#D39448]" : ""} />
+            Admin Dashboard
+          </button>
+        )}
         <div className="group flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-lg hover:bg-white/[0.035] transition-colors duration-150">
           <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-full bg-gradient-to-br from-[#D39448] to-[#A97942] flex items-center justify-center text-[11.5px] xl:text-[12px] font-medium text-[#020508] shrink-0">
             {initials}
