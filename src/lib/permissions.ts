@@ -5,14 +5,17 @@ export type WorkspaceRole = "owner" | "manager" | "va";
 // is also enforced at the database level (RLS / SECURITY DEFINER RPCs) —
 // this helper only controls what the UI shows, never the real access.
 
-// Team *management* (invite, change a role, remove a member, cancel an
-// invite) is Owner-only — a Manager can see the team (see canViewTeam
-// below) but never act on it, confirmed as a real gap live: a Manager
-// could otherwise change their own role. Owner and Manager can see
-// Billing; a VA gets the full day-to-day workspace (Research, Research
-// Accounts, Collections, Creators, Production, Library) but neither of
-// those two things.
+// Owner and Manager can both invite/remove a member/cancel an invite. Only
+// a VA can't — it can't manage the team at all, day-to-day or otherwise.
 export function canManageTeam(role: string | undefined): boolean {
+  return role === "owner" || role === "manager";
+}
+
+// Changing a member's role specifically is narrower than the above and
+// Owner-only — confirmed as a real gap live: a Manager could otherwise
+// change their own role (self-demote). Everything else about team
+// management (invite/remove/cancel-invite) Owner and Manager both keep.
+export function canChangeTeamRoles(role: string | undefined): boolean {
   return role === "owner";
 }
 
