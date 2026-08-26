@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useLayoutEffect, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import type { Collection, Creator } from "../../types";
 import { groupCollectionsByFamily } from "../../lib/collectionNaming";
 
 type Action = "copy" | "move";
+
+const POPOVER_WIDTH = 240; // matches the w-60 panel below
 
 // Anchored popover for reassigning a saved Concept to a different creator —
 // mirrors SavePanel's "Save for X" + collection-list pattern so this feels
@@ -11,7 +14,13 @@ type Action = "copy" | "move";
 // (move) is only offered when the caller says it's safe (i.e. the concept
 // hasn't been submitted yet); "Assign to another creator" (copy) is always
 // available.
+//
+// Rendered through a portal at document.body, positioned from the trigger
+// button's real screen coordinates — the concept card it hangs off of has
+// overflow-hidden (to clip the thumbnail to its rounded corners), which
+// silently cropped this panel whenever the card wasn't wide enough for it.
 export function AssignCreatorPopover({
+  anchorRef,
   creators,
   collections,
   currentCreatorId,
@@ -19,6 +28,7 @@ export function AssignCreatorPopover({
   onClose,
   onConfirm,
 }: {
+  anchorRef: RefObject<HTMLElement | null>;
   creators: Creator[];
   collections: Collection[];
   currentCreatorId: string | undefined;
@@ -28,6 +38,16 @@ export function AssignCreatorPopover({
 }) {
   const [action, setAction] = useState<Action>("copy");
   const [targetCreatorId, setTargetCreatorId] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    // Right-align to the button like before, just clamped to stay on-screen
+    // now that clipping isn't doing that for us implicitly.
+    const left = Math.min(Math.max(8, rect.right - POPOVER_WIDTH), window.innerWidth - POPOVER_WIDTH - 8);
+    setPosition({ top: rect.bottom + 4, left });
+  }, [anchorRef]);
 
   const otherCreators = creators.filter((c) => c.id !== currentCreatorId);
   const targetCreator = creators.find((c) => c.id === targetCreatorId);
@@ -42,11 +62,14 @@ export function AssignCreatorPopover({
     onConfirm(action, targetCreatorId, targetCollectionId);
   }
 
-  return (
+  if (!position) return null;
+
+  return createPortal(
     <div
       onMouseLeave={onClose}
       onClick={(e) => e.stopPropagation()}
-      className="absolute right-0 top-7 z-20 w-60 rounded-lg surface-panel-strong p-1 animate-fade-in"
+      style={{ top: position.top, left: position.left, width: POPOVER_WIDTH }}
+      className="fixed z-[60] rounded-lg surface-panel-strong p-1 animate-fade-in"
     >
       {!targetCreatorId ? (
         <>
@@ -130,6 +153,7 @@ export function AssignCreatorPopover({
           )}
         </>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

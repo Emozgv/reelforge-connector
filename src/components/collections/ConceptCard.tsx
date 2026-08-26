@@ -44,6 +44,7 @@ export function ConceptCard({
   const [editingNote, setEditingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState(concept.notes);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
+  const assignButtonRef = useRef<HTMLButtonElement>(null);
   const { video } = concept;
 
   useEffect(() => {
@@ -123,6 +124,7 @@ export function ConceptCard({
       {/* assign/reassign creator — hover only, mirrors the remove button */}
       <div className="absolute top-2 right-2 mt-12">
         <button
+          ref={assignButtonRef}
           onClick={(e) => {
             e.stopPropagation();
             setAssignMenuOpen((v) => !v);
@@ -134,6 +136,7 @@ export function ConceptCard({
         </button>
         {assignMenuOpen && (
           <AssignCreatorPopover
+            anchorRef={assignButtonRef}
             creators={creators}
             collections={collections}
             currentCreatorId={currentCreatorId}
