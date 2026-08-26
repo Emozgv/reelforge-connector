@@ -496,21 +496,42 @@ export function ResearchAccountsPage({
           <CreatorSelector creators={creators} selected={selectedCreator} onSelect={setSelectedCreator} />
 
           <div className="flex items-center h-11 p-1 rounded-full glass-panel">
-            {(["instagram", "tiktok"] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPlatform(p)}
-                className={[
-                  "flex items-center gap-1.5 h-9 px-4 rounded-full text-[13px] capitalize transition-all duration-200",
-                  platform === p
-                    ? "bg-[#D39448]/15 text-[#D39448] shadow-[inset_0_0_0_1px_rgba(211,148,72,0.35)]"
-                    : "text-neutral-500 hover:text-neutral-300",
-                ].join(" ")}
-              >
-                <PlatformIcon platform={p} size={12} />
-                {p === "instagram" ? "Instagram" : "TikTok"}
-              </button>
-            ))}
+            {(["instagram", "tiktok"] as const).map((p) => {
+              // Temporarily disabled while TikTok's real-session reliability
+              // (login blocks, feed freshness) gets re-verified on a clean
+              // account/device/network — see connect-worker.mjs and
+              // session-server.mjs, both left fully intact. Instagram is
+              // completely unaffected; platform state already defaults to
+              // "instagram" and this is the only place it's ever changed,
+              // so disabling the click here is enough to fully block access.
+              const disabled = p === "tiktok";
+              return (
+                <button
+                  key={p}
+                  onClick={() => {
+                    if (!disabled) setPlatform(p);
+                  }}
+                  disabled={disabled}
+                  title={disabled ? "TikTok Research is temporarily unavailable" : undefined}
+                  className={[
+                    "flex items-center gap-1.5 h-9 px-4 rounded-full text-[13px] capitalize transition-all duration-200",
+                    disabled
+                      ? "text-neutral-700 opacity-50 cursor-not-allowed"
+                      : platform === p
+                        ? "bg-[#D39448]/15 text-[#D39448] shadow-[inset_0_0_0_1px_rgba(211,148,72,0.35)]"
+                        : "text-neutral-500 hover:text-neutral-300",
+                  ].join(" ")}
+                >
+                  <PlatformIcon platform={p} size={12} />
+                  {p === "instagram" ? "Instagram" : "TikTok"}
+                  {disabled && (
+                    <span className="ml-0.5 text-[9px] tracking-wide uppercase text-neutral-600 font-medium">
+                      Beta
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
