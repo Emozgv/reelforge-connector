@@ -25,6 +25,10 @@ export function useWorkspace(userId: string | undefined) {
   // lets the app show a one-time "set your password" step before dropping
   // an invited person straight into the workspace they just joined.
   const [justJoined, setJustJoined] = useState(false);
+  // True when this session came from an invite link that's since been
+  // cancelled (see cancel_workspace_invite) — a distinct, honest message
+  // rather than the generic "no workspace access" screen.
+  const [inviteCancelled, setInviteCancelled] = useState(false);
 
   useEffect(() => {
     if (!userId) {
@@ -57,8 +61,11 @@ export function useWorkspace(userId: string | undefined) {
       // their invite into a real membership. Trying this unconditionally
       // whenever no membership is found is harmless: it's a no-op error for
       // every other case (already a member, no invite, etc).
+      let cancelled = false;
       if (!membership.error && !membership.data) {
-        const { data: accepted } = await supabase.schema("client_os").rpc("accept_pending_workspace_invite");
+        const { data: accepted, error: acceptError } = await supabase
+          .schema("client_os")
+          .rpc("accept_pending_workspace_invite");
         if (accepted) {
           didAccept = true;
           membership = await supabase
@@ -68,8 +75,11 @@ export function useWorkspace(userId: string | undefined) {
             .eq("user_id", userId)
             .limit(1)
             .maybeSingle();
+        } else if (acceptError?.message?.includes("invite_cancelled")) {
+          cancelled = true;
         }
       }
+      setInviteCancelled(cancelled);
 
       if (!active) return;
 
@@ -135,5 +145,13 @@ export function useWorkspace(userId: string | undefined) {
     return { error: null };
   }
 
-  return { workspace, loading, error, justJoined, dismissJustJoined: () => setJustJoined(false), updateDisplayName };
+  return {
+    workspace,
+    loading,
+    error,
+    justJoined,
+    dismissJustJoined: () => setJustJoined(false),
+    inviteCancelled,
+    updateDisplayName,
+  };
 }

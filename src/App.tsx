@@ -74,6 +74,7 @@ function App() {
     loading: workspaceLoading,
     justJoined,
     dismissJustJoined,
+    inviteCancelled,
     updateDisplayName,
   } = useWorkspace(user?.id);
   const displayName = workspace?.displayName || user?.email;
@@ -96,7 +97,7 @@ function App() {
   }
 
   if (!workspace) {
-    return <NoWorkspaceAccess email={user.email} onSignOut={signOut} />;
+    return <NoWorkspaceAccess email={user.email} cancelled={inviteCancelled} onSignOut={signOut} />;
   }
 
   if (justJoined) {
