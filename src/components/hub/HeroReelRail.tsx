@@ -80,10 +80,12 @@ const RAIL_IMAGES = [
 
 function Column({
   offset,
+  imageOffset,
   duration,
   reverse,
 }: {
   offset: number;
+  imageOffset: number;
   duration: number;
   reverse?: boolean;
 }) {
@@ -100,7 +102,7 @@ function Column({
         }}
       >
         {loop.map((g, i) => {
-          const src = RAIL_IMAGES[(offset + i) % RAIL_IMAGES.length];
+          const src = RAIL_IMAGES[(imageOffset + i) % RAIL_IMAGES.length];
           return (
             <div
               key={i}
@@ -142,10 +144,10 @@ export function HeroReelRails() {
         className="absolute left-2 xl:left-6 2xl:left-10 top-0 bottom-0 flex items-center gap-3 xl:gap-4 opacity-[0.35]"
         style={maskStyle}
       >
-        <Column offset={0} duration={36} />
-        <Column offset={2} duration={44} reverse />
+        <Column offset={0} imageOffset={0} duration={36} />
+        <Column offset={2} imageOffset={21} duration={44} reverse />
         <div className="hidden 2xl:block">
-          <Column offset={3} duration={38} />
+          <Column offset={3} imageOffset={41} duration={38} />
         </div>
       </div>
       <div
@@ -153,10 +155,10 @@ export function HeroReelRails() {
         style={maskStyle}
       >
         <div className="hidden 2xl:block">
-          <Column offset={5} duration={42} reverse />
+          <Column offset={5} imageOffset={52} duration={42} reverse />
         </div>
-        <Column offset={4} duration={40} reverse />
-        <Column offset={1} duration={32} />
+        <Column offset={4} imageOffset={31} duration={40} reverse />
+        <Column offset={1} imageOffset={10} duration={32} />
       </div>
     </div>
   );
