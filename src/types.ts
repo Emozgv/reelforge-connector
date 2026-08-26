@@ -251,7 +251,7 @@ export interface WorkspacePackage {
 // (client_os.creator_packages). A creator with no CreatorPackage has no
 // active plan; that must always read as "No active plan," never a default
 // free tier.
-export type PlanTier = "S" | "M" | "L" | "Enterprise";
+export type PlanTier = "Trial" | "S" | "M" | "L" | "Enterprise";
 
 export interface CreatorPackage {
   creatorId: string;

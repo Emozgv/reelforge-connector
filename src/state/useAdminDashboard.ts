@@ -112,6 +112,15 @@ export interface AdminWorkspaceDetail {
       price_monthly: number | null;
       monthly_reel_allowance: number;
       status: string;
+      setup_fee_paid_at: string | null;
+      trial_fee_paid_at: string | null;
+      bonus_reel_credits: number;
+      regeneration_credits_total: number;
+      pending_plan_tier: string | null;
+      pending_plan_label: string | null;
+      pending_change_effective_at: string | null;
+      cancel_at_period_end: boolean;
+      cancellation_effective_at: string | null;
     } | null;
   }[];
   recent_activity: { id: string; event_type: string; message: string; created_at: string }[];
@@ -205,7 +214,7 @@ export function useAdminWorkspaceDetail(workspaceId: string | null) {
 
   async function setCreatorPackage(input: {
     creatorId: string;
-    planTier: "S" | "M" | "L" | "Enterprise";
+    planTier: "Trial" | "S" | "M" | "L" | "Enterprise";
     planLabel: string;
     priceMonthly: number;
     monthlyReelAllowance: number;
@@ -222,6 +231,21 @@ export function useAdminWorkspaceDetail(workspaceId: string | null) {
     return { error: null };
   }
 
+  async function grantCreatorBonusCredits(
+    creatorId: string,
+    bonusReels: number,
+    bonusRegenerations: number
+  ): Promise<{ error: string | null }> {
+    const { error: e } = await supabase.schema("client_os").rpc("admin_grant_creator_bonus_credits", {
+      p_creator_id: creatorId,
+      p_bonus_reels: bonusReels,
+      p_bonus_regenerations: bonusRegenerations,
+    });
+    if (e) return { error: parseError(e) };
+    await load();
+    return { error: null };
+  }
+
   return {
     detail,
     loading,
@@ -232,5 +256,6 @@ export function useAdminWorkspaceDetail(workspaceId: string | null) {
     grantBonusCredits,
     grantFreePeriod,
     setCreatorPackage,
+    grantCreatorBonusCredits,
   };
 }

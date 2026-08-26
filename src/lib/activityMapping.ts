@@ -17,7 +17,12 @@ export type ActivityEventType =
   | "regeneration_requested"
   | "delivery_eta_set"
   | "submission_finished"
-  | "submission_check_inbox";
+  | "submission_check_inbox"
+  | "plan_upgraded"
+  | "plan_downgrade_scheduled"
+  | "plan_change_cancelled"
+  | "subscription_cancellation_scheduled"
+  | "subscription_cancellation_undone";
 
 // Shape of a row from client_os.activity_events. Append-only from the client's
 // perspective — SELECT + INSERT only, no UPDATE/DELETE grant at all.

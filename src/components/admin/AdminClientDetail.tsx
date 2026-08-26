@@ -11,6 +11,7 @@ import {
   History,
 } from "lucide-react";
 import { useAdminWorkspaceDetail } from "../../state/useAdminDashboard";
+import { usePlanCatalog } from "../../lib/planCatalog";
 
 const STATUS_STYLE: Record<string, string> = {
   active: "text-emerald-300/85 bg-emerald-400/10",
@@ -18,12 +19,10 @@ const STATUS_STYLE: Record<string, string> = {
   removed: "text-rose-300/85 bg-rose-400/10",
 };
 
-const PLAN_TIER_DEFAULTS: Record<string, { label: string; price: number; allowance: number }> = {
-  S: { label: "Starter", price: 89, allowance: 25 },
-  M: { label: "Growth", price: 179, allowance: 60 },
-  L: { label: "Scale", price: 349, allowance: 120 },
-  Enterprise: { label: "Enterprise", price: 0, allowance: 0 },
-};
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric" });
+}
 
 function SectionCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -38,8 +37,18 @@ function SectionCard({ title, icon, children }: { title: string; icon: React.Rea
 }
 
 export function AdminClientDetail({ workspaceId, onBack }: { workspaceId: string; onBack: () => void }) {
-  const { detail, loading, error, setStatus, setWorkspacePackage, grantBonusCredits, grantFreePeriod, setCreatorPackage } =
-    useAdminWorkspaceDetail(workspaceId);
+  const {
+    detail,
+    loading,
+    error,
+    setStatus,
+    setWorkspacePackage,
+    grantBonusCredits,
+    grantFreePeriod,
+    setCreatorPackage,
+    grantCreatorBonusCredits,
+  } = useAdminWorkspaceDetail(workspaceId);
+  const { catalog } = usePlanCatalog();
 
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -51,12 +60,17 @@ export function AdminClientDetail({ workspaceId, onBack }: { workspaceId: string
     null
   );
   const [editingCreatorId, setEditingCreatorId] = useState<string | null>(null);
-  const [creatorDraft, setCreatorDraft] = useState<{ tier: "S" | "M" | "L" | "Enterprise"; label: string; price: string; allowance: string }>({
+  const [creatorDraft, setCreatorDraft] = useState<{ tier: "Trial" | "S" | "M" | "L" | "Enterprise"; label: string; price: string; allowance: string }>({
     tier: "S",
     label: "Starter",
     price: "89",
     allowance: "25",
   });
+  const [creatorBonus, setCreatorBonus] = useState<Record<string, { reels: string; regens: string }>>({});
+
+  function catalogDefault(tier: string) {
+    return catalog.find((p) => p.tier === tier) ?? { label: tier, price: 0, monthlyReelAllowance: 0 };
+  }
 
   async function run(key: string, fn: () => Promise<{ error: string | null }>) {
     setBusy(key);
@@ -359,6 +373,7 @@ export function AdminClientDetail({ workspaceId, onBack }: { workspaceId: string
                   <span className="text-[10.5px] text-neutral-400">
                     {c.package.plan_label} · {c.package.monthly_reel_allowance} reels/mo
                     {c.package.price_monthly ? ` · $${c.package.price_monthly}` : ""}
+                    {c.package.bonus_reel_credits > 0 && ` · +${c.package.bonus_reel_credits} bonus`}
                   </span>
                 ) : (
                   <span className="text-[10.5px] text-neutral-600">No plan</span>
@@ -370,12 +385,13 @@ export function AdminClientDetail({ workspaceId, onBack }: { workspaceId: string
                       return;
                     }
                     setEditingCreatorId(c.id);
-                    const tier = (c.package?.plan_tier as "S" | "M" | "L" | "Enterprise") ?? "S";
+                    const tier = (c.package?.plan_tier as "Trial" | "S" | "M" | "L" | "Enterprise") ?? "S";
+                    const d = catalogDefault(tier);
                     setCreatorDraft({
                       tier,
-                      label: c.package?.plan_label ?? PLAN_TIER_DEFAULTS[tier].label,
-                      price: String(c.package?.price_monthly ?? PLAN_TIER_DEFAULTS[tier].price),
-                      allowance: String(c.package?.monthly_reel_allowance ?? PLAN_TIER_DEFAULTS[tier].allowance),
+                      label: c.package?.plan_label ?? d.label,
+                      price: String(c.package?.price_monthly ?? d.price ?? 0),
+                      allowance: String(c.package?.monthly_reel_allowance ?? d.monthlyReelAllowance ?? 0),
                     });
                   }}
                   className="shrink-0 text-[11px] font-medium text-[#D39448] hover:brightness-110 transition-[filter]"
@@ -384,21 +400,71 @@ export function AdminClientDetail({ workspaceId, onBack }: { workspaceId: string
                 </button>
               </div>
 
+              {c.package && (c.package.setup_fee_paid_at || c.package.trial_fee_paid_at || c.package.pending_change_effective_at || c.package.cancel_at_period_end) && (
+                <p className="mt-1.5 text-[10px] text-neutral-600 flex flex-wrap gap-x-3">
+                  {c.package.setup_fee_paid_at && <span>Setup fee paid {fmtDate(c.package.setup_fee_paid_at)}</span>}
+                  {c.package.trial_fee_paid_at && <span>Trial started {fmtDate(c.package.trial_fee_paid_at)}</span>}
+                  {c.package.pending_change_effective_at && (
+                    <span className="text-amber-400/80">Changing to {c.package.pending_plan_label} on {fmtDate(c.package.pending_change_effective_at)}</span>
+                  )}
+                  {c.package.cancel_at_period_end && (
+                    <span className="text-rose-400/80">Ends {fmtDate(c.package.cancellation_effective_at)}</span>
+                  )}
+                </p>
+              )}
+
               {editingCreatorId === c.id && (
-                <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
+                <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-3">
+                  {c.package && (
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10.5px] text-neutral-500">Grant bonus reels</label>
+                        <input
+                          type="number"
+                          value={creatorBonus[c.id]?.reels ?? "0"}
+                          onChange={(e) => setCreatorBonus({ ...creatorBonus, [c.id]: { reels: e.target.value, regens: creatorBonus[c.id]?.regens ?? "0" } })}
+                          className="mt-1 w-full h-8 px-2 rounded-md surface-field text-[12.5px] text-neutral-100 outline-none"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10.5px] text-neutral-500">Grant regen credits</label>
+                        <input
+                          type="number"
+                          value={creatorBonus[c.id]?.regens ?? "0"}
+                          onChange={(e) => setCreatorBonus({ ...creatorBonus, [c.id]: { reels: creatorBonus[c.id]?.reels ?? "0", regens: e.target.value } })}
+                          className="mt-1 w-full h-8 px-2 rounded-md surface-field text-[12.5px] text-neutral-100 outline-none"
+                        />
+                      </div>
+                      <button
+                        disabled={busy === `bonus-${c.id}`}
+                        onClick={() =>
+                          void run(`bonus-${c.id}`, async () => {
+                            const b = creatorBonus[c.id] ?? { reels: "0", regens: "0" };
+                            const res = await grantCreatorBonusCredits(c.id, Number(b.reels) || 0, Number(b.regens) || 0);
+                            if (!res.error) setCreatorBonus({ ...creatorBonus, [c.id]: { reels: "0", regens: "0" } });
+                            return res;
+                          })
+                        }
+                        className="h-8 px-3 rounded-lg text-[12px] font-medium bg-[#D39448]/80 text-[#020508] hover:brightness-110 transition-[filter] flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {busy === `bonus-${c.id}` && <Loader2 size={12} className="animate-spin" />}
+                        Grant
+                      </button>
+                    </div>
+                  )}
                   <div className="grid grid-cols-4 gap-2">
                     <div>
                       <label className="text-[10.5px] text-neutral-500">Tier</label>
                       <select
                         value={creatorDraft.tier}
                         onChange={(e) => {
-                          const tier = e.target.value as "S" | "M" | "L" | "Enterprise";
-                          const d = PLAN_TIER_DEFAULTS[tier];
-                          setCreatorDraft({ tier, label: d.label, price: String(d.price), allowance: String(d.allowance) });
+                          const tier = e.target.value as "Trial" | "S" | "M" | "L" | "Enterprise";
+                          const d = catalogDefault(tier);
+                          setCreatorDraft({ tier, label: d.label, price: String(d.price ?? 0), allowance: String(d.monthlyReelAllowance ?? 0) });
                         }}
                         className="mt-1 w-full h-8 px-2 rounded-md surface-field text-[12.5px] text-neutral-100 outline-none"
                       >
-                        {(["S", "M", "L", "Enterprise"] as const).map((t) => (
+                        {(["Trial", "S", "M", "L", "Enterprise"] as const).map((t) => (
                           <option key={t} value={t} className="bg-[#0b0f14]">
                             {t}
                           </option>

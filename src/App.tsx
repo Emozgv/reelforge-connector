@@ -275,8 +275,7 @@ function App() {
             {page === "billing" && (
               <BillingPage
                 creators={creatorsStore.creators}
-                creatorPackages={creatorPackages}
-                collections={collectionsStore.collections}
+                workspaceId={workspace.id}
                 canChangePlan={canChangePlan(workspace.role, workspace.canChangePlan)}
               />
             )}
