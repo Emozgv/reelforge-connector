@@ -127,6 +127,10 @@ export function CreativityHubPage({
   // (after real retries and a fallback source) — distinct from a profile
   // that just has zero reels, which stays false with an empty `videos`.
   const [profileReelsUnavailable, setProfileReelsUnavailable] = useState(false);
+  // True when `videos` is real but incomplete because the server stopped
+  // backfilling early after a genuine provider failure — never silently
+  // presented as if it were the whole batch.
+  const [profileResultsPartial, setProfileResultsPartial] = useState(false);
   const [searchCursor, setSearchCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<HubFilters>(DEFAULT_FILTERS);
@@ -233,13 +237,17 @@ export function CreativityHubPage({
       cursor?: string;
       hasMore?: boolean;
       reelsUnavailable?: boolean;
+      partial?: boolean;
     }>,
     opts: { isProfile: true }
   ) {
     const requestId = ++requestIdRef.current;
     setSearching(true);
     setSearchError(false);
-    if (opts.isProfile) setProfileReelsUnavailable(false);
+    if (opts.isProfile) {
+      setProfileReelsUnavailable(false);
+      setProfileResultsPartial(false);
+    }
     const res = await fetcher();
     // A newer search/profile lookup/Shuffle has started since this one was
     // fired — this response is stale, discard it rather than let it
@@ -265,6 +273,7 @@ export function CreativityHubPage({
       setProfileCursor(res.cursor ?? null);
       setProfileHasMore(!!res.hasMore);
       setProfileReelsUnavailable(!!res.reelsUnavailable);
+      setProfileResultsPartial(!!res.partial);
     }
     setSearching(false);
   }
@@ -369,7 +378,7 @@ export function CreativityHubPage({
   async function loadMoreProfileVideos() {
     if (!profileSecUid || !profileCursor || !profileHasMore || loadingMore) return;
     setLoadingMore(true);
-    const { results, error, cursor, hasMore } = await fetchMoreProfileReels(
+    const { results, error, cursor, hasMore, partial } = await fetchMoreProfileReels(
       profilePlatform,
       profileSecUid,
       profileCursor
@@ -378,6 +387,7 @@ export function CreativityHubPage({
       console.error("[search-reels] provider error (load more):", error);
       setProfileHasMore(false);
     } else {
+      setProfileResultsPartial(!!partial);
       // TikHub's cursor can land back on the last item of the previous page —
       // drop anything we've already got rather than showing/saving a duplicate.
       let addedCount = 0;
@@ -752,6 +762,14 @@ export function CreativityHubPage({
         ) : (
           <>
             {lastAction?.kind === "profile" && profile && <ProfileHeader profile={profile} />}
+
+            {profileResultsPartial && filtered.length > 0 && (
+              <div className="mb-5 flex items-center gap-2 rounded-xl surface-panel px-4 py-3 text-[12.5px] text-neutral-400">
+                <Info size={14} className="shrink-0 text-neutral-500" />
+                Only showing what loaded — our provider had a brief hiccup pulling the rest. Try Load more or
+                Refresh for the full set.
+              </div>
+            )}
 
             <VideoGrid
               videos={filtered}

@@ -19,6 +19,12 @@ export interface SearchReelsResult {
   // from a profile that genuinely just has zero reels (results is empty
   // either way, but this flag says which case it is).
   reelsUnavailable?: boolean;
+  // Instagram profile mode only — true when `results` is real but the server
+  // stopped backfilling early because of an actual provider failure (not
+  // because the profile ran out of reels). Distinct from reelsUnavailable:
+  // this batch is NOT empty, just possibly short — never silently presented
+  // as a complete result.
+  partial?: boolean;
 }
 
 interface RawSearchReelsResponse {
@@ -29,6 +35,7 @@ interface RawSearchReelsResponse {
   cursor?: string;
   hasMore?: boolean;
   reelsUnavailable?: boolean;
+  partial?: boolean;
 }
 
 async function invokeSearchReels(body: Record<string, unknown>): Promise<SearchReelsResult> {
@@ -58,6 +65,7 @@ async function invokeSearchReels(body: Record<string, unknown>): Promise<SearchR
     cursor: data?.cursor,
     hasMore: data?.hasMore,
     reelsUnavailable: data?.reelsUnavailable,
+    partial: data?.partial,
   };
 }
 
