@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Building2, Check, CreditCard, LogOut } from "lucide-react";
-import { canManageTeam, canViewBilling } from "../../lib/permissions";
+import { canViewBilling } from "../../lib/permissions";
 import { TeamSection } from "./TeamSection";
 
 export function SettingsPage({
@@ -117,17 +117,15 @@ export function SettingsPage({
           </>
         )}
 
-        {canManageTeam(role) && (
-          <>
-            <h2 className="mt-8 text-[13px] font-medium text-neutral-200">Team</h2>
-            <p className="mt-1 text-[12px] text-neutral-600 max-w-md">
-              Invite teammates, assign roles, and control who can see Billing or manage the team.
-            </p>
-            <div className="mt-3">
-              <TeamSection workspaceId={workspaceId} currentUserId={userId} callerRole={role} />
-            </div>
-          </>
-        )}
+        <h2 className="mt-8 text-[13px] font-medium text-neutral-200">Team</h2>
+        <p className="mt-1 text-[12px] text-neutral-600 max-w-md">
+          {role === "owner"
+            ? "Invite teammates, assign roles, and control who can see Billing or manage the team."
+            : "Everyone on your workspace's team — only the Owner can invite, change roles, or remove someone."}
+        </p>
+        <div className="mt-3">
+          <TeamSection workspaceId={workspaceId} currentUserId={userId} callerRole={role} />
+        </div>
 
         <h2 className="mt-8 text-[13px] font-medium text-neutral-200">Coming soon</h2>
         <p className="mt-1 text-[12px] text-neutral-600 max-w-md">

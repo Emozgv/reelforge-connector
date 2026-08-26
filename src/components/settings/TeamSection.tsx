@@ -9,10 +9,13 @@ const ROLE_BADGE_STYLE: Record<WorkspaceRole, string> = {
   va: "text-neutral-400 bg-white/[0.05]",
 };
 
-// Owner+Manager only — SettingsPage never renders this for a VA at all (see
-// canManageTeam). Every mutation here is a thin wrapper over RPCs/an edge
-// function that independently re-checks the caller's role and the owner
-// protections server-side — this component enforces nothing on its own.
+// Visible to every role — viewing the team isn't sensitive. Only an Owner
+// (callerRole === "owner") gets the invite/role-change/remove controls;
+// everyone else sees a read-only list. Every mutation here is a thin
+// wrapper over RPCs/an edge function that independently re-checks the
+// caller's role server-side (Owner-only) — this component enforces
+// nothing on its own, it just doesn't render controls a non-Owner
+// couldn't use anyway.
 export function TeamSection({
   workspaceId,
   currentUserId,
@@ -35,6 +38,7 @@ export function TeamSection({
     cancelInvite,
     updatePlanPermission,
   } = useTeamMembers(workspaceId);
+  const isOwner = callerRole === "owner";
 
   const [inviting, setInviting] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -111,9 +115,9 @@ export function TeamSection({
                   {m.displayName && m.email && <p className="text-[10.5px] text-neutral-600 truncate">{m.email}</p>}
                 </div>
 
-                {m.role === "owner" ? (
-                  <span className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", ROLE_BADGE_STYLE.owner].join(" ")}>
-                    Owner
+                {m.role === "owner" || !isOwner ? (
+                  <span className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", ROLE_BADGE_STYLE[m.role]].join(" ")}>
+                    {ROLE_LABEL[m.role]}
                   </span>
                 ) : (
                   <>
@@ -145,10 +149,10 @@ export function TeamSection({
               </div>
 
               {/* Off by default for every Manager — only the Owner can grant
-                  this, and only ever sees the toggle for their own review;
-                  a Manager viewing the team list never sees or controls it
-                  for anyone, including themselves. */}
-              {m.role === "manager" && callerRole === "owner" && (
+                  this, and only the Owner ever sees the toggle; a non-Owner
+                  viewing the team list never sees or controls it for
+                  anyone, including themselves. */}
+              {m.role === "manager" && isOwner && (
                 <label className="mt-2 flex items-center gap-2 pl-9 text-[11px] text-neutral-500 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -175,19 +179,22 @@ export function TeamSection({
               <span className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", ROLE_BADGE_STYLE[inv.role]].join(" ")}>
                 {ROLE_LABEL[inv.role]}
               </span>
-              <button
-                onClick={() => void handleCancelInvite(inv.id)}
-                disabled={busyId === inv.id}
-                title="Cancel invite"
-                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 hover:text-rose-400 hover:bg-rose-400/[0.08] transition-colors duration-150 disabled:opacity-30"
-              >
-                {busyId === inv.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
-              </button>
+              {isOwner && (
+                <button
+                  onClick={() => void handleCancelInvite(inv.id)}
+                  disabled={busyId === inv.id}
+                  title="Cancel invite"
+                  className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 hover:text-rose-400 hover:bg-rose-400/[0.08] transition-colors duration-150 disabled:opacity-30"
+                >
+                  {busyId === inv.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
+      {isOwner && (
       <div className="mt-3 pt-3 border-t border-white/[0.06]">
         {!inviting ? (
           <button
@@ -246,6 +253,7 @@ export function TeamSection({
           </form>
         )}
       </div>
+      )}
     </div>
   );
 }
