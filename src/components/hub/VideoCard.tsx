@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bookmark, Sparkles, FolderPlus, ExternalLink, Play, Eye } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
@@ -14,16 +15,19 @@ export function VideoCard({
   onAddToCollection?: (video: ReelVideo) => void;
   onOpenDetail?: (video: ReelVideo) => void;
 }) {
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+
   return (
     <div
       onClick={() => onOpenDetail?.(video)}
       className="group relative aspect-[9/16] w-full rounded-2xl overflow-hidden border border-white/[0.08] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-[#D39448]/35 hover:shadow-[0_18px_40px_-12px_rgba(0,0,0,0.6)] cursor-pointer"
     >
-      {video.thumbnailUrl ? (
+      {video.thumbnailUrl && !thumbnailFailed ? (
         <img
           src={video.thumbnailUrl}
           alt=""
           loading="lazy"
+          onError={() => setThumbnailFailed(true)}
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
         />
       ) : (
