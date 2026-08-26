@@ -568,6 +568,25 @@ async function startSession(accountId, token) {
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
+
+  // TikTok specifically: storageState is a frozen snapshot (captured at
+  // login, only ever refreshed by an explicit Resync) — every new session
+  // otherwise replays that exact same localStorage every time, and TikTok's
+  // web client keeps its own feed-continuation state in there, so it just
+  // resumes from the same pinned point instead of seeding a real fresh For
+  // You feed (confirmed as the cause of "same first reel every session").
+  // Login itself lives in cookies (see hasRealSession, connect-worker.mjs),
+  // never localStorage, so clearing it can't affect being logged in.
+  // Instagram doesn't show this symptom and isn't touched.
+  if (platform === "tiktok") {
+    await context.addInitScript(() => {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch {}
+    });
+  }
+
   const page = await context.newPage();
 
   const id = randomUUID();

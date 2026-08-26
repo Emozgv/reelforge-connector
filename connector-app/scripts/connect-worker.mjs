@@ -226,8 +226,53 @@ async function connectMain(platform, account, token) {
 
   emit("opening", { platform });
 
-  const browser = await chromium.launch({ headless: false });
+  // TikTok specifically uses the VA's own real, already-installed Chrome
+  // (channel: "chrome") rather than Playwright's bundled Chromium — direct
+  // testing showed the bundled build can't decode H.264/AAC at all (TikTok
+  // videos silently fail) and gets flagged by TikTok's login defenses far
+  // more readily. The close-to-cancel mechanism just below (page "close" +
+  // an explicit browser.close() in cancelAndExit) was verified to work
+  // identically against real Chrome — it doesn't depend on the browser
+  // spontaneously reporting itself disconnected, so this doesn't touch that
+  // guarantee at all. --renderer-process-limit=1 trims one of the several
+  // extra OS processes a full Chrome install spawns versus the trimmed
+  // Chromium build; real Chrome's baseline footprint (GPU process, network
+  // service, crashpad handler, etc.) is otherwise fixed cost, not a bug —
+  // running it alongside an already-open, heavily-tabbed everyday Chrome on
+  // one machine is the likely source of any remaining sluggishness, not
+  // something a launch flag can fix away. Instagram (and resync/like/wake)
+  // are entirely untouched — this only ever applies for platform ===
+  // "tiktok".
+  const launchOptions = { headless: false };
+  if (platform === "tiktok") {
+    launchOptions.channel = "chrome";
+    launchOptions.args = ["--renderer-process-limit=1"];
+  }
+
+  let browser;
+  try {
+    browser = await chromium.launch(launchOptions);
+  } catch (err) {
+    if (platform === "tiktok") {
+      await notifyCancelled(account, token);
+      emit("error", { message: "TikTok login needs Google Chrome installed on this computer. Install Chrome, then press Reconnect." });
+      process.exit(1);
+    }
+    throw err;
+  }
   const context = await browser.newContext();
+
+  // The one thing that's still genuinely TikTok-specific: navigator.webdriver
+  // reads true on Playwright's bundled Chromium, one of the simplest,
+  // most commonly checked automation signals — this removes just that flag
+  // without touching anything about how the browser process itself behaves,
+  // so Instagram's window/process lifecycle is completely unaffected.
+  if (platform === "tiktok") {
+    await context.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, "webdriver", { get: () => undefined });
+    });
+  }
+
   const page = await context.newPage();
 
   // The VA closing the login window is a real, expected way for this to
