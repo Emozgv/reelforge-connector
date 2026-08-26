@@ -111,9 +111,8 @@ function ChangePlanView({
                 </p>
                 {preview.proratedEstimate != null && (
                   <p className="mt-2 text-[12px] text-neutral-500 leading-relaxed">
-                    Estimated additional charge for the rest of this cycle: <span className="text-neutral-300">{money(preview.proratedEstimate)}</span>.
-                    From your next renewal, billing becomes {money(preview.newPrice)}/mo. This is an estimate — the real prorated charge will be
-                    calculated automatically once Stripe checkout is connected.
+                    Estimated additional charge for the rest of this cycle: <span className="text-neutral-300">{money(preview.proratedEstimate)}</span>,
+                    charged to the card on file right away. From your next renewal, billing becomes {money(preview.newPrice)}/mo.
                   </p>
                 )}
               </>
@@ -327,7 +326,7 @@ function CreatorPlanCard({
 
           {!isTrial && !isEnterprise && (
             <p className="mt-1.5 text-[10.5px] text-neutral-600">
-              Setup fee: {summary.setupFeePaidAt ? `paid ${formatDate(summary.setupFeePaidAt)}` : "—"}
+              Creator Setup — {summary.setupFeePaidAt ? `Paid ${formatDate(summary.setupFeePaidAt)}` : "—"}
             </p>
           )}
 

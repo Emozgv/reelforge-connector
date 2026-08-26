@@ -115,7 +115,7 @@ async function handle(req: Request): Promise<Response> {
     if (action === "upgrade") {
       await stripe.subscriptions.update(subscriptionId, {
         items: [{ id: currentItem.id, price: plan.stripe_price_id }],
-        proration_behavior: "create_prorations",
+        proration_behavior: "always_invoice",
       });
       return json({ ok: true, timing: "immediate" });
     }
