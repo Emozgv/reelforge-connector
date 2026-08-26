@@ -3,7 +3,7 @@ import type { Platform, ReelProfileInfo, ReelVideo } from "../types";
 
 // How many reels to request per page of a profile lookup — fast first batch,
 // then the same size again on each "Load more" rather than preloading everything.
-export const PROFILE_PAGE_SIZE = 18;
+export const PROFILE_PAGE_SIZE = 24;
 
 export interface SearchReelsResult {
   results: ReelVideo[];
