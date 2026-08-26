@@ -24,6 +24,8 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { FullScreenLoader } from "./components/auth/FullScreenLoader";
 import { NoWorkspaceAccess } from "./components/auth/NoWorkspaceAccess";
+import { SetPasswordPage } from "./components/auth/SetPasswordPage";
+import { supabase } from "./lib/supabase";
 import { useCollectionsStore } from "./state/useCollectionsStore";
 import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
@@ -67,7 +69,13 @@ function App() {
   }
 
   const { user, loading: authLoading, signIn, signOut } = useAuthSession();
-  const { workspace, loading: workspaceLoading, updateDisplayName } = useWorkspace(user?.id);
+  const {
+    workspace,
+    loading: workspaceLoading,
+    justJoined,
+    dismissJustJoined,
+    updateDisplayName,
+  } = useWorkspace(user?.id);
   const displayName = workspace?.displayName || user?.email;
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
@@ -91,6 +99,20 @@ function App() {
     return <NoWorkspaceAccess email={user.email} onSignOut={signOut} />;
   }
 
+  if (justJoined) {
+    return (
+      <SetPasswordPage
+        workspaceName={workspace.name}
+        onSetPassword={async (password) => {
+          const { error } = await supabase.auth.updateUser({ password });
+          if (error) return error.message;
+          dismissJustJoined();
+          return null;
+        }}
+      />
+    );
+  }
+
   if (creatorsStore.loading || collectionsStore.loading) {
     return <FullScreenLoader />;
   }
@@ -112,6 +134,7 @@ function App() {
         userEmail={user.email}
         displayName={displayName}
         workspaceName={workspace.name}
+        role={workspace.role}
         onSignOut={signOut}
         activity={activity}
         onOpenCollection={navigateToCollection}
@@ -220,7 +243,9 @@ function App() {
             )}
             {page === "settings" && (
               <SettingsPage
+                userId={user.id}
                 userEmail={user.email}
+                workspaceId={workspace.id}
                 workspaceName={workspace.name}
                 role={workspace.role}
                 displayName={workspace.displayName}

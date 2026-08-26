@@ -21,12 +21,17 @@ export function useWorkspace(userId: string | undefined) {
   const [workspace, setWorkspace] = useState<ActiveWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // True only for the one load right after a fresh invite gets accepted —
+  // lets the app show a one-time "set your password" step before dropping
+  // an invited person straight into the workspace they just joined.
+  const [justJoined, setJustJoined] = useState(false);
 
   useEffect(() => {
     if (!userId) {
       setWorkspace(null);
       setLoading(false);
       setError(null);
+      setJustJoined(false);
       return;
     }
 
@@ -35,7 +40,7 @@ export function useWorkspace(userId: string | undefined) {
     setError(null);
 
     (async () => {
-      const { data: membership, error: membershipError } = await supabase
+      let membership = await supabase
         .schema("client_os")
         .from("workspace_members")
         .select("id, workspace_id, role, display_name")
@@ -45,14 +50,37 @@ export function useWorkspace(userId: string | undefined) {
 
       if (!active) return;
 
-      if (membershipError) {
-        setError(membershipError.message);
+      let didAccept = false;
+      // No membership yet doesn't necessarily mean "no access" — it's also
+      // exactly the state a freshly-invited person lands in the instant
+      // Supabase's invite link signs them in, before anything has turned
+      // their invite into a real membership. Trying this unconditionally
+      // whenever no membership is found is harmless: it's a no-op error for
+      // every other case (already a member, no invite, etc).
+      if (!membership.error && !membership.data) {
+        const { data: accepted } = await supabase.schema("client_os").rpc("accept_pending_workspace_invite");
+        if (accepted) {
+          didAccept = true;
+          membership = await supabase
+            .schema("client_os")
+            .from("workspace_members")
+            .select("id, workspace_id, role, display_name")
+            .eq("user_id", userId)
+            .limit(1)
+            .maybeSingle();
+        }
+      }
+
+      if (!active) return;
+
+      if (membership.error) {
+        setError(membership.error.message);
         setWorkspace(null);
         setLoading(false);
         return;
       }
 
-      if (!membership) {
+      if (!membership.data) {
         setWorkspace(null);
         setLoading(false);
         return;
@@ -62,7 +90,7 @@ export function useWorkspace(userId: string | undefined) {
         .schema("client_os")
         .from("workspaces")
         .select("id, name")
-        .eq("id", membership.workspace_id)
+        .eq("id", membership.data.workspace_id)
         .maybeSingle();
 
       if (!active) return;
@@ -74,10 +102,11 @@ export function useWorkspace(userId: string | undefined) {
         setWorkspace({
           id: ws.id,
           name: ws.name,
-          role: membership.role,
-          membershipId: membership.id,
-          displayName: membership.display_name,
+          role: membership.data.role,
+          membershipId: membership.data.id,
+          displayName: membership.data.display_name,
         });
+        setJustJoined(didAccept);
       }
       setLoading(false);
     })();
@@ -106,5 +135,5 @@ export function useWorkspace(userId: string | undefined) {
     return { error: null };
   }
 
-  return { workspace, loading, error, updateDisplayName };
+  return { workspace, loading, error, justJoined, dismissJustJoined: () => setJustJoined(false), updateDisplayName };
 }

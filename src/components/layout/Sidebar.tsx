@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import type { ActivityEventType } from "../../lib/activityMapping";
+import { canViewBilling } from "../../lib/permissions";
 
 // The bell is for things worth interrupting the client for — not a mirror of
 // every log line (that full trail lives in Dashboard/Collection history).
@@ -73,6 +74,7 @@ export function Sidebar({
   userEmail,
   displayName,
   workspaceName,
+  role,
   onSignOut,
   activity,
   onOpenCollection,
@@ -82,6 +84,7 @@ export function Sidebar({
   userEmail?: string;
   displayName?: string;
   workspaceName?: string;
+  role?: string;
   onSignOut?: () => void;
   activity: { items: ActivityFeedItem[]; loading: boolean };
   onOpenCollection: (collectionId: string) => void;
@@ -175,7 +178,9 @@ export function Sidebar({
               {group.label}
             </p>
             <div className="space-y-1">
-              {group.items.map((item) => {
+              {group.items
+                .filter((item) => item.id !== "billing" || canViewBilling(role))
+                .map((item) => {
                 const active = item.id === page;
                 return (
                   <button
