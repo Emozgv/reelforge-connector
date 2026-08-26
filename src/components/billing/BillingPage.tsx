@@ -1,14 +1,9 @@
 import { useState } from "react";
-import { ArrowLeft, Ban, CreditCard, Loader2, Mail, RefreshCw, RotateCcw, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Ban, CreditCard, Loader2, RefreshCw, RotateCcw, ShieldAlert, Sparkles } from "lucide-react";
 import type { Creator } from "../../types";
 import { useCreatorBillingSummaries, type CreatorBillingSummary, type PlanChangePreview } from "../../state/useCreatorBillingSummaries";
 import { usePlanCatalog, type PlanCatalogEntry } from "../../lib/planCatalog";
-
-const CONTACT_EMAIL = "hello@reelforgeai.net";
-
-function mailtoFor(subject: string): string {
-  return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}`;
-}
+import { startStripeCheckout, manageStripeSubscription } from "../../lib/stripe";
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -30,6 +25,7 @@ function ChangePlanView({
   onConfirmed,
   previewPlanChange,
   changePlan,
+  refetch,
 }: {
   creator: Creator;
   summary: CreatorBillingSummary;
@@ -38,6 +34,7 @@ function ChangePlanView({
   onConfirmed: () => void;
   previewPlanChange: (creatorId: string, newTier: string) => Promise<{ preview: PlanChangePreview | null; error: string | null }>;
   changePlan: (creatorId: string, newTier: string) => Promise<{ error: string | null }>;
+  refetch: () => void;
 }) {
   const selectable = catalog.filter((p) => (p.tier === "S" || p.tier === "M" || p.tier === "L") && p.tier !== summary.planTier);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
@@ -55,12 +52,17 @@ function ChangePlanView({
   }
 
   async function confirm() {
-    if (!selectedTier) return;
+    if (!selectedTier || !preview) return;
     setBusy(true);
-    const res = await changePlan(creator.id, selectedTier);
+    const res = summary.hasStripeSubscription
+      ? await manageStripeSubscription({ creatorId: creator.id, action: preview.isUpgrade ? "upgrade" : "downgrade", newTier: selectedTier as "S" | "M" | "L" })
+      : await changePlan(creator.id, selectedTier);
     setBusy(false);
     if (res.error) setError(res.error);
-    else onConfirmed();
+    else {
+      if (summary.hasStripeSubscription) refetch();
+      onConfirmed();
+    }
   }
 
   return (
@@ -147,22 +149,29 @@ function CancelSubscriptionView({
   onBack,
   onConfirmed,
   cancelSubscription,
+  refetch,
 }: {
   creator: Creator;
   summary: CreatorBillingSummary;
   onBack: () => void;
   onConfirmed: () => void;
   cancelSubscription: (creatorId: string) => Promise<{ error: string | null }>;
+  refetch: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function confirm() {
     setBusy(true);
-    const res = await cancelSubscription(creator.id);
+    const res = summary.hasStripeSubscription
+      ? await manageStripeSubscription({ creatorId: creator.id, action: "cancel" })
+      : await cancelSubscription(creator.id);
     setBusy(false);
     if (res.error) setError(res.error);
-    else onConfirmed();
+    else {
+      if (summary.hasStripeSubscription) refetch();
+      onConfirmed();
+    }
   }
 
   return (
@@ -213,20 +222,37 @@ function CancelSubscriptionView({
 function CreatorPlanCard({
   creator,
   summary,
+  catalog,
   canChangePlanFallback,
   onOpenChangePlan,
   onOpenCancel,
   cancelPendingPlanChange,
   undoCancellation,
+  refetch,
 }: {
   creator: Creator;
   summary: CreatorBillingSummary | undefined;
+  catalog: PlanCatalogEntry[];
   canChangePlanFallback: boolean;
   onOpenChangePlan: () => void;
   onOpenCancel: () => void;
   cancelPendingPlanChange: (creatorId: string) => Promise<{ error: string | null }>;
   undoCancellation: (creatorId: string) => Promise<{ error: string | null }>;
+  refetch: () => void;
 }) {
+  const [checkoutBusy, setCheckoutBusy] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  async function beginCheckout(kind: "subscription" | "trial", tier?: "S" | "M" | "L") {
+    setCheckoutBusy(kind + (tier ?? ""));
+    setCheckoutError(null);
+    const res = await startStripeCheckout({ creatorId: creator.id, kind, tier });
+    if (res.error) {
+      setCheckoutError(res.error);
+      setCheckoutBusy(null);
+    }
+    // on success the browser navigates away to Stripe Checkout
+  }
   const [busy, setBusy] = useState(false);
   const hasPlan = summary?.hasPlan;
   const canChangePlan = summary?.canChangePlan ?? canChangePlanFallback;
@@ -314,7 +340,12 @@ function CreatorPlanCard({
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
-                  await cancelPendingPlanChange(creator.id);
+                  if (summary.hasStripeSubscription) {
+                    await manageStripeSubscription({ creatorId: creator.id, action: "undo_downgrade" });
+                    refetch();
+                  } else {
+                    await cancelPendingPlanChange(creator.id);
+                  }
                   setBusy(false);
                 }}
                 className="mt-1 text-[11px] text-amber-300 hover:text-amber-100 underline underline-offset-2"
@@ -331,7 +362,12 @@ function CreatorPlanCard({
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
-                  await undoCancellation(creator.id);
+                  if (summary.hasStripeSubscription) {
+                    await manageStripeSubscription({ creatorId: creator.id, action: "undo_cancel" });
+                    refetch();
+                  } else {
+                    await undoCancellation(creator.id);
+                  }
                   setBusy(false);
                 }}
                 className="mt-1 text-[11px] text-rose-300 hover:text-rose-100 underline underline-offset-2"
@@ -371,13 +407,33 @@ function CreatorPlanCard({
           <p className="text-[11.5px] text-neutral-500 leading-relaxed">
             No active ReelForge plan — reels can't be produced for {creator.name.split(" ")[0]} until one is set up.
           </p>
+          {checkoutError && <p className="mt-2 text-[11px] text-rose-400">{checkoutError}</p>}
           {canChangePlanFallback ? (
-            <a
-              href={mailtoFor(`Set up a plan for ${creator.name}`)}
-              className="mt-2.5 inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#D39448] text-[#020508] text-[11.5px] font-medium hover:brightness-110 transition-[filter] duration-150"
-            >
-              Get started
-            </a>
+            <>
+              <button
+                disabled={checkoutBusy !== null}
+                onClick={() => void beginCheckout("trial")}
+                className="mt-2.5 inline-flex items-center gap-1.5 h-8 px-3 rounded-full surface-field text-neutral-200 text-[11.5px] font-medium hover:bg-white/[0.06] transition-colors duration-150 disabled:opacity-50"
+              >
+                {checkoutBusy === "trial" ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                Start Trial — $25
+              </button>
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {catalog
+                  .filter((p) => p.tier === "S" || p.tier === "M" || p.tier === "L")
+                  .map((p) => (
+                    <button
+                      key={p.tier}
+                      disabled={checkoutBusy !== null}
+                      onClick={() => void beginCheckout("subscription", p.tier as "S" | "M" | "L")}
+                      className="h-8 px-2 rounded-lg bg-[#D39448] text-[#020508] text-[11px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      {checkoutBusy === "subscription" + p.tier && <Loader2 size={10} className="animate-spin" />}
+                      {p.label} ${p.price}
+                    </button>
+                  ))}
+              </div>
+            </>
           ) : (
             <p className="mt-2.5 text-[11px] text-neutral-600">Ask the Owner to set up a plan.</p>
           )}
@@ -391,6 +447,36 @@ function CreatorPlanCard({
 
 type View = { type: "list" } | { type: "change"; creatorId: string } | { type: "cancel"; creatorId: string };
 
+function RegenPackButton({ creatorId, count, price }: { creatorId: string; count: 5 | 10 | 25; price: number }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function buy() {
+    setBusy(true);
+    setError(null);
+    const res = await startStripeCheckout({ creatorId, kind: "regen_pack", pack: count });
+    if (res.error) {
+      setError(res.error);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      disabled={busy}
+      onClick={() => void buy()}
+      className="rounded-lg surface-field px-3 py-2.5 text-center hover:bg-white/[0.06] transition-colors duration-150 disabled:opacity-50"
+    >
+      <p className="text-[15px] font-serif text-neutral-50 flex items-center justify-center gap-1.5">
+        {busy && <Loader2 size={12} className="animate-spin" />}
+        {count}
+      </p>
+      <p className="text-[11px] text-neutral-500">${price}</p>
+      {error && <p className="mt-1 text-[9.5px] text-rose-400">{error}</p>}
+    </button>
+  );
+}
+
 export function BillingPage({
   creators,
   workspaceId,
@@ -400,7 +486,7 @@ export function BillingPage({
   workspaceId: string | undefined;
   canChangePlan: boolean;
 }) {
-  const { summaries, previewPlanChange, changePlan, cancelPendingPlanChange, cancelSubscription, undoCancellation } =
+  const { summaries, refetch, previewPlanChange, changePlan, cancelPendingPlanChange, cancelSubscription, undoCancellation } =
     useCreatorBillingSummaries(workspaceId);
   const { catalog } = usePlanCatalog();
   const [view, setView] = useState<View>({ type: "list" });
@@ -413,6 +499,9 @@ export function BillingPage({
   }, 0);
   const hasEnterprise = [...summaries.values()].some((s) => s.planTier === "Enterprise");
   const totalRegenRemaining = creators.reduce((sum, c) => sum + (summaries.get(c.id)?.regenCreditsRemaining ?? 0), 0);
+  const creatorsWithPlan = creators.filter((c) => summaries.get(c.id)?.hasPlan);
+  const [regenCreatorId, setRegenCreatorId] = useState<string | null>(null);
+  const activeRegenCreatorId = regenCreatorId ?? creatorsWithPlan[0]?.id ?? null;
 
   if (view.type === "change") {
     const creator = creators.find((c) => c.id === view.creatorId);
@@ -427,6 +516,7 @@ export function BillingPage({
           onConfirmed={() => setView({ type: "list" })}
           previewPlanChange={previewPlanChange}
           changePlan={changePlan}
+          refetch={refetch}
         />
       );
     }
@@ -443,6 +533,7 @@ export function BillingPage({
           onBack={() => setView({ type: "list" })}
           onConfirmed={() => setView({ type: "list" })}
           cancelSubscription={cancelSubscription}
+          refetch={refetch}
         />
       );
     }
@@ -487,11 +578,13 @@ export function BillingPage({
                 key={c.id}
                 creator={c}
                 summary={summaries.get(c.id)}
+                catalog={catalog}
                 canChangePlanFallback={canChangePlan}
                 onOpenChangePlan={() => setView({ type: "change", creatorId: c.id })}
                 onOpenCancel={() => setView({ type: "cancel", creatorId: c.id })}
                 cancelPendingPlanChange={cancelPendingPlanChange}
                 undoCancellation={undoCancellation}
+                refetch={refetch}
               />
             ))}
           </div>
@@ -506,25 +599,33 @@ export function BillingPage({
             Regenerations are a separate credit balance from reels — a QC failure is always replaced free, no credit used. Buy more as a one-time
             pack:
           </p>
-          <div className="mt-3 grid grid-cols-3 gap-2.5">
-            {[
-              { count: 5, price: 20 },
-              { count: 10, price: 35 },
-              { count: 25, price: 69 },
-            ].map((pack) => (
-              <div key={pack.count} className="rounded-lg surface-field px-3 py-2.5 text-center">
-                <p className="text-[15px] font-serif text-neutral-50">{pack.count}</p>
-                <p className="text-[11px] text-neutral-500">${pack.price}</p>
+          {creatorsWithPlan.length === 0 ? (
+            <p className="mt-3 text-[11.5px] text-neutral-600">Set up a creator's plan first to buy regeneration credits for them.</p>
+          ) : (
+            <>
+              <label className="mt-3 block text-[10.5px] text-neutral-500">For creator</label>
+              <select
+                value={activeRegenCreatorId ?? ""}
+                onChange={(e) => setRegenCreatorId(e.target.value)}
+                className="mt-1 h-8 px-2 rounded-md surface-field text-[12.5px] text-neutral-100 outline-none"
+              >
+                {creatorsWithPlan.map((c) => (
+                  <option key={c.id} value={c.id} className="bg-[#0b0f14]">
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-3 grid grid-cols-3 gap-2.5">
+                {activeRegenCreatorId && (
+                  <>
+                    <RegenPackButton creatorId={activeRegenCreatorId} count={5} price={20} />
+                    <RegenPackButton creatorId={activeRegenCreatorId} count={10} price={35} />
+                    <RegenPackButton creatorId={activeRegenCreatorId} count={25} price={69} />
+                  </>
+                )}
               </div>
-            ))}
-          </div>
-          <a
-            href={mailtoFor("Buy more regenerations")}
-            className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-neutral-400 hover:text-[#D39448] transition-colors duration-150"
-          >
-            <Mail size={11} />
-            Request a regeneration pack
-          </a>
+            </>
+          )}
         </div>
 
         <h2 className="mt-8 text-[13px] font-medium text-neutral-200 flex items-center gap-2">
@@ -532,8 +633,8 @@ export function BillingPage({
           Payment &amp; billing management
         </h2>
         <p className="mt-1 text-[12px] text-neutral-600 max-w-md">
-          Plan changes above are already real — the only thing missing is a connected payment method. Once Stripe checkout is wired in, upgrades,
-          downgrades, and cancellations here will charge or credit automatically.
+          Subscriptions, upgrades, downgrades, cancellations, Trial, and regeneration packs above are all real — backed by Stripe Checkout and
+          your subscription webhooks.
         </p>
         <div className="mt-3 rounded-xl surface-panel p-4 flex items-center justify-between gap-4">
           <div className="min-w-0">
@@ -542,7 +643,7 @@ export function BillingPage({
           </div>
           <span className="shrink-0 text-[9px] tracking-wide uppercase text-neutral-600 border border-white/[0.08] rounded-[3px] px-1.5 py-[2px] flex items-center gap-1">
             <RotateCcw size={9} />
-            Requires Stripe
+            Coming soon
           </span>
         </div>
       </div>

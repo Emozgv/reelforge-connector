@@ -22,7 +22,8 @@ export type ActivityEventType =
   | "plan_downgrade_scheduled"
   | "plan_change_cancelled"
   | "subscription_cancellation_scheduled"
-  | "subscription_cancellation_undone";
+  | "subscription_cancellation_undone"
+  | "stripe_payment_failed";
 
 // Shape of a row from client_os.activity_events. Append-only from the client's
 // perspective — SELECT + INSERT only, no UPDATE/DELETE grant at all.

@@ -41,7 +41,10 @@ import { usePauseAnimationsWhenHidden } from "./state/usePauseAnimationsWhenHidd
 
 function App() {
   usePauseAnimationsWhenHidden();
-  const [page, setPage] = useState<Page>("dashboard");
+  // Stripe Checkout redirects back to `#billing?stripe=success|cancelled` —
+  // land the returning user on Billing instead of the default Dashboard so
+  // the result of what they just did is immediately visible.
+  const [page, setPage] = useState<Page>(window.location.hash.startsWith("#billing") ? "billing" : "dashboard");
   const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
   const [openCreatorId, setOpenCreatorId] = useState<string | null>(null);
   // Which page a Collection was opened from, so "Back" returns you there

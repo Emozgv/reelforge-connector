@@ -32,6 +32,7 @@ export interface CreatorBillingSummary {
   cancellationEffectiveAt?: string | null;
   canChangePlan?: boolean;
   canCancel?: boolean;
+  hasStripeSubscription?: boolean;
 }
 
 function fromRow(raw: Record<string, unknown>): CreatorBillingSummary {
@@ -63,6 +64,7 @@ function fromRow(raw: Record<string, unknown>): CreatorBillingSummary {
     cancellationEffectiveAt: raw.cancellation_effective_at as string | null,
     canChangePlan: raw.can_change_plan as boolean,
     canCancel: raw.can_cancel as boolean,
+    hasStripeSubscription: raw.has_stripe_subscription as boolean,
   };
 }
 
