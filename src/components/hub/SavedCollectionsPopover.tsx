@@ -121,7 +121,7 @@ export function SavedCollectionsPopover({
                     )}
                   </div>
                   <div className="min-w-0 flex-1 text-left">
-                    {family.length > 1 && isVersionableCollection(current.name) ? (
+                    {isVersionableCollection(current.name) ? (
                       <CollectionVersionMenu
                         family={family}
                         currentId={current.id}
@@ -135,9 +135,11 @@ export function SavedCollectionsPopover({
                       >
                         <p className="text-[12.5px] text-neutral-100 truncate">
                           {current.name}
-                          <span className="ml-1.5 text-[10px] font-normal text-neutral-600">
-                            {family.length} versions
-                          </span>
+                          {family.length > 1 && (
+                            <span className="ml-1.5 text-[10px] font-normal text-neutral-600">
+                              {family.length} versions
+                            </span>
+                          )}
                         </p>
                       </CollectionVersionMenu>
                     ) : (
