@@ -187,6 +187,20 @@ export function CreativityHubPage({
     return { savedSourceUrls: saved, usedSourceUrls: used };
   }, [collectionsStore.collections]);
 
+  // Real reel thumbnails for the hero's purely-decorative background rails
+  // (HeroReelRails) — prefers whatever Discovery already has loaded so the
+  // rails feel connected to what's actually on screen, falling back to
+  // already-saved real reels when nothing's loaded yet (e.g. before the
+  // first search). Never fabricated: an empty array here just leaves the
+  // rails on their original gradient-only tiles.
+  const heroRailThumbnails = useMemo(() => {
+    const fromDiscovery = videos.map((v) => v.thumbnailUrl).filter((u): u is string => !!u);
+    if (fromDiscovery.length > 0) return fromDiscovery;
+    return collectionsStore.collections
+      .flatMap((c) => c.concepts.map((k) => k.video.thumbnailUrl))
+      .filter((u): u is string => !!u);
+  }, [videos, collectionsStore.collections]);
+
   const filtered = useMemo(() => {
     let list = videos.filter((v) => {
       if (filters.platform !== "all" && v.platform !== filters.platform) return false;
@@ -573,7 +587,7 @@ export function CreativityHubPage({
               "radial-gradient(720px 340px at 50% -20%, rgba(224,164,79,0.15), transparent 65%)",
           }}
         />
-        <HeroReelRails />
+        <HeroReelRails thumbnails={heroRailThumbnails} />
 
         <div className="relative z-10 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto text-center">
           <div className="flex items-center justify-center gap-2.5 mb-3">

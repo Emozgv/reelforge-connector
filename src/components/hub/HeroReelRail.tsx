@@ -11,10 +11,16 @@ function Column({
   offset,
   duration,
   reverse,
+  images,
 }: {
   offset: number;
   duration: number;
   reverse?: boolean;
+  // Real reel thumbnail URLs, when any are available — cycled across tiles
+  // so each column shows a different slice. The gradient tile underneath is
+  // always rendered first, so a missing/slow/broken image still leaves a
+  // normal-looking placeholder tile rather than an empty block.
+  images: string[];
 }) {
   const tiles = [...RAIL_GRADIENTS.slice(offset), ...RAIL_GRADIENTS.slice(0, offset)];
   const loop = [...tiles, ...tiles];
@@ -28,13 +34,33 @@ function Column({
           animationDirection: reverse ? "reverse" : "normal",
         }}
       >
-        {loop.map((g, i) => (
-          <div
-            key={i}
-            className="w-11 aspect-[9/16] rounded-lg border border-white/[0.06] shrink-0"
-            style={{ background: g }}
-          />
-        ))}
+        {loop.map((g, i) => {
+          const src = images.length > 0 ? images[(offset + i) % images.length] : undefined;
+          return (
+            <div
+              key={i}
+              className="w-11 aspect-[9/16] rounded-lg border border-white/[0.06] shrink-0 overflow-hidden"
+              style={{ background: g }}
+            >
+              {src && (
+                <img
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                  // Some thumbnail URLs are provider-signed and expire (e.g.
+                  // TikTok's), so a real one can go stale after the fact —
+                  // hide the broken image on load failure rather than show
+                  // the browser's broken-image icon; the gradient underneath
+                  // is still there once the <img> is gone.
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -44,8 +70,12 @@ function Column({
  * Purely decorative, ambient motion flanking the hero — masked so it fades
  * both toward the outer screen edge and toward the center search column.
  * Never intercepts pointer events; hidden below the desktop breakpoint.
+ *
+ * `thumbnails` is an optional list of real reel thumbnail URLs (from
+ * whatever's already loaded elsewhere on the page) — passing none keeps the
+ * original gradient-only tiles exactly as before.
  */
-export function HeroReelRails() {
+export function HeroReelRails({ thumbnails = [] }: { thumbnails?: string[] }) {
   const maskStyle = {
     WebkitMaskImage:
       "radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 85%)",
@@ -58,10 +88,10 @@ export function HeroReelRails() {
         className="absolute left-2 xl:left-6 2xl:left-10 top-0 bottom-0 flex items-center gap-3 xl:gap-4 opacity-[0.35]"
         style={maskStyle}
       >
-        <Column offset={0} duration={36} />
-        <Column offset={2} duration={44} reverse />
+        <Column offset={0} duration={36} images={thumbnails} />
+        <Column offset={2} duration={44} reverse images={thumbnails} />
         <div className="hidden 2xl:block">
-          <Column offset={3} duration={38} />
+          <Column offset={3} duration={38} images={thumbnails} />
         </div>
       </div>
       <div
@@ -69,10 +99,10 @@ export function HeroReelRails() {
         style={maskStyle}
       >
         <div className="hidden 2xl:block">
-          <Column offset={5} duration={42} reverse />
+          <Column offset={5} duration={42} reverse images={thumbnails} />
         </div>
-        <Column offset={4} duration={40} reverse />
-        <Column offset={1} duration={32} />
+        <Column offset={4} duration={40} reverse images={thumbnails} />
+        <Column offset={1} duration={32} images={thumbnails} />
       </div>
     </div>
   );
