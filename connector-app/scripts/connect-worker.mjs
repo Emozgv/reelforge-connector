@@ -23,7 +23,13 @@ const CANCEL_CONNECT_URL = process.env.REELFORGE_CANCEL_CONNECT_URL
 
 const LOGIN_URL = {
   instagram: "https://www.instagram.com/accounts/login/",
-  tiktok: "https://www.tiktok.com/login/phone-or-email/email",
+  // The normal homepage, not the forced email/password route — the VA sees
+  // TikTok's own real "Anmelden" flow (QR, phone/email, Facebook, Google,
+  // LINE, whatever TikTok currently offers) instead of a route that skips
+  // straight past all of that. Detection below never depended on being on
+  // any particular URL — it just polls for a real session cookie — so this
+  // is a safe, self-contained change.
+  tiktok: "https://www.tiktok.com/",
 };
 
 // Automated (non-login) contexts force English — without this, Chromium
