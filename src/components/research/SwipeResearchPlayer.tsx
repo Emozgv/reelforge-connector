@@ -388,6 +388,7 @@ export function SwipeResearchPlayer({
   currentReel,
   hasPrev,
   loading,
+  navBusy,
   sessionStatus,
   sessionError,
   wakeCountdown,
@@ -412,6 +413,12 @@ export function SwipeResearchPlayer({
   currentReel: ReelVideo | null;
   hasPrev: boolean;
   loading: boolean;
+  // True while a next()/prev() request is genuinely in flight -- on a
+  // fresh/exhausted local buffer this can legitimately take several
+  // seconds waiting for Instagram's own feed to refill (see
+  // ensurePending() in session-server.mjs). Purely a visual "still
+  // working" signal; the chevrons already handle their own gating.
+  navBusy: boolean;
   sessionStatus: LiveSessionStatus;
   sessionError: string | null;
   wakeCountdown: number | null;
@@ -740,20 +747,20 @@ export function SwipeResearchPlayer({
           <button
             type="button"
             onClick={goPrev}
-            title="Previous"
+            title={navBusy ? "Waiting for the next reel to load…" : "Previous"}
             className="absolute top-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-colors"
           >
-            <ChevronUp size={16} />
+            {navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronUp size={16} />}
           </button>
         )}
         {currentReel && (
           <button
             type="button"
             onClick={goNext}
-            title="Next"
+            title={navBusy ? "Waiting for the next reel to load…" : "Next"}
             className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-colors disabled:opacity-40"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
+            {loading || navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
           </button>
         )}
       </div>

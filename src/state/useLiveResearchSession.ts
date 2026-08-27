@@ -186,6 +186,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   const platformRef = useRef<Platform>("instagram");
   const heartbeatRef = useRef<number | null>(null);
   const busyRef = useRef(false);
+  // Mirrors busyRef as real state (a ref alone can't trigger a re-render) so
+  // the UI can show that a next()/prev() request is genuinely in flight —
+  // on a fresh session this can legitimately take several seconds (up to
+  // ~8s server-side: see ensurePending in session-server.mjs) while
+  // Instagram's own feed refills an exhausted local buffer. Purely a visual
+  // signal; it doesn't change next()/prev()'s own gating.
+  const [navBusy, setNavBusy] = useState(false);
   const pendingRef = useRef<{ accountId: string; platform: Platform } | null>(null);
   // Which account this tab currently holds the live-research lock for, if
   // any — set the instant start-research-live-session actually acquires it,
@@ -620,6 +627,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     const session = sessionRef.current;
     if (!session || busyRef.current) return;
     busyRef.current = true;
+    setNavBusy(true);
     try {
       const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/next`, {
         method: "POST",
@@ -641,6 +649,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       setError(err instanceof Error ? err.message : "Couldn't load the next reel.");
     } finally {
       busyRef.current = false;
+      setNavBusy(false);
     }
   }, [recoverFromDeadSession]);
 
@@ -648,6 +657,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     const session = sessionRef.current;
     if (!session || busyRef.current) return;
     busyRef.current = true;
+    setNavBusy(true);
     try {
       const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/prev`, {
         method: "POST",
@@ -669,6 +679,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       setError(err instanceof Error ? err.message : "Couldn't go back.");
     } finally {
       busyRef.current = false;
+      setNavBusy(false);
     }
   }, [recoverFromDeadSession]);
 
@@ -791,6 +802,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     error,
     wakeCountdown,
     lockedByLabel,
+    navBusy,
     startSession,
     endSession,
     checkInitialReachability,

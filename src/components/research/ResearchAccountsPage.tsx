@@ -684,6 +684,7 @@ export function ResearchAccountsPage({
                   currentReel={currentSwipeVideo}
                   hasPrev={liveSession.hasPrev}
                   loading={liveSession.status === "connecting" || liveSession.status === "checking"}
+                  navBusy={liveSession.navBusy}
                   sessionStatus={liveSession.status}
                   sessionError={liveSession.error}
                   wakeCountdown={liveSession.wakeCountdown}
