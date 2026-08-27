@@ -28,17 +28,6 @@ export function effectiveCollectionStatus(collection: {
   return collection.status;
 }
 
-// Collection.status ("Draft"/"Sent"/"Completed") doesn't distinguish "just
-// sent, nothing happening yet" from "actively being worked on" — this reads
-// the latest real submission to surface that distinction as its own small
-// tag, so the client doesn't have to open the collection to tell.
-function productionTag(collection: Collection): { label: string; style: string } | null {
-  const latest = collection.submissions[collection.submissions.length - 1];
-  if (!latest || latest.status === "Cancelled") return null;
-  if (latest.status === "Finished") return { label: "Finished", style: "text-emerald-300/80 bg-emerald-400/10" };
-  return { label: "In Production", style: "text-[#D39448] bg-[#D39448]/15" };
-}
-
 export function CollectionRow({
   family,
   current,
@@ -175,19 +164,6 @@ export function CollectionRow({
           style={{ background: creator.avatarColor }}
         />
       )}
-
-      {(() => {
-        const tag = productionTag(current);
-        return tag ? (
-          <span
-            className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] whitespace-nowrap", tag.style].join(
-              " "
-            )}
-          >
-            {tag.label}
-          </span>
-        ) : null;
-      })()}
 
       <span
         className={[
