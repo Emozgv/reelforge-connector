@@ -30,6 +30,8 @@ const FETCH_SESSION_URL = process.env.REELFORGE_FETCH_SESSION_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/fetch-research-account-session";
 const SUBMIT_LIVE_REEL_URL = process.env.REELFORGE_SUBMIT_LIVE_REEL_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/submit-research-live-reel";
+const RESOLVE_TOKEN_URL = process.env.REELFORGE_RESOLVE_TOKEN_URL
+  ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/resolve-live-session-token";
 
 // The web app heartbeats every 15s while the tab is active — but browsers
 // throttle setInterval in a *backgrounded* tab (Chrome can drop to roughly
@@ -445,19 +447,62 @@ if (PARENT_PID) {
 /** @type {Map<string, Session>} */
 const sessions = new Map();
 
-// Best-effort — archiving a reel the VA actually saw is a nice-to-have
-// history/cache write, never something that should be able to block or
-// slow down the live feed itself. A failure here is silently swallowed;
-// the reel was already shown either way.
-async function archiveLiveReel(accountId, token, reel) {
+// research_accounts.sync_token is a single shared column per account -- a
+// second live session started for the same account (another tab, a
+// reconnect, another staff member) overwrites it in the DB, silently
+// invalidating this session's own cached token for every archive write from
+// that point on. This used to be undetectable: the old version never
+// checked the response status at all, so a 403 looked identical to success.
+// Now: check res.ok, and on exactly one 403 retry with the account's
+// CURRENT token (see resolve-live-session-token) -- no mint, no loop. A
+// successful retry updates session.token so every later archive call this
+// session reuses the fresh value instead of re-hitting the same 403 every
+// time. Never blocks or slows the live feed either way -- still
+// fire-and-forget from next()'s point of view.
+async function submitLiveReel(accountId, token, reel) {
+  return fetch(SUBMIT_LIVE_REEL_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accountId, token, reel }),
+  });
+}
+
+async function resolveCurrentSyncToken(accountId) {
   try {
-    await fetch(SUBMIT_LIVE_REEL_URL, {
+    const res = await fetch(RESOLVE_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId, token, reel }),
+      body: JSON.stringify({ accountId }),
     });
+    const body = await res.json().catch(() => ({}));
+    return res.ok && body.token ? body.token : null;
   } catch {
-    // Archive is cache/history only — never load-bearing for the live feed.
+    return null;
+  }
+}
+
+async function archiveLiveReel(session, reel) {
+  try {
+    let res = await submitLiveReel(session.accountId, session.token, reel);
+
+    if (res.status === 403) {
+      const freshToken = await resolveCurrentSyncToken(session.accountId);
+      if (!freshToken) {
+        console.error(`[archive] session ${session.id} reel ${reel.id}: token rejected (403) and no fresh token could be resolved.`);
+        return;
+      }
+      res = await submitLiveReel(session.accountId, freshToken, reel);
+      if (res.ok) session.token = freshToken;
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      console.error(`[archive] session ${session.id} reel ${reel.id} failed (${res.status}): ${body.error ?? "(no error message)"}`);
+    }
+  } catch (err) {
+    // A real network failure, not a rejected token -- archive is
+    // cache/history only, never load-bearing for the live feed.
+    console.error(`[archive] session ${session.id} reel ${reel.id} failed: ${err?.message ?? err}`);
   }
 }
 
@@ -536,7 +581,7 @@ class Session {
     // session — exactly the moment Archive is supposed to pick it up.
     // Fire-and-forget: never lets a slow/failed archive write hold up the
     // live feed the VA is actually looking at.
-    void archiveLiveReel(this.accountId, this.token, reel);
+    void archiveLiveReel(this, reel);
     return { reel, fresh: true };
   }
 

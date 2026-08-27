@@ -108,7 +108,13 @@ function isSessionGoneStatus(status: number) {
 // feed" spinner implying a feed fetch that hadn't actually started yet).
 // "connecting" is now reserved for the part that's actually true of it:
 // Connector is confirmed reachable and a real session is being created.
-export type LiveSessionStatus = "idle" | "checking" | "connecting" | "active" | "error" | "needs_connector";
+// "in_use" — a Research Account may only have one active live session at a
+// time, across tabs, devices, and team members (the underlying Instagram/
+// TikTok session is a single real browser context; letting two callers
+// drive it silently clobbered each other's cached sync_token). Set when
+// start-research-live-session reports the account's lock is currently held
+// by someone else; lockedByLabel names who.
+export type LiveSessionStatus = "idle" | "checking" | "connecting" | "active" | "error" | "needs_connector" | "in_use";
 
 interface ActiveSession {
   accountId: string;
@@ -133,6 +139,9 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // below) — null the rest of the time, including during a normal
   // already-running-Connector session start.
   const [wakeCountdown, setWakeCountdown] = useState<number | null>(null);
+  // Who currently holds the account's live-research lock, set only alongside
+  // status === "in_use".
+  const [lockedByLabel, setLockedByLabel] = useState<string | null>(null);
   const sessionRef = useRef<ActiveSession | null>(null);
   const platformRef = useRef<Platform>("instagram");
   const heartbeatRef = useRef<number | null>(null);
@@ -176,6 +185,10 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     } catch {
       // Best-effort — Connector's own heartbeat timeout closes it regardless.
     }
+    // Frees this account for someone else right away instead of waiting out
+    // the ~5min lock lease. Best-effort too — a failure here just means the
+    // lease itself expires on its own shortly after.
+    supabase.functions.invoke("release-research-account-lock", { body: { accountId: session.accountId } }).catch(() => {});
   }, [stopHeartbeat]);
 
   // Called once, the first time a Research Account becomes available (app
@@ -223,6 +236,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     async (accountId: string, platform: Platform) => {
       const attemptId = ++attemptRef.current;
       const isStale = () => attemptRef.current !== attemptId;
+      setLockedByLabel(null);
 
       let timedOut = false;
       const timeoutId = window.setTimeout(() => {
@@ -240,14 +254,28 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         const { data, error: invokeError } = await supabase.functions.invoke<{
           token?: string;
           error?: string;
+          holder?: string;
         }>("start-research-live-session", { body: { workspaceId, accountId } });
         console.log(`[timing] start-research-live-session invoke: ${(performance.now() - startedAt).toFixed(0)}ms`);
 
         if (isStale() || timedOut) return;
 
         if (invokeError || !data?.token) {
+          // supabase-js only sets a generic message on invokeError for a
+          // non-2xx response — the real { error, holder } body (specifically
+          // the "in_use" conflict) only comes through via error.context.
+          let body = data;
+          if (invokeError) {
+            const context = (invokeError as { context?: Response }).context;
+            body = await context?.json().catch(() => undefined);
+          }
+          if (body?.error === "in_use") {
+            setStatus("in_use");
+            setLockedByLabel(body.holder ?? "another team member");
+            return;
+          }
           setStatus("error");
-          setError(data?.error ?? "Couldn't start a research session.");
+          setError(body?.error ?? "Couldn't start a research session.");
           return;
         }
 
@@ -311,6 +339,35 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
               if (sessionRef.current !== s) return;
               fallBackToNeedsConnector(accountId, platform);
             });
+
+          // Same tick, one more thing it does — keeps this account's
+          // exclusive live-research lock alive. If this session lost the
+          // lock (lease lapsed and someone else started a session on the
+          // same account first), end this one and show who has it now,
+          // rather than let it keep silently driving a session that's no
+          // longer exclusively ours per the one-session-per-account rule.
+          void supabase.functions
+            .invoke<{ ok?: boolean; holder?: string | null }>("refresh-research-account-lock", {
+              body: { accountId: s.accountId },
+            })
+            .then(({ data }) => {
+              if (data?.ok || sessionRef.current !== s) return;
+              void fetch(`${SESSION_SERVER_URL}/sessions/${s.sessionId}/end`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sessionSecret: s.sessionSecret }),
+              }).catch(() => {});
+              sessionRef.current = null;
+              stopHeartbeat();
+              setCurrentReel(null);
+              setStatus("in_use");
+              setLockedByLabel(data?.holder ?? "another team member");
+            })
+            .catch(() => {
+              // Best-effort — a real network failure here doesn't mean the
+              // lock was actually lost, so this deliberately does nothing
+              // rather than kicking the VA out over a blip.
+            });
         }, HEARTBEAT_MS);
       } catch (err) {
         if (isStale() || timedOut) return;
@@ -320,7 +377,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         window.clearTimeout(timeoutId);
       }
     },
-    [workspaceId, fallBackToNeedsConnector]
+    [workspaceId, fallBackToNeedsConnector, stopHeartbeat]
   );
 
   // Opening a Research Account calls this automatically — it never attempts
@@ -580,6 +637,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     status,
     error,
     wakeCountdown,
+    lockedByLabel,
     startSession,
     endSession,
     checkInitialReachability,

@@ -687,6 +687,7 @@ export function ResearchAccountsPage({
                   sessionStatus={liveSession.status}
                   sessionError={liveSession.error}
                   wakeCountdown={liveSession.wakeCountdown}
+                  lockedByLabel={liveSession.lockedByLabel}
                   onNext={() => void liveSession.next()}
                   onPrev={() => void liveSession.prev()}
                   onSaveClick={(video) => {

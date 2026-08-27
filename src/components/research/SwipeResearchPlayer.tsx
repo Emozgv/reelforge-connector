@@ -391,6 +391,7 @@ export function SwipeResearchPlayer({
   sessionStatus,
   sessionError,
   wakeCountdown,
+  lockedByLabel,
   onNext,
   onPrev,
   onSaveClick,
@@ -414,6 +415,7 @@ export function SwipeResearchPlayer({
   sessionStatus: LiveSessionStatus;
   sessionError: string | null;
   wakeCountdown: number | null;
+  lockedByLabel: string | null;
   onNext: () => void;
   onPrev: () => void;
   onSaveClick: (video: ReelVideo) => void;
@@ -588,6 +590,26 @@ export function SwipeResearchPlayer({
                   Once ReelForge finishes setting up its real session, this account's feed will start appearing here
                   automatically.
                 </p>
+              </>
+            ) : sessionStatus === "in_use" ? (
+              // A Research Account only ever has one active live session at
+              // a time, across tabs, devices, and team members — this
+              // shows up either when starting a session finds it already
+              // held, or when a running session's own lock lapses because
+              // someone else started one first.
+              <>
+                <Square size={16} className="text-neutral-600 mb-1" />
+                <p className="text-[13px] text-neutral-300">This account is already being researched.</p>
+                <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">
+                  {lockedByLabel ?? "Another team member"} is using it right now. Try again once they're done.
+                </p>
+                <button
+                  type="button"
+                  onClick={onRefreshSession}
+                  className="mt-4 h-9 px-4 rounded-full glass-panel text-[12.5px] text-neutral-300 hover:bg-white/[0.06] transition-colors duration-150"
+                >
+                  Check again
+                </button>
               </>
             ) : sessionStatus === "needs_connector" ? (
               <>
