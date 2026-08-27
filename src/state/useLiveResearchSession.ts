@@ -276,6 +276,16 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       // actually got as far as acquiring one.
       lockedAccountIdRef.current = null;
       void releaseLock(accountId);
+      // The UI is back in a clickable ("needs_connector") state right now,
+      // but this fires on a *client-side* timeout -- the beginSession call
+      // that's being abandoned may still be sitting on a hung Connector
+      // fetch that hasn't actually settled yet, so startSession/
+      // retryWithWake's own try/finally won't release the in-flight guard
+      // for however long that takes (possibly indefinitely). Without this,
+      // every click after a timeout silently no-ops: the guard is still
+      // held, so startSession/retryWithWake return before touching any
+      // state, and the UI never shows why nothing happened.
+      startInFlightRef.current = false;
     },
     [stopHeartbeat]
   );
