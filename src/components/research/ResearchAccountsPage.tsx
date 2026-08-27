@@ -448,7 +448,10 @@ export function ResearchAccountsPage({
   async function handleBlockCreator(video: ReelVideo) {
     if (blockStatus[video.id] === "pending" || blockStatus[video.id] === "done") return;
     setBlockStatus((prev) => ({ ...prev, [video.id]: "pending" }));
-    const { blocked } = await liveSession.block();
+    const { blocked, error } = await liveSession.block();
+    // Diagnostic-only, no behavior change yet -- surfaces the real reason
+    // instead of only ever showing "Retry" with no way to tell why.
+    if (!blocked) console.error(`[block] failed for ${video.username || video.id}: ${error ?? "(no error message)"}`);
     setBlockStatus((prev) => ({ ...prev, [video.id]: blocked ? "done" : "failed" }));
   }
 

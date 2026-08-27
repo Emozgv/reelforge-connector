@@ -223,11 +223,17 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         fallBackToNeedsConnector(accountId, platform);
       }, BEGIN_SESSION_TIMEOUT_MS);
 
+      // Diagnostic-only timing, no behavior change -- pairs with the
+      // [timing] logs inside Connector's session-server.mjs so a slow
+      // "Loading your feed…" report can be attributed to a specific step
+      // instead of guessed at.
+      const startedAt = performance.now();
       try {
         const { data, error: invokeError } = await supabase.functions.invoke<{
           token?: string;
           error?: string;
         }>("start-research-live-session", { body: { workspaceId, accountId } });
+        console.log(`[timing] start-research-live-session invoke: ${(performance.now() - startedAt).toFixed(0)}ms`);
 
         if (isStale() || timedOut) return;
 
@@ -237,12 +243,17 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
           return;
         }
 
+        const connectorStartedAt = performance.now();
         const res = await fetch(`${SESSION_SERVER_URL}/sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ accountId, token: data.token }),
         });
         const body = await res.json();
+        console.log(
+          `[timing] connector POST /sessions (chromium+nav+first-reel, see Connector's own log for the breakdown): ${(performance.now() - connectorStartedAt).toFixed(0)}ms`
+        );
+        console.log(`[timing] beginSession total: ${(performance.now() - startedAt).toFixed(0)}ms`);
         if (!res.ok) throw new Error(body.error ?? "Couldn't start a research session.");
 
         if (isStale() || timedOut) {

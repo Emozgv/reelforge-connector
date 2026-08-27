@@ -554,6 +554,11 @@ class Session {
 }
 
 async function startSession(accountId, token) {
+  // Diagnostic-only timing, no behavior change -- lets us see which of the
+  // four real steps (Supabase session fetch, Chromium launch, page
+  // navigation, first-reel polling) is actually slow on a given "Loading
+  // your feed…" report, instead of guessing at a single timeout constant.
+  const t0 = Date.now();
   const sessionRes = await fetch(FETCH_SESSION_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -565,9 +570,12 @@ async function startSession(accountId, token) {
   }
   const { platform, storageState } = sessionBody;
   if (!REEL_URL[platform]) throw new Error("This platform isn't supported for live research sessions yet.");
+  console.log(`[timing] fetch-research-account-session: ${Date.now() - t0}ms`);
 
+  const t1 = Date.now();
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
+  console.log(`[timing] chromium launch + context: ${Date.now() - t1}ms`);
 
   // TikTok specifically: storageState is a frozen snapshot (captured at
   // login, only ever refreshed by an explicit Resync) — every new session
@@ -595,6 +603,7 @@ async function startSession(accountId, token) {
   sessions.set(id, session);
   console.log(`[session] started ${id} for account ${accountId} (${platform})`);
 
+  const t2 = Date.now();
   try {
     await page.goto(REEL_URL[platform], { waitUntil: "domcontentloaded", timeout: 30000 });
   } catch (err) {
@@ -602,8 +611,12 @@ async function startSession(accountId, token) {
     await browser.close().catch(() => {});
     throw new Error("Couldn't open the real Reels session. Check your internet connection and try again.");
   }
+  console.log(`[timing] page.goto navigation: ${Date.now() - t2}ms`);
 
+  const t3 = Date.now();
   const { reel } = await session.next();
+  console.log(`[timing] first-reel polling (session.next): ${Date.now() - t3}ms`);
+  console.log(`[timing] startSession total: ${Date.now() - t0}ms`);
   // Makes the first reel's real provenance independently checkable from the
   // log alone — this is a brand-new page.goto() + scroll on a fresh
   // browser/context created above, never a replay of any prior session's
@@ -706,6 +719,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (action === "block") {
         const result = await session.block();
+        // Diagnostic-only, no behavior change -- block() already returns a
+        // specific error string on failure, but nothing ever logged it, so
+        // every failure looked identical from the outside ("Retry").
+        if (!result.blocked) console.error(`[block] session ${id} failed: ${result.error ?? "(no error message)"}`);
         return json(res, 200, result);
       }
       if (action === "heartbeat") {
