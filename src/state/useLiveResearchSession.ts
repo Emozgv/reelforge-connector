@@ -634,6 +634,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         }
         throw new Error(body.error ?? "Couldn't load the next reel.");
       }
+      setError(null);
       if (body.reel) setCurrentReel(liveReelToVideo(body.reel, platformRef.current));
       setHasPrev(!!body.hasPrev);
     } catch (err) {
@@ -661,6 +662,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         }
         throw new Error(body.error ?? "Couldn't go back.");
       }
+      setError(null);
       if (body.reel) setCurrentReel(liveReelToVideo(body.reel, platformRef.current));
       setHasPrev(!!body.hasPrev);
     } catch (err) {

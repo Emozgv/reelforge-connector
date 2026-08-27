@@ -714,6 +714,28 @@ export function SwipeResearchPlayer({
           </div>
         )}
 
+        {/* currentReel truthy skips the whole status overlay above, which
+            is otherwise the only place sessionError/sessionStatus ever
+            render -- so a next()/prev() failure while a reel is already on
+            screen (Connector drops mid-session, request fails) previously
+            left the stale reel showing with zero indication anything was
+            wrong, chevrons visually unchanged but silently failing on every
+            further click. This surfaces that exact case without hiding the
+            reel or touching the overlay logic above. */}
+        {currentReel && sessionError && (
+          <div className="absolute inset-x-3 top-12 z-30 rounded-lg bg-rose-950/90 backdrop-blur-sm px-3 py-2 flex items-center gap-2 shadow-lg">
+            <AlertTriangle size={13} className="text-rose-300 shrink-0" />
+            <p className="flex-1 text-[11px] text-rose-100 leading-snug">{sessionError}</p>
+            <button
+              type="button"
+              onClick={onRefreshSession}
+              className="shrink-0 text-[11px] font-medium text-white underline underline-offset-2 hover:text-rose-200"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {hasPrev && (
           <button
             type="button"
