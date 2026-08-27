@@ -686,6 +686,25 @@ export function SwipeResearchPlayer({
                 <Loader2 size={20} className="text-[#D39448] animate-spin" />
                 <p className="mt-3 text-[12.5px] text-neutral-400">Starting Research…</p>
               </>
+            ) : sessionStatus === "active" ? (
+              // A session did start, but its very first reel pull came back
+              // empty (Connector's session.next() gives up after ~8s if
+              // Instagram's own feed hasn't yielded anything yet — see
+              // ensurePending in session-server.mjs). Nothing polls or
+              // retries this on its own, and hasPrev/currentReel are both
+              // falsy here too, so without this branch the chevrons never
+              // appear and the generic spinner below never recovers.
+              <>
+                <Loader2 size={20} className="text-[#D39448] animate-spin" />
+                <p className="mt-3 text-[12.5px] text-neutral-400">Feed hasn't loaded a reel yet.</p>
+                <button
+                  type="button"
+                  onClick={onRefreshSession}
+                  className="mt-4 h-9 px-4 rounded-full glass-panel text-[12.5px] text-neutral-300 hover:bg-white/[0.06] transition-colors duration-150"
+                >
+                  Try again
+                </button>
+              </>
             ) : (
               <>
                 <Loader2 size={20} className="text-[#D39448] animate-spin" />
