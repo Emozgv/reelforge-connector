@@ -224,6 +224,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       setCurrentReel(null);
       setError(null);
       setStatus("needs_connector");
+      // This attempt is being abandoned client-side (20s begin-session
+      // timeout, or Connector became unreachable) -- release whatever lock
+      // it may have already acquired, or a retry (same user, same tab) will
+      // find its own still-valid lock and get falsely told the account is
+      // "already being researched" by itself. A no-op if this attempt never
+      // actually got as far as acquiring one.
+      supabase.functions.invoke("release-research-account-lock", { body: { accountId } }).catch(() => {});
     },
     [stopHeartbeat]
   );
