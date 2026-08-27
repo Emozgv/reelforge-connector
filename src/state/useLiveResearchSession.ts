@@ -219,6 +219,14 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // in-flight guard stuck so the visible "Start research" button did
   // nothing when clicked.
   const wakingRef = useRef(false);
+  // Set the instant retryWithWake confirms Connector reachable, so the
+  // *next* startSession() call (the separate, explicit "Start research"
+  // click that follows) knows this Connector process really did just
+  // cold-launch and still plays the settle-time countdown once — without
+  // retryWithWake itself chaining straight into a session start. Cleared
+  // the moment it's consumed (or found stale on a failed health check), so
+  // it can never cause a countdown to reappear on an unrelated later click.
+  const justWokeRef = useRef(false);
   // Bumped on every startSession/retryWithWake call. beginSession captures
   // its own value and checks it before every state write, so a slow/hung
   // attempt that's since been superseded (or a timeout that already forced
@@ -515,11 +523,30 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         setStatus("checking");
 
         if (await checkHealth()) {
+          // Set before the countdown below, not after -- SwipeResearchPlayer's
+          // status ternary checks "checking" before it checks wakeCountdown,
+          // so the countdown text would never actually render while status
+          // was still "checking". "connecting" matches neither, letting the
+          // ternary fall through to the countdown branch, exactly like
+          // retryWithWake's own countdown used to rely on.
           setStatus("connecting");
+          // Only true right after retryWithWake woke Connector from a cold
+          // launch and stopped there (see its own comment) — the ordinary
+          // already-running-Connector path below never touches this, so it
+          // stays exactly as silent/instant as before.
+          if (justWokeRef.current) {
+            justWokeRef.current = false;
+            for (let remaining = WAKE_STARTUP_DELAY_SEC; remaining > 0; remaining--) {
+              setWakeCountdown(remaining);
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+            setWakeCountdown(null);
+          }
           await beginSession(accountId, platform);
           return;
         }
 
+        justWokeRef.current = false;
         pendingRef.current = { accountId, platform };
         setStatus("needs_connector");
       } finally {
@@ -548,30 +575,24 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         return;
       }
 
-      // Connector answering /health doesn't mean it's actually settled
-      // enough for a full session start (cold-launched process, browser
-      // binaries, etc.) -- a visible countdown here, instead of starting
-      // the instant it's reachable, is what gives it that room.
-      for (let remaining = WAKE_STARTUP_DELAY_SEC; remaining > 0; remaining--) {
-        if (!pendingRef.current) {
-          setWakeCountdown(null); // superseded (e.g. account/platform switched away)
-          return;
-        }
-        setWakeCountdown(remaining);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-      setWakeCountdown(null);
-
-      // Nothing is held yet up to this point -- from here on, beginSession
-      // may actually acquire a lock/session, so a real tab close should go
-      // back to being handled normally.
+      // Connector is reachable now, but starting a real Research session is
+      // a separate, explicit action from waking Connector -- land back on
+      // the same ready screen startSession's "idle" status already shows
+      // (with its own "Start research" button) instead of chaining straight
+      // into the settle-time countdown and a session start. justWokeRef
+      // makes the *next* startSession() call show that countdown once,
+      // since this Connector process really did just cold-launch.
+      //
+      // Nothing is held at this point -- no session, no lock -- so a real
+      // tab close can go back to being handled normally.
+      justWokeRef.current = true;
       wakingRef.current = false;
-      await beginSession(pending.accountId, pending.platform);
+      setStatus("idle");
     } finally {
       wakingRef.current = false;
       startInFlightRef.current = false;
     }
-  }, [beginSession]);
+  }, []);
 
   // Shared by next/prev: a dead-session response (Connector's fine, this
   // particular session just isn't there anymore — see isSessionGoneStatus)
