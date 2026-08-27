@@ -147,6 +147,14 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   const heartbeatRef = useRef<number | null>(null);
   const busyRef = useRef(false);
   const pendingRef = useRef<{ accountId: string; platform: Platform } | null>(null);
+  // Which account this tab currently holds the live-research lock for, if
+  // any — set the instant start-research-live-session actually acquires it,
+  // well before sessionRef gets set (that only happens once Connector's own
+  // /sessions POST resolves, which can take a while). Tracking this
+  // separately from sessionRef is what lets a tab-close/unmount mid-connect
+  // still release a lock it already holds, even though no session was ever
+  // fully established.
+  const lockedAccountIdRef = useRef<string | null>(null);
   // Bumped on every startSession/retryWithWake call. beginSession captures
   // its own value and checks it before every state write, so a slow/hung
   // attempt that's since been superseded (or a timeout that already forced
@@ -174,6 +182,19 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     setHasPrev(false);
     setError(null);
     setStatus("idle");
+
+    // Release whatever lock this tab currently holds (or is mid-acquiring),
+    // independent of whether a real Connector session was ever established.
+    // Gating this on `session` being non-null used to mean a tab closed (or
+    // an attempt abandoned) while still connecting -- lock already acquired,
+    // sessionRef never set -- never released it at all, since this whole
+    // block was skipped by the early `if (!session) return` below.
+    const lockedAccountId = lockedAccountIdRef.current;
+    if (lockedAccountId) {
+      lockedAccountIdRef.current = null;
+      supabase.functions.invoke("release-research-account-lock", { body: { accountId: lockedAccountId } }).catch(() => {});
+    }
+
     if (!session) return;
     try {
       await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/end`, {
@@ -185,10 +206,6 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     } catch {
       // Best-effort — Connector's own heartbeat timeout closes it regardless.
     }
-    // Frees this account for someone else right away instead of waiting out
-    // the ~5min lock lease. Best-effort too — a failure here just means the
-    // lease itself expires on its own shortly after.
-    supabase.functions.invoke("release-research-account-lock", { body: { accountId: session.accountId } }).catch(() => {});
   }, [stopHeartbeat]);
 
   // Called once, the first time a Research Account becomes available (app
@@ -230,6 +247,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       // find its own still-valid lock and get falsely told the account is
       // "already being researched" by itself. A no-op if this attempt never
       // actually got as far as acquiring one.
+      lockedAccountIdRef.current = null;
       supabase.functions.invoke("release-research-account-lock", { body: { accountId } }).catch(() => {});
     },
     [stopHeartbeat]
@@ -285,6 +303,12 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
           setError(body?.error ?? "Couldn't start a research session.");
           return;
         }
+
+        // The lock is genuinely acquired the moment this call succeeds --
+        // well before Connector's own /sessions POST below resolves. Record
+        // it now so a tab close/unmount during that (potentially slow, cold
+        // Chromium) wait still releases it, not just a clean success/fail.
+        lockedAccountIdRef.current = accountId;
 
         const connectorStartedAt = performance.now();
         const res = await fetch(`${SESSION_SERVER_URL}/sessions`, {
@@ -365,6 +389,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
                 body: JSON.stringify({ sessionSecret: s.sessionSecret }),
               }).catch(() => {});
               sessionRef.current = null;
+              lockedAccountIdRef.current = null; // someone else holds it now, nothing left to release
               stopHeartbeat();
               setCurrentReel(null);
               setStatus("in_use");
