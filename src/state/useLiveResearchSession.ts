@@ -100,6 +100,24 @@ function isSessionGoneStatus(status: number) {
   return status === 403 || status === 404;
 }
 
+// Best-effort but not silent: a release call that fails outright (e.g. an
+// auth hiccup landing at the same moment, unrelated to the lock itself)
+// used to be swallowed by a bare .catch(() => {}), orphaning the lock for
+// the rest of its 5-minute lease with no trace. One retry, matching the
+// same retry-once-on-transient-failure pattern Connector's own archive path
+// already uses for its analogous case.
+async function releaseLock(accountId: string) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { error } = await supabase.functions.invoke("release-research-account-lock", { body: { accountId } });
+    if (!error) return;
+    if (attempt === 2) {
+      console.error(`[lock] release-research-account-lock failed for account ${accountId}:`, error);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
 // "checking" is deliberately its own state, distinct from both "idle" and
 // "connecting" — it's the brief window where Connector's reachability
 // simply isn't known yet (mid checkHealth() call). Folding it into "idle"
@@ -155,6 +173,15 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // still release a lock it already holds, even though no session was ever
   // fully established.
   const lockedAccountIdRef = useRef<string | null>(null);
+  // Guards startSession/retryWithWake against a second call landing before
+  // the first has had a chance to move status off "needs_connector"/"idle"
+  // (a fast double-click, or two nearly-simultaneous events from the same
+  // click) -- a plain `disabled` prop only helps once React has re-rendered,
+  // and a synchronous double-invocation can beat that render. Checked and
+  // set synchronously at the very top of both functions, before any await,
+  // so the second call is rejected outright rather than racing the first
+  // one's own start-research-live-session call for the same lock.
+  const startInFlightRef = useRef(false);
   // Bumped on every startSession/retryWithWake call. beginSession captures
   // its own value and checks it before every state write, so a slow/hung
   // attempt that's since been superseded (or a timeout that already forced
@@ -192,7 +219,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     const lockedAccountId = lockedAccountIdRef.current;
     if (lockedAccountId) {
       lockedAccountIdRef.current = null;
-      supabase.functions.invoke("release-research-account-lock", { body: { accountId: lockedAccountId } }).catch(() => {});
+      void releaseLock(lockedAccountId);
     }
 
     if (!session) return;
@@ -248,7 +275,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       // "already being researched" by itself. A no-op if this attempt never
       // actually got as far as acquiring one.
       lockedAccountIdRef.current = null;
-      supabase.functions.invoke("release-research-account-lock", { body: { accountId } }).catch(() => {});
+      void releaseLock(accountId);
     },
     [stopHeartbeat]
   );
@@ -422,38 +449,44 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // (no user gesture behind it) does not reliably work.
   const startSession = useCallback(
     async (accountId: string, platform: Platform) => {
-      await endSession();
+      if (startInFlightRef.current) return;
+      startInFlightRef.current = true;
+      try {
+        await endSession();
 
-      if (platform !== "instagram" && platform !== "tiktok") {
-        setStatus("error");
-        setError("Live research sessions aren't available for this platform yet.");
+        if (platform !== "instagram" && platform !== "tiktok") {
+          setStatus("error");
+          setError("Live research sessions aren't available for this platform yet.");
+          setCurrentReel(null);
+          return;
+        }
+        if (!workspaceId) {
+          setStatus("error");
+          setError("No active workspace.");
+          return;
+        }
+
+        platformRef.current = platform;
+        setError(null);
         setCurrentReel(null);
-        return;
-      }
-      if (!workspaceId) {
-        setStatus("error");
-        setError("No active workspace.");
-        return;
-      }
+        setHasPrev(false);
+        // Reachability isn't known yet — say so, rather than defaulting to
+        // "idle" (looks like nothing is happening) or "connecting" (implies
+        // a session is already being created) for the ~1.5s checkHealth()
+        // can genuinely take.
+        setStatus("checking");
 
-      platformRef.current = platform;
-      setError(null);
-      setCurrentReel(null);
-      setHasPrev(false);
-      // Reachability isn't known yet — say so, rather than defaulting to
-      // "idle" (looks like nothing is happening) or "connecting" (implies
-      // a session is already being created) for the ~1.5s checkHealth()
-      // can genuinely take.
-      setStatus("checking");
+        if (await checkHealth()) {
+          setStatus("connecting");
+          await beginSession(accountId, platform);
+          return;
+        }
 
-      if (await checkHealth()) {
-        setStatus("connecting");
-        await beginSession(accountId, platform);
-        return;
+        pendingRef.current = { accountId, platform };
+        setStatus("needs_connector");
+      } finally {
+        startInFlightRef.current = false;
       }
-
-      pendingRef.current = { accountId, platform };
-      setStatus("needs_connector");
     },
     [workspaceId, endSession, beginSession]
   );
@@ -463,32 +496,37 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // SwipeResearchPlayer), not from an effect or a timer.
   const retryWithWake = useCallback(async () => {
     const pending = pendingRef.current;
-    if (!pending) return;
-    setStatus("connecting");
-    setError(null);
-    wakeConnector();
-    const ready = await waitForConnector(WAKE_TIMEOUT_MS);
-    if (!ready) {
-      setStatus("error");
-      setError("Couldn't reach ReelForge Connector. Make sure it's installed, then try again.");
-      return;
-    }
-
-    // Connector answering /health doesn't mean it's actually settled enough
-    // for a full session start (cold-launched process, browser binaries,
-    // etc.) -- a visible countdown here, instead of starting the instant
-    // it's reachable, is what gives it that room.
-    for (let remaining = WAKE_STARTUP_DELAY_SEC; remaining > 0; remaining--) {
-      if (!pendingRef.current) {
-        setWakeCountdown(null); // superseded (e.g. account/platform switched away)
+    if (!pending || startInFlightRef.current) return;
+    startInFlightRef.current = true;
+    try {
+      setStatus("connecting");
+      setError(null);
+      wakeConnector();
+      const ready = await waitForConnector(WAKE_TIMEOUT_MS);
+      if (!ready) {
+        setStatus("error");
+        setError("Couldn't reach ReelForge Connector. Make sure it's installed, then try again.");
         return;
       }
-      setWakeCountdown(remaining);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-    setWakeCountdown(null);
 
-    await beginSession(pending.accountId, pending.platform);
+      // Connector answering /health doesn't mean it's actually settled
+      // enough for a full session start (cold-launched process, browser
+      // binaries, etc.) -- a visible countdown here, instead of starting
+      // the instant it's reachable, is what gives it that room.
+      for (let remaining = WAKE_STARTUP_DELAY_SEC; remaining > 0; remaining--) {
+        if (!pendingRef.current) {
+          setWakeCountdown(null); // superseded (e.g. account/platform switched away)
+          return;
+        }
+        setWakeCountdown(remaining);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      setWakeCountdown(null);
+
+      await beginSession(pending.accountId, pending.platform);
+    } finally {
+      startInFlightRef.current = false;
+    }
   }, [beginSession]);
 
   // Shared by next/prev: a dead-session response (Connector's fine, this
