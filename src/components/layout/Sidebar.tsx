@@ -134,7 +134,7 @@ export function Sidebar({
         </div>
 
         <div className="flex items-center gap-0.5">
-        <TestAccountButton workspaceId={workspaceId} canManage={role === "owner" || role === "manager"} />
+        <TestAccountButton workspaceId={workspaceId} canManage={Boolean(isPlatformAdmin)} />
         <div className="relative">
           <button
             onClick={() => setNotifOpen((v) => !v)}
