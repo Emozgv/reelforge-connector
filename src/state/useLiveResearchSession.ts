@@ -10,6 +10,10 @@ import type { Platform, ReelVideo } from "../types";
 const SESSION_SERVER_URL = "http://127.0.0.1:48211";
 const HEARTBEAT_MS = 15_000;
 const WAKE_TIMEOUT_MS = 15_000;
+// Purely a visible "let it start properly" pause after Connector just woke
+// up from a cold launch -- not an extra wait added on top of WAKE_TIMEOUT_MS
+// (which only bounds how long we wait for it to become reachable at all).
+const WAKE_STARTUP_DELAY_SEC = 10;
 const BEGIN_SESSION_TIMEOUT_MS = 20_000;
 
 interface RawLiveReel {
@@ -125,6 +129,10 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   const [hasPrev, setHasPrev] = useState(false);
   const [status, setStatus] = useState<LiveSessionStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Set only during retryWithWake's post-wake pause (see WAKE_STARTUP_DELAY_MS
+  // below) — null the rest of the time, including during a normal
+  // already-running-Connector session start.
+  const [wakeCountdown, setWakeCountdown] = useState<number | null>(null);
   const sessionRef = useRef<ActiveSession | null>(null);
   const platformRef = useRef<Platform>("instagram");
   const heartbeatRef = useRef<number | null>(null);
@@ -376,6 +384,21 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       setError("Couldn't reach ReelForge Connector. Make sure it's installed, then try again.");
       return;
     }
+
+    // Connector answering /health doesn't mean it's actually settled enough
+    // for a full session start (cold-launched process, browser binaries,
+    // etc.) -- a visible countdown here, instead of starting the instant
+    // it's reachable, is what gives it that room.
+    for (let remaining = WAKE_STARTUP_DELAY_SEC; remaining > 0; remaining--) {
+      if (!pendingRef.current) {
+        setWakeCountdown(null); // superseded (e.g. account/platform switched away)
+        return;
+      }
+      setWakeCountdown(remaining);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    setWakeCountdown(null);
+
     await beginSession(pending.accountId, pending.platform);
   }, [beginSession]);
 
@@ -463,6 +486,24 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   }, []);
 
   // A real platform action on the real connected account (see
+  // session-server.mjs's Session.follow) — same shape as like().
+  const follow = useCallback(async (): Promise<{ following: boolean; error?: string }> => {
+    const session = sessionRef.current;
+    if (!session) return { following: false, error: "No active research session." };
+    try {
+      const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/follow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionSecret: session.sessionSecret }),
+      });
+      const body = await res.json();
+      return { following: !!body.following, error: body.error };
+    } catch (err) {
+      return { following: false, error: err instanceof Error ? err.message : "Couldn't follow this creator." };
+    }
+  }, []);
+
+  // A real platform action on the real connected account (see
   // session-server.mjs's Session.block) — never a local-only hide.
   const block = useCallback(async (): Promise<{ blocked: boolean; error?: string }> => {
     const session = sessionRef.current;
@@ -538,12 +579,14 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     hasPrev,
     status,
     error,
+    wakeCountdown,
     startSession,
     endSession,
     checkInitialReachability,
     next,
     prev,
     like,
+    follow,
     block,
     retryWithWake,
   };

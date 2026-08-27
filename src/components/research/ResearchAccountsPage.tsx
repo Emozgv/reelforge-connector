@@ -13,7 +13,7 @@ import { VideoGrid } from "../hub/VideoGrid";
 import { SavePanel } from "../hub/SavePanel";
 import { SavedCollectionsPopover } from "../hub/SavedCollectionsPopover";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
-import { SwipeResearchPlayer, type LikeStatus } from "./SwipeResearchPlayer";
+import { SwipeResearchPlayer, type LikeStatus, type FollowStatus } from "./SwipeResearchPlayer";
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: "IG Research", tiktok: "TikTok Research" };
@@ -275,6 +275,7 @@ export function ResearchAccountsPage({
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [likeStatus, setLikeStatus] = useState<Record<string, LikeStatus>>({});
+  const [followStatus, setFollowStatus] = useState<Record<string, FollowStatus>>({});
   const [blockStatus, setBlockStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
   const liveSession = useLiveResearchSession(workspaceId);
 
@@ -438,6 +439,16 @@ export function ResearchAccountsPage({
     setLikeStatus((prev) => ({ ...prev, [video.id]: "pending" }));
     const { liked } = await liveSession.like();
     setLikeStatus((prev) => ({ ...prev, [video.id]: liked ? "liked" : "failed" }));
+  }
+
+  // A real platform action on the real connected account (see
+  // session-server.mjs's Session.follow) — same shape as handleLikeClick.
+  async function handleFollowClick(video: ReelVideo) {
+    if (followStatus[video.id] === "pending" || followStatus[video.id] === "following") return;
+    setFollowStatus((prev) => ({ ...prev, [video.id]: "pending" }));
+    const { following, error } = await liveSession.follow();
+    if (!following) console.error(`[follow] failed for ${video.username || video.id}: ${error ?? "(no error message)"}`);
+    setFollowStatus((prev) => ({ ...prev, [video.id]: following ? "following" : "failed" }));
   }
 
   // A real platform action on the real connected account — the whole point
@@ -675,6 +686,7 @@ export function ResearchAccountsPage({
                   loading={liveSession.status === "connecting" || liveSession.status === "checking"}
                   sessionStatus={liveSession.status}
                   sessionError={liveSession.error}
+                  wakeCountdown={liveSession.wakeCountdown}
                   onNext={() => void liveSession.next()}
                   onPrev={() => void liveSession.prev()}
                   onSaveClick={(video) => {
@@ -684,6 +696,8 @@ export function ResearchAccountsPage({
                   onExitToArchive={() => setMode("archive")}
                   onLikeClick={handleLikeClick}
                   likeStatus={likeStatus}
+                  onFollowClick={handleFollowClick}
+                  followStatus={followStatus}
                   onBlockCreator={handleBlockCreator}
                   blockStatus={blockStatus}
                   onRefreshSession={() => void liveSession.startSession(currentAccount.id, currentAccount.platform)}

@@ -8,6 +8,7 @@ import { formatDuration } from "../../lib/researchFeedMapping";
 import { DownloadConnectorLink } from "./DownloadConnectorButton";
 
 export type LikeStatus = "pending" | "liked" | "failed";
+export type FollowStatus = "pending" | "following" | "failed";
 export type BlockStatus = "pending" | "done" | "failed";
 
 // One video, full-bleed within its slot, autoplaying when both this slide
@@ -20,7 +21,20 @@ export type BlockStatus = "pending" | "done" | "failed";
 // mounted so its live session survives that navigation (see App.tsx), so
 // this has to police its own "is anyone actually looking at this" state
 // instead of relying on being unmounted.
-function SwipeSlide({ video, active, pageActive, onSaveClick, onAddToCollection, onLikeClick, likeStatus, onBlockCreator, blockStatus, canLike }: {
+function SwipeSlide({
+  video,
+  active,
+  pageActive,
+  onSaveClick,
+  onAddToCollection,
+  onLikeClick,
+  likeStatus,
+  onFollowClick,
+  followStatus,
+  onBlockCreator,
+  blockStatus,
+  canLike,
+}: {
   video: ReelVideo;
   active: boolean;
   pageActive: boolean;
@@ -28,6 +42,8 @@ function SwipeSlide({ video, active, pageActive, onSaveClick, onAddToCollection,
   onAddToCollection: () => void;
   onLikeClick: () => void;
   likeStatus?: LikeStatus;
+  onFollowClick: () => void;
+  followStatus?: FollowStatus;
   onBlockCreator: () => void;
   blockStatus?: BlockStatus;
   canLike: boolean;
@@ -150,7 +166,37 @@ function SwipeSlide({ video, active, pageActive, onSaveClick, onAddToCollection,
 
       {/* bottom-left: who/what */}
       <div className="absolute bottom-4 left-4 right-20">
-        <p className="text-[14px] text-white font-medium">@{video.username}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-[14px] text-white font-medium">@{video.username}</p>
+          {canLike && (
+            <button
+              type="button"
+              onClick={onFollowClick}
+              disabled={followStatus === "pending" || followStatus === "following"}
+              className={[
+                "text-[11px] font-medium disabled:cursor-default",
+                followStatus === "following" ? "text-white/50" : "text-[#D39448] hover:text-[#e0a860]",
+              ].join(" ")}
+              title={
+                followStatus === "following"
+                  ? "Following on the real account"
+                  : followStatus === "pending"
+                    ? "Following…"
+                    : followStatus === "failed"
+                      ? "Couldn't confirm the follow — try again"
+                      : "Follow on the real account"
+              }
+            >
+              {followStatus === "following"
+                ? "Following"
+                : followStatus === "pending"
+                  ? "Following…"
+                  : followStatus === "failed"
+                    ? "Retry"
+                    : "Follow"}
+            </button>
+          )}
+        </div>
         {video.caption && (
           <button
             type="button"
@@ -344,6 +390,7 @@ export function SwipeResearchPlayer({
   loading,
   sessionStatus,
   sessionError,
+  wakeCountdown,
   onNext,
   onPrev,
   onSaveClick,
@@ -351,6 +398,8 @@ export function SwipeResearchPlayer({
   onExitToArchive,
   onLikeClick,
   likeStatus,
+  onFollowClick,
+  followStatus,
   onBlockCreator,
   blockStatus,
   onRetryWake,
@@ -364,6 +413,7 @@ export function SwipeResearchPlayer({
   loading: boolean;
   sessionStatus: LiveSessionStatus;
   sessionError: string | null;
+  wakeCountdown: number | null;
   onNext: () => void;
   onPrev: () => void;
   onSaveClick: (video: ReelVideo) => void;
@@ -371,6 +421,8 @@ export function SwipeResearchPlayer({
   onExitToArchive: () => void;
   onLikeClick: (video: ReelVideo) => void;
   likeStatus: Record<string, LikeStatus>;
+  onFollowClick: (video: ReelVideo) => void;
+  followStatus: Record<string, FollowStatus>;
   onBlockCreator: (video: ReelVideo) => void;
   blockStatus: Record<string, BlockStatus>;
   onRetryWake: () => void;
@@ -520,6 +572,8 @@ export function SwipeResearchPlayer({
             onAddToCollection={() => onAddToCollection(currentReel)}
             onLikeClick={() => onLikeClick(currentReel)}
             likeStatus={likeStatus[currentReel.id]}
+            onFollowClick={() => onFollowClick(currentReel)}
+            followStatus={followStatus[currentReel.id]}
             onBlockCreator={() => onBlockCreator(currentReel)}
             blockStatus={blockStatus[currentReel.id]}
             canLike={currentReel.platform === "instagram" || currentReel.platform === "tiktok"}
@@ -586,6 +640,16 @@ export function SwipeResearchPlayer({
                 >
                   Start research
                 </button>
+              </>
+            ) : wakeCountdown !== null ? (
+              // Connector just woke from a cold launch and answered /health,
+              // but that alone doesn't mean it's settled enough for a full
+              // session start yet — this visible pause (not an extra wait on
+              // top of anything, just what fills this same window) is what
+              // stops research from starting the instant it's reachable.
+              <>
+                <Loader2 size={20} className="text-[#D39448] animate-spin" />
+                <p className="mt-3 text-[12.5px] text-neutral-400">Starting research in {wakeCountdown}…</p>
               </>
             ) : (
               <>

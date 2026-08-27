@@ -260,6 +260,51 @@ async function likeTikTok(page) {
 
 const LIKE_HANDLER = { instagram: likeInstagram, tiktok: likeTikTok };
 
+// A real Follow on the actual connected account, same rule as Like/Block:
+// only report success once the platform's own UI provably confirms it, not
+// just because a click was dispatched. Runs on the reel's own page (same
+// page Like already uses) since both Instagram and TikTok show the
+// Follow/Following control right in that page's header — no separate
+// profile-page navigation needed the way Block requires.
+async function followInstagram(page) {
+  async function isFollowingVisible() {
+    if (await page.getByRole("button", { name: "Following", exact: true }).first().isVisible().catch(() => false)) return true;
+    return page.getByRole("button", { name: "Requested", exact: true }).first().isVisible().catch(() => false);
+  }
+  if (await isFollowingVisible()) return { following: true };
+  const followButton = page.getByRole("button", { name: "Follow", exact: true }).first();
+  if (!(await followButton.isVisible().catch(() => false))) {
+    return { following: false, error: "Couldn't find a real Follow button on this reel's page." };
+  }
+  await followButton.click();
+  await sleep(1500);
+  const following = await isFollowingVisible();
+  return following ? { following: true } : { following: false, error: "Clicked Follow, but Instagram's real button didn't confirm it." };
+}
+
+// TikTok's follow control on a video page carries a stable data-e2e hook
+// (same convention as its like button/count above) and its own text swaps
+// to "Following"/"Friends" once the follow lands — checked the same way
+// likeTikTok verifies via its like count, not a CSS class.
+async function followTikTok(page) {
+  const followButton = page.locator('[data-e2e="follow-button"], [data-e2e="browse-follow-icon"]').first();
+  if (!(await followButton.isVisible().catch(() => false))) {
+    return { following: false, error: "Couldn't find a real Follow button on this video's page." };
+  }
+  async function isFollowingText() {
+    const text = await followButton.textContent().catch(() => null);
+    return !!text && /following|friends/i.test(text);
+  }
+  if (await isFollowingText()) return { following: true };
+  await followButton.click().catch(() => {});
+  await sleep(1500);
+  return (await isFollowingText())
+    ? { following: true }
+    : { following: false, error: "Clicked Follow, but TikTok's real button didn't confirm it." };
+}
+
+const FOLLOW_HANDLER = { instagram: followInstagram, tiktok: followTikTok };
+
 // A genuine platform block — not a ReelForge-only blacklist. Runs on the
 // creator's real profile page (not the reel), because that's where
 // Instagram's/TikTok's own Block control actually lives. Same rule as
@@ -523,6 +568,25 @@ class Session {
     return result;
   }
 
+  async follow() {
+    const reel = this.current();
+    if (!reel) return { following: false, error: "No reel is currently in view." };
+
+    const followPage = await this.context.newPage();
+    let result;
+    try {
+      await followPage.goto(reel.sourceUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await sleep(2000);
+      result = await FOLLOW_HANDLER[this.platform](followPage);
+    } catch (err) {
+      result = { following: false, error: err?.message ?? "Something went wrong while following this creator." };
+    } finally {
+      await followPage.close().catch(() => {});
+    }
+
+    return result;
+  }
+
   async block() {
     const reel = this.current();
     if (!reel || !reel.username) return { blocked: false, error: "No reel is currently in view." };
@@ -698,7 +762,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|block|heartbeat|end)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|heartbeat|end)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
       const { sessionSecret } = await readBody(req);
@@ -715,6 +779,11 @@ const server = http.createServer(async (req, res) => {
       }
       if (action === "like") {
         const result = await session.like();
+        return json(res, 200, result);
+      }
+      if (action === "follow") {
+        const result = await session.follow();
+        if (!result.following) console.error(`[follow] session ${id} failed: ${result.error ?? "(no error message)"}`);
         return json(res, 200, result);
       }
       if (action === "block") {
