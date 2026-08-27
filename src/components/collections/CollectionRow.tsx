@@ -6,25 +6,31 @@ import { isVersionableCollection, nextCollectionName } from "../../lib/collectio
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
 
-export const COLLECTION_STATUS_STYLES: Record<Collection["status"] | "Cancelled", string> = {
+export const COLLECTION_STATUS_STYLES: Record<Collection["status"] | "Cancelled" | "In Progress", string> = {
   Draft: "text-neutral-400 bg-white/[0.04]",
   Sent: "text-sky-300/80 bg-sky-400/10",
+  "In Progress": "text-amber-300/80 bg-amber-400/10",
   Completed: "text-emerald-300/80 bg-emerald-400/10",
   Cancelled: "text-neutral-500 bg-white/[0.04]",
 };
 
 // Collection.status only ever moves forward to "Sent" when a Submission goes
-// out — it has no "Cancelled" value of its own, and nothing rolls it back
-// when that Submission is later cancelled (cancellation is system-controlled,
-// not a client mutation). So the badge shown for a Collection reflects its
-// latest Submission's real outcome rather than the stale stored status
-// whenever that Submission was cancelled.
+// out (a DB trigger takes it the rest of the way to "Completed" once that
+// Submission is marked Finished — see collections_auto_complete) — but
+// nothing rolls it back when the Submission is instead cancelled, or moves
+// it while the Submission is actively In Progress/Check Inbox. So the badge
+// shown for a Collection reflects its latest Submission's real state
+// whenever the stored "Sent" would otherwise sit unchanged through all of
+// that.
 export function effectiveCollectionStatus(collection: {
   status: Collection["status"];
   submissions: { status: string }[];
-}): Collection["status"] | "Cancelled" {
+}): Collection["status"] | "Cancelled" | "In Progress" {
   const latest = collection.submissions[collection.submissions.length - 1];
-  if (latest?.status === "Cancelled" && collection.status === "Sent") return "Cancelled";
+  if (collection.status === "Sent") {
+    if (latest?.status === "Cancelled") return "Cancelled";
+    if (latest?.status === "In Progress" || latest?.status === "Check Inbox") return "In Progress";
+  }
   return collection.status;
 }
 
