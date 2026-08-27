@@ -467,12 +467,12 @@ async function submitLiveReel(accountId, token, reel) {
   });
 }
 
-async function resolveCurrentSyncToken(accountId) {
+async function resolveCurrentSyncToken(accountId, lockSecret) {
   try {
     const res = await fetch(RESOLVE_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId }),
+      body: JSON.stringify({ accountId, lockSecret }),
     });
     const body = await res.json().catch(() => ({}));
     return res.ok && body.token ? body.token : null;
@@ -486,7 +486,7 @@ async function archiveLiveReel(session, reel) {
     let res = await submitLiveReel(session.accountId, session.token, reel);
 
     if (res.status === 403) {
-      const freshToken = await resolveCurrentSyncToken(session.accountId);
+      const freshToken = await resolveCurrentSyncToken(session.accountId, session.lockSecret);
       if (!freshToken) {
         console.error(`[archive] session ${session.id} reel ${reel.id}: token rejected (403) and no fresh token could be resolved.`);
         return;
@@ -507,7 +507,7 @@ async function archiveLiveReel(session, reel) {
 }
 
 class Session {
-  constructor(id, secret, accountId, platform, token, browser, context, page) {
+  constructor(id, secret, accountId, platform, token, lockSecret, browser, context, page) {
     this.id = id;
     this.secret = secret;
     this.accountId = accountId;
@@ -517,6 +517,11 @@ class Session {
     // itself never depends on it again after the initial storageState
     // fetch in startSession().
     this.token = token;
+    // The capability minted alongside this account's live-research lock —
+    // proves to resolve-live-session-token that this session actually
+    // holds the lock, not just that some session exists for the account.
+    // Only ever needed for the token-recovery retry in archiveLiveReel.
+    this.lockSecret = lockSecret;
     this.browser = browser;
     this.context = context;
     this.page = page;
@@ -662,7 +667,7 @@ class Session {
   }
 }
 
-async function startSession(accountId, token) {
+async function startSession(accountId, token, lockSecret) {
   // Diagnostic-only timing, no behavior change -- lets us see which of the
   // four real steps (Supabase session fetch, Chromium launch, page
   // navigation, first-reel polling) is actually slow on a given "Loading
@@ -708,7 +713,7 @@ async function startSession(accountId, token) {
 
   const id = randomUUID();
   const secret = randomUUID();
-  const session = new Session(id, secret, accountId, platform, token, browser, context, page);
+  const session = new Session(id, secret, accountId, platform, token, lockSecret, browser, context, page);
   sessions.set(id, session);
   console.log(`[session] started ${id} for account ${accountId} (${platform})`);
 
@@ -797,10 +802,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/sessions") {
-      const { accountId, token } = await readBody(req);
+      const { accountId, token, lockSecret } = await readBody(req);
       if (!accountId || !token) return json(res, 400, { error: "Missing required fields." });
       try {
-        const { session, reel } = await startSession(accountId, token);
+        const { session, reel } = await startSession(accountId, token, lockSecret);
         return json(res, 200, { sessionId: session.id, sessionSecret: session.secret, reel });
       } catch (err) {
         return json(res, 502, { error: err?.message ?? "Couldn't start a research session." });

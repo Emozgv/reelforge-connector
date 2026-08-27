@@ -342,6 +342,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       try {
         const { data, error: invokeError } = await supabase.functions.invoke<{
           token?: string;
+          lockSecret?: string;
           error?: string;
           holder?: string;
         }>("start-research-live-session", { body: { workspaceId, accountId } });
@@ -378,7 +379,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         const res = await fetch(`${SESSION_SERVER_URL}/sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accountId, token: data.token }),
+          body: JSON.stringify({ accountId, token: data.token, lockSecret: data.lockSecret }),
         });
         const body = await res.json();
         console.log(
