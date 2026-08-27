@@ -7,7 +7,17 @@ import { AdminClientDetail } from "./AdminClientDetail";
 // entirely server-side (every admin_* RPC independently re-checks
 // is_platform_admin()), this component just decides list vs. detail.
 export function AdminDashboardPage() {
-  const { workspaces, loading, error, search, setSearch } = useAdminDashboard();
+  const {
+    workspaces,
+    loading,
+    error,
+    search,
+    setSearch,
+    backfillRunning,
+    backfillResult,
+    backfillError,
+    runThumbnailBackfill,
+  } = useAdminDashboard();
   const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>(null);
 
   if (openWorkspaceId) {
@@ -22,6 +32,10 @@ export function AdminDashboardPage() {
       search={search}
       onSearchChange={setSearch}
       onOpen={setOpenWorkspaceId}
+      backfillRunning={backfillRunning}
+      backfillResult={backfillResult}
+      backfillError={backfillError}
+      onRunThumbnailBackfill={runThumbnailBackfill}
     />
   );
 }

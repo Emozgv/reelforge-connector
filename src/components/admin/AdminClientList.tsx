@@ -1,5 +1,5 @@
-import { Search, ShieldCheck, ChevronRight } from "lucide-react";
-import type { AdminWorkspaceRow } from "../../state/useAdminDashboard";
+import { Search, ShieldCheck, ChevronRight, ImageOff } from "lucide-react";
+import type { AdminWorkspaceRow, ThumbnailBackfillResult } from "../../state/useAdminDashboard";
 
 const STATUS_STYLE: Record<AdminWorkspaceRow["status"], string> = {
   active: "text-emerald-300/85 bg-emerald-400/10",
@@ -14,6 +14,10 @@ export function AdminClientList({
   search,
   onSearchChange,
   onOpen,
+  backfillRunning,
+  backfillResult,
+  backfillError,
+  onRunThumbnailBackfill,
 }: {
   workspaces: AdminWorkspaceRow[];
   loading: boolean;
@@ -21,6 +25,10 @@ export function AdminClientList({
   search: string;
   onSearchChange: (value: string) => void;
   onOpen: (workspaceId: string) => void;
+  backfillRunning: boolean;
+  backfillResult: ThumbnailBackfillResult | null;
+  backfillError: string | null;
+  onRunThumbnailBackfill: () => void;
 }) {
   return (
     <div className="h-full overflow-y-auto">
@@ -45,6 +53,32 @@ export function AdminClientList({
         </div>
 
         {error && <p className="mt-3 text-[12px] text-rose-400">{error}</p>}
+
+        <div className="mt-5 rounded-xl surface-panel px-4 py-3.5 flex items-center gap-3">
+          <ImageOff size={15} className="text-neutral-500 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] text-neutral-200">Backfill saved thumbnails</p>
+            <p className="mt-0.5 text-[11.5px] text-neutral-500">
+              Mirrors existing concepts' source thumbnails into permanent storage where the source is still
+              reachable. Safe to run more than once — already-mirrored concepts are skipped.
+            </p>
+            {backfillResult && (
+              <p className="mt-1 text-[11.5px] text-neutral-400">
+                Scanned {backfillResult.scanned}, recovered {backfillResult.succeeded}, couldn't recover{" "}
+                {backfillResult.failed} (source already gone).
+                {backfillResult.more && " More remain — run again to continue."}
+              </p>
+            )}
+            {backfillError && <p className="mt-1 text-[11.5px] text-rose-400">{backfillError}</p>}
+          </div>
+          <button
+            onClick={onRunThumbnailBackfill}
+            disabled={backfillRunning}
+            className="shrink-0 h-8 px-3 rounded-lg surface-field text-[12px] text-neutral-200 hover:text-neutral-50 transition-colors duration-150 disabled:opacity-60"
+          >
+            {backfillRunning ? "Running…" : "Run backfill"}
+          </button>
+        </div>
 
         <div className="mt-5 rounded-xl surface-panel overflow-hidden">
           <div className="grid grid-cols-[1.6fr_1.4fr_0.8fr_0.6fr_0.6fr_0.9fr_0.7fr] gap-3 px-4 py-2.5 text-[10.5px] tracking-wide uppercase text-neutral-600 border-b border-white/[0.06]">

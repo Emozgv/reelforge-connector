@@ -21,6 +21,26 @@ function isForeignKeyViolation(error: { code?: string } | null): boolean {
   return error?.code === "23503";
 }
 
+// Concept thumbnails come in as raw TikTok/Instagram CDN URLs, which expire
+// (TikTok's signed URLs are only good for ~24-48h) -- left alone, every
+// saved thumbnail eventually goes dead. Fired right after a concept is
+// inserted, this re-hosts the image in our own Storage bucket and overwrites
+// thumbnail_url with a permanent URL, without ever blocking or slowing down
+// the save itself. Best-effort: if the source is already gone, the concept
+// just keeps its existing gradient fallback, same as before this existed.
+function cacheThumbnailInBackground(conceptId: string, thumbnailUrl: string | null | undefined) {
+  if (!thumbnailUrl || thumbnailUrl.includes("/client-os-concept-thumbnails/")) return;
+  void supabase.functions
+    .invoke("cache-concept-thumbnail", { body: { concept_id: conceptId, source_url: thumbnailUrl } })
+    .then(({ data, error }) => {
+      // Logged, not surfaced to the user -- the save already succeeded and
+      // the existing gradient fallback covers this concept in the meantime.
+      if (error) console.warn(`[thumbnail cache] concept ${conceptId} failed:`, error);
+      else if (data?.error) console.warn(`[thumbnail cache] concept ${conceptId} failed:`, data.error);
+    })
+    .catch((e) => console.warn(`[thumbnail cache] concept ${conceptId} failed:`, e));
+}
+
 /**
  * Collection metadata, Concepts, Submissions, and now Activity/History are all
  * fetched from and persisted to Supabase. There is no mock/local data left in
@@ -246,6 +266,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       prev.map((c) => (c.id === collectionId ? { ...c, concepts: [concept, ...c.concepts] } : c))
     );
     void logActivity(collectionId, "concept_added", "1 concept added");
+    cacheThumbnailInBackground(concept.video.id, concept.video.thumbnailUrl);
   }
 
   async function createCollection(
@@ -280,7 +301,10 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         .insert(conceptToInsertRow(initialVideo, meta.id, workspaceId, conceptNotes, conceptCreatorId, sourceLabel))
         .select()
         .single();
-      if (conceptRow) concepts = [conceptFromRow(conceptRow as ConceptRow)];
+      if (conceptRow) {
+        concepts = [conceptFromRow(conceptRow as ConceptRow)];
+        cacheThumbnailInBackground(concepts[0].video.id, concepts[0].video.thumbnailUrl);
+      }
     }
 
     const created: Collection = { ...meta, concepts, submissions: [], history: [], regenerationRequests: [] };
@@ -666,7 +690,10 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         .from("concepts")
         .insert(source.concepts.map((k) => conceptToInsertRow(k.video, meta.id, workspaceId, k.notes, k.creatorId)))
         .select();
-      if (conceptRows) concepts = (conceptRows as ConceptRow[]).map(conceptFromRow);
+      if (conceptRows) {
+        concepts = (conceptRows as ConceptRow[]).map(conceptFromRow);
+        for (const c of concepts) cacheThumbnailInBackground(c.video.id, c.video.thumbnailUrl);
+      }
     }
 
     const copy: Collection = { ...meta, concepts, submissions: [], history: [], regenerationRequests: [] };
@@ -776,6 +803,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     const newConcept = conceptFromRow(data as ConceptRow);
     setCollections((prev) => prev.map((c) => (c.id === target.id ? { ...c, concepts: [newConcept, ...c.concepts] } : c)));
     void logActivity(target.id, "concept_added", `1 concept assigned from ${source.name}`);
+    cacheThumbnailInBackground(newConcept.video.id, newConcept.video.thumbnailUrl);
     return { error: null };
   }
 

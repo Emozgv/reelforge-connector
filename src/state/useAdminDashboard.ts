@@ -49,11 +49,21 @@ function fromListRow(r: WorkspaceListRow): AdminWorkspaceRow {
 // DEFINER, each independently re-checking is_platform_admin() server-side)
 // — this hook never touches client_os tables directly, so it can't
 // accidentally rely on RLS doing the gating for it.
+export interface ThumbnailBackfillResult {
+  scanned: number;
+  succeeded: number;
+  failed: number;
+  more: boolean;
+}
+
 export function useAdminDashboard() {
   const [workspaces, setWorkspaces] = useState<AdminWorkspaceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<ThumbnailBackfillResult | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
 
   const load = useCallback(async (searchTerm: string) => {
     setLoading(true);
@@ -76,7 +86,46 @@ export function useAdminDashboard() {
     return () => clearTimeout(handle);
   }, [search, load]);
 
-  return { workspaces, loading, error, search, setSearch, refresh: () => load(search) };
+  // One-off maintenance action: recovers thumbnails for existing concepts
+  // still pointing at a raw (expiring) TikTok/Instagram CDN URL by mirroring
+  // them into our own Storage bucket. Safe to run more than once — the
+  // function itself skips anything already mirrored. Only concepts whose
+  // source thumbnail is still live can be recovered; ones that already
+  // expired stay on their existing gradient fallback.
+  async function runThumbnailBackfill() {
+    setBackfillRunning(true);
+    setBackfillError(null);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("cache-concept-thumbnail", {
+        body: { mode: "backfill" },
+      });
+      if (invokeError) throw new Error(invokeError.message);
+      if (data?.error) throw new Error(data.error);
+      setBackfillResult({
+        scanned: data.scanned ?? 0,
+        succeeded: data.succeeded ?? 0,
+        failed: data.failed ?? 0,
+        more: Boolean(data.more),
+      });
+    } catch (e) {
+      setBackfillError((e as { message?: string })?.message ?? "Backfill failed.");
+    } finally {
+      setBackfillRunning(false);
+    }
+  }
+
+  return {
+    workspaces,
+    loading,
+    error,
+    search,
+    setSearch,
+    refresh: () => load(search),
+    backfillRunning,
+    backfillResult,
+    backfillError,
+    runThumbnailBackfill,
+  };
 }
 
 // Everything the detail view needs, assembled server-side into one jsonb
