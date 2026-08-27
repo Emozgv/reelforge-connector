@@ -88,7 +88,7 @@ export function TestAccountButton({ workspaceId, canManage }: { workspaceId?: st
       {open && (
         <div
           onMouseLeave={() => setOpen(false)}
-          className="absolute right-0 top-9 z-30 w-72 rounded-xl surface-panel-strong p-3 animate-fade-in"
+          className="absolute left-0 top-9 z-30 w-72 rounded-xl surface-panel-strong p-3 animate-fade-in"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-[12px] font-medium text-neutral-200">Test accounts</span>
