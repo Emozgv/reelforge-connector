@@ -718,8 +718,8 @@ export function CreativityHubPage({
 
             <button
               onClick={handleShuffle}
-              disabled={searching}
-              title={lastAction ? "Shuffle — fresh batch, same topic" : "Shuffle in a fresh niche"}
+              disabled={searching || !lastAction}
+              title={lastAction ? "Shuffle — fresh batch, same topic" : "Search or browse a profile first"}
               className="flex items-center justify-center w-11 h-11 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <Shuffle size={15} className={shuffleSpinning ? "animate-spin" : ""} />
