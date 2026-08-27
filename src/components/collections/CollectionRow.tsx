@@ -75,6 +75,7 @@ export function CollectionRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [failedThumbs, setFailedThumbs] = useState<Record<number, boolean>>({});
   const [draftName, setDraftName] = useState(current.name);
   const creator = creators.find((c) => c.id === current.creatorId);
   const preview = current.concepts.slice(0, 4);
@@ -104,8 +105,15 @@ export function CollectionRow({
       <div className="w-11 h-11 rounded-md overflow-hidden shrink-0 grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30">
         {Array.from({ length: 4 }).map((_, i) =>
           preview[i] ? (
-            preview[i].video.thumbnailUrl ? (
-              <img key={i} src={preview[i].video.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+            preview[i].video.thumbnailUrl && !failedThumbs[i] ? (
+              <img
+                key={i}
+                src={preview[i].video.thumbnailUrl}
+                alt=""
+                loading="lazy"
+                onError={() => setFailedThumbs((prev) => ({ ...prev, [i]: true }))}
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div key={i} style={{ background: preview[i].video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
             )

@@ -31,6 +31,7 @@ export function SavedCollectionsPopover({
   // the family's base name so a switch survives the list re-rendering as
   // saves come in elsewhere.
   const [selectedVersionByFamily, setSelectedVersionByFamily] = useState<Record<string, string>>({});
+  const [failedThumbs, setFailedThumbs] = useState<Record<string, boolean>>({});
 
   if (!open || !creator) return null;
 
@@ -101,12 +102,13 @@ export function SavedCollectionsPopover({
                   <div className="w-9 h-9 rounded-md overflow-hidden shrink-0 grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30">
                     {Array.from({ length: 4 }).map((_, i) =>
                       current.concepts[i] ? (
-                        current.concepts[i].video.thumbnailUrl ? (
+                        current.concepts[i].video.thumbnailUrl && !failedThumbs[`${familyKey}-${i}`] ? (
                           <img
                             key={i}
                             src={current.concepts[i].video.thumbnailUrl}
                             alt=""
                             loading="lazy"
+                            onError={() => setFailedThumbs((prev) => ({ ...prev, [`${familyKey}-${i}`]: true }))}
                             className="w-full h-full object-cover"
                           />
                         ) : (

@@ -81,10 +81,14 @@ export function ReelDetailModal({
   active?: boolean;
 }) {
   const [videoError, setVideoError] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (open) setVideoError(false);
+    if (open) {
+      setVideoError(false);
+      setThumbnailFailed(false);
+    }
   }, [open, video?.id]);
 
   useEffect(() => {
@@ -160,8 +164,13 @@ export function ReelDetailModal({
               />
             ) : (
               <>
-                {video.thumbnailUrl ? (
-                  <img src={video.thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                {video.thumbnailUrl && !thumbnailFailed ? (
+                  <img
+                    src={video.thumbnailUrl}
+                    alt=""
+                    onError={() => setThumbnailFailed(true)}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
                 ) : (
                   <div
                     className="absolute inset-0"

@@ -31,6 +31,19 @@ export function SavePanel({
   const [confirmedLabel, setConfirmedLabel] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState(defaultCreatorId);
   const [assigneeMenuOpen, setAssigneeMenuOpen] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+
+  // CSS background-image never fires an error event on its own element, so a
+  // dead thumbnail URL here would otherwise just render as blank forever
+  // instead of falling back to the gradient like every other thumbnail spot.
+  useEffect(() => {
+    setThumbnailFailed(false);
+    const url = video?.thumbnailUrl;
+    if (!url) return;
+    const img = new Image();
+    img.onerror = () => setThumbnailFailed(true);
+    img.src = url;
+  }, [video?.thumbnailUrl]);
 
   useEffect(() => {
     if (open) {
@@ -143,7 +156,7 @@ export function SavePanel({
                 <div
                   className="w-9 h-14 rounded-md shrink-0 border border-white/10 bg-cover bg-center"
                   style={
-                    video.thumbnailUrl
+                    video.thumbnailUrl && !thumbnailFailed
                       ? { backgroundImage: `url(${video.thumbnailUrl})` }
                       : { background: video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }
                   }

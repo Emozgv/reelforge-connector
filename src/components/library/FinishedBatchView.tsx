@@ -29,16 +29,18 @@ function BatchItemCard({
   pending: boolean;
   onSelect: () => void;
 }) {
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   return (
     <button
       onClick={onSelect}
       className="group relative aspect-[9/16] w-full rounded-xl overflow-hidden border border-white/[0.08] hover:border-[#D39448]/35 transition-colors duration-200"
     >
-      {concept.video.thumbnailUrl ? (
+      {concept.video.thumbnailUrl && !thumbnailFailed ? (
         <img
           src={concept.video.thumbnailUrl}
           alt=""
           loading="lazy"
+          onError={() => setThumbnailFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
         />
       ) : (
@@ -118,6 +120,7 @@ function ItemDetail({
   const [detailVideo, setDetailVideo] = useState<ReelVideo | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
 
   useEffect(() => {
     if (!videoOpen) return;
@@ -187,10 +190,11 @@ function ItemDetail({
                 onClick={() => setVideoOpen(true)}
                 className="group/ref relative aspect-[9/16] w-full rounded-xl overflow-hidden block"
               >
-                {concept.video.thumbnailUrl ? (
+                {concept.video.thumbnailUrl && !thumbnailFailed ? (
                   <img
                     src={concept.video.thumbnailUrl}
                     alt=""
+                    onError={() => setThumbnailFailed(true)}
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                 ) : (

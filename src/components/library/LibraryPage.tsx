@@ -41,6 +41,7 @@ export function LibraryPage({
   onUploadFinishedVideo: (collectionId: string, conceptId: string, file: File) => Promise<{ error: string | null }>;
 }) {
   const [openSubmissionId, setOpenSubmissionId] = useState<string | null>(null);
+  const [failedThumbs, setFailedThumbs] = useState<Record<string, boolean>>({});
 
   const batches: DeliveredBatch[] = collections
     .flatMap((c) =>
@@ -121,12 +122,13 @@ export function LibraryPage({
                   <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
                     {Array.from({ length: 4 }).map((_, i) =>
                       b.previews[i] ? (
-                        b.previews[i].thumbnailUrl ? (
+                        b.previews[i].thumbnailUrl && !failedThumbs[`${b.submissionId}-${i}`] ? (
                           <img
                             key={i}
                             src={b.previews[i].thumbnailUrl}
                             alt=""
                             loading="lazy"
+                            onError={() => setFailedThumbs((prev) => ({ ...prev, [`${b.submissionId}-${i}`]: true }))}
                             className="w-full h-full object-cover"
                           />
                         ) : (
