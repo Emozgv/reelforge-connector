@@ -58,7 +58,7 @@ export function LoginPage({
         </div>
 
         <div className="rounded-2xl surface-panel p-6">
-          <h1 className="text-[19px] font-serif font-medium text-neutral-50 text-center">
+          <h1 className="text-[19px] font-login-heading font-medium text-neutral-50 text-center">
             Client OS
           </h1>
           <p className="mt-1.5 text-[12.5px] text-neutral-500 text-center">
