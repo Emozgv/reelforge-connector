@@ -100,18 +100,40 @@ function isSessionGoneStatus(status: number) {
   return status === 403 || status === 404;
 }
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
 // Best-effort but not silent: a release call that fails outright (e.g. an
 // auth hiccup landing at the same moment, unrelated to the lock itself)
 // used to be swallowed by a bare .catch(() => {}), orphaning the lock for
 // the rest of its 5-minute lease with no trace. One retry, matching the
 // same retry-once-on-transient-failure pattern Connector's own archive path
 // already uses for its analogous case.
+//
+// Uses a raw fetch with keepalive instead of supabase.functions.invoke (which
+// doesn't expose that option) -- this call is also the one endSession fires
+// from a beforeunload/pagehide handler on a *real* tab close/reload, and
+// without keepalive the browser can abort it mid-flight before it reaches
+// the server, orphaning the lock for the rest of its lease with no error to
+// even log.
 async function releaseLock(accountId: string) {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const { error } = await supabase.functions.invoke("release-research-account-lock", { body: { accountId } });
-    if (!error) return;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/release-research-account-lock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify({ accountId }),
+        keepalive: true,
+      });
+      if (res.ok) return;
+    } catch {
+      // network failure — fall through to retry/log below
+    }
     if (attempt === 2) {
-      console.error(`[lock] release-research-account-lock failed for account ${accountId}:`, error);
+      console.error(`[lock] release-research-account-lock failed for account ${accountId}`);
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -182,6 +204,21 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // so the second call is rejected outright rather than racing the first
   // one's own start-research-live-session call for the same lock.
   const startInFlightRef = useRef(false);
+  // True only for the span of retryWithWake before beginSession is called
+  // (the wakeConnector() hand-off, the reachability wait, and the visible
+  // countdown) -- nothing is held yet during that window (no session, no
+  // lock), so there is nothing real for a tab-close/reload to clean up.
+  // Needed because window.location.href = "reelforge-connect://..." (the
+  // only way that's been confirmed to reliably reach Connector -- see
+  // wakeConnector()'s own comment) can itself fire a spurious pagehide in
+  // Chrome/Safari as part of the browser handing off to the OS, even though
+  // the tab never actually unloads. Without this, that false pagehide ran
+  // endSession() mid-flow -- silently snapping status back to "idle" while
+  // retryWithWake kept running underneath, hiding the countdown behind the
+  // idle/checking branch (checked earlier in the ternary) and leaving the
+  // in-flight guard stuck so the visible "Start research" button did
+  // nothing when clicked.
+  const wakingRef = useRef(false);
   // Bumped on every startSession/retryWithWake call. beginSession captures
   // its own value and checks it before every state write, so a slow/hung
   // attempt that's since been superseded (or a timeout that already forced
@@ -498,6 +535,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     const pending = pendingRef.current;
     if (!pending || startInFlightRef.current) return;
     startInFlightRef.current = true;
+    wakingRef.current = true;
     try {
       setStatus("connecting");
       setError(null);
@@ -523,8 +561,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       }
       setWakeCountdown(null);
 
+      // Nothing is held yet up to this point -- from here on, beginSession
+      // may actually acquire a lock/session, so a real tab close should go
+      // back to being handled normally.
+      wakingRef.current = false;
       await beginSession(pending.accountId, pending.platform);
     } finally {
+      wakingRef.current = false;
       startInFlightRef.current = false;
     }
   }, [beginSession]);
@@ -658,6 +701,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // the session soon" regardless of whether either of these fires.
   useEffect(() => {
     function handleUnload() {
+      // See wakingRef's own comment: wakeConnector()'s custom-scheme
+      // hand-off can itself trigger a spurious pagehide that never actually
+      // unloads the page. Nothing is held yet during that window anyway, so
+      // skipping is safe -- and necessary, since running endSession() here
+      // for real would silently corrupt the still-in-progress wake/countdown
+      // flow underneath it.
+      if (wakingRef.current) return;
       void endSession();
     }
     window.addEventListener("beforeunload", handleUnload);
