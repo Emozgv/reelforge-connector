@@ -16,6 +16,7 @@ import {
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import type { ActivityEventType } from "../../lib/activityMapping";
 import { canViewBilling } from "../../lib/permissions";
+import { TestAccountButton } from "./TestAccountButton";
 
 // The bell is for things worth interrupting the client for — not a mirror of
 // every log line (that full trail lives in Dashboard/Collection history).
@@ -76,6 +77,7 @@ export function Sidebar({
   userEmail,
   displayName,
   workspaceName,
+  workspaceId,
   role,
   isPlatformAdmin,
   onSignOut,
@@ -87,6 +89,7 @@ export function Sidebar({
   userEmail?: string;
   displayName?: string;
   workspaceName?: string;
+  workspaceId?: string;
   role?: string;
   // Completely separate from `role` — a normal Agency Owner never sees
   // this just because role === "owner" in their own workspace. Only true
@@ -130,6 +133,8 @@ export function Sidebar({
           <span className="font-brand text-[16.5px] xl:text-[18px] text-neutral-100">ReelForge</span>
         </div>
 
+        <div className="flex items-center gap-0.5">
+        <TestAccountButton workspaceId={workspaceId} canManage={role === "owner" || role === "manager"} />
         <div className="relative">
           <button
             onClick={() => setNotifOpen((v) => !v)}
@@ -175,6 +180,7 @@ export function Sidebar({
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 

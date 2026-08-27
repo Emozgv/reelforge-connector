@@ -173,6 +173,7 @@ function App() {
         userEmail={user.email}
         displayName={displayName}
         workspaceName={workspace.name}
+        workspaceId={workspace.id}
         role={workspace.role}
         isPlatformAdmin={isPlatformAdmin}
         onSignOut={signOut}
