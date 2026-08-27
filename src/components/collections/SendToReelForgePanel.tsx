@@ -20,31 +20,45 @@ export function SendToReelForgePanel({
   overlapCount: number;
   overlapSubmissionIndexes?: number[];
   onClose: () => void;
-  onConfirm: (note: string) => void;
+  onConfirm: (note: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [note, setNote] = useState("");
   const [step, setStep] = useState<Step>("confirm");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setNote("");
       setStep("confirm");
+      setSending(false);
+      setSendError(null);
     }
   }, [open]);
 
   if (!open) return null;
 
-  function send() {
-    onConfirm(note);
+  async function send() {
+    if (sending) return;
+    setSending(true);
+    setSendError(null);
+    const result = await onConfirm(note);
+    setSending(false);
+    if (!result.ok) {
+      setSendError(result.error ?? "Couldn't send to ReelForge — please try again.");
+      setStep("confirm");
+      return;
+    }
     setStep("done");
     setTimeout(onClose, 900);
   }
 
   function handlePrimaryClick() {
+    if (sending) return;
     if (overlapCount > 0) {
       setStep("warn");
     } else {
-      send();
+      void send();
     }
   }
 
@@ -96,16 +110,18 @@ export function SendToReelForgePanel({
                 <div className="mt-3 flex items-center gap-2.5">
                   <button
                     onClick={() => setStep("confirm")}
-                    className="flex-1 h-9 rounded-md text-[12.5px] font-medium text-neutral-300 hover:bg-white/[0.05] transition-colors"
+                    disabled={sending}
+                    className="flex-1 h-9 rounded-md text-[12.5px] font-medium text-neutral-300 hover:bg-white/[0.05] transition-colors disabled:opacity-40 disabled:cursor-default"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={send}
-                    className="flex-1 h-9 rounded-md flex items-center justify-center gap-1.5 bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] press-feedback"
+                    onClick={() => void send()}
+                    disabled={sending}
+                    className="flex-1 h-9 rounded-md flex items-center justify-center gap-1.5 bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] press-feedback disabled:opacity-40 disabled:cursor-default"
                   >
                     <Send size={12} />
-                    Send Anyway
+                    {sending ? "Sending…" : "Send Anyway"}
                   </button>
                 </div>
               </div>
@@ -145,14 +161,23 @@ export function SendToReelForgePanel({
                 />
               </div>
 
+              {sendError && (
+                <div className="px-5 pt-3.5">
+                  <div className="rounded-lg bg-red-500/[0.08] border border-red-500/20 p-3 flex gap-2">
+                    <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+                    <p className="text-[12px] text-red-300 leading-relaxed">{sendError}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="px-5 py-4">
                 <button
-                  disabled={totalCount === 0}
+                  disabled={totalCount === 0 || sending}
                   onClick={handlePrimaryClick}
                   className="w-full h-10 rounded-lg flex items-center justify-center gap-2 bg-[#D39448] text-[#020508] text-[13px] font-medium disabled:opacity-40 hover:bg-[#e2b57c] transition-colors press-feedback"
                 >
                   <Send size={13} />
-                  Confirm &amp; Send
+                  {sending ? "Sending…" : "Confirm & Send"}
                 </button>
               </div>
             </>

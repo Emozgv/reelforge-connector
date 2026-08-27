@@ -449,11 +449,18 @@ export function useCollectionsStore(workspaceId: string | undefined) {
   // membership are tracked independently. New submissions always start
   // "Sent"; only a future Internal connection (service_role, never the
   // browser) can move them through In Progress / Check Inbox / Finished.
-  async function sendSubmission(collectionId: string, note: string) {
+  // Returns the real outcome instead of firing-and-forgetting -- callers
+  // (see SendToReelForgePanel) need to know whether the send actually
+  // completed before showing a success state, not just that the call was
+  // made. Everything below this line -- what gets inserted, when the
+  // billing-adjacent status/activity updates run, how a partial link
+  // failure is handled -- is unchanged from before; the only difference is
+  // reporting the outcome instead of swallowing it.
+  async function sendSubmission(collectionId: string, note: string): Promise<{ ok: boolean; error?: string }> {
     const target = collectionsRef.current.find((c) => c.id === collectionId);
-    if (!target || !workspaceId) return;
+    if (!target || !workspaceId) return { ok: false, error: "No active workspace." };
     const included = target.concepts.filter((k) => k.status !== "Rejected");
-    if (included.length === 0) return;
+    if (included.length === 0) return { ok: false, error: "Nothing to send." };
 
     const { data: submissionRow, error: insertError } = await supabase
       .schema("client_os")
@@ -463,8 +470,9 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       .single();
 
     if (insertError || !submissionRow) {
-      setSaveError("Couldn't send to ReelForge — please try again.");
-      return;
+      const message = "Couldn't send to ReelForge — please try again.";
+      setSaveError(message);
+      return { ok: false, error: message };
     }
 
     const row = submissionRow as SubmissionRow;
@@ -473,10 +481,10 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       .from("submission_concepts")
       .insert(included.map((k) => ({ submission_id: row.id, concept_id: k.video.id })));
 
+    let resultError: string | undefined;
     if (linkError) {
-      setSaveError(
-        "Submission was sent but not all concepts could be attached — please refresh and check before resending."
-      );
+      resultError = "Submission was sent but not all concepts could be attached — please refresh and check before resending.";
+      setSaveError(resultError);
     }
 
     const submission = submissionFromRow(row, included.map((k) => k.video.id));
@@ -485,6 +493,8 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     );
     void applyMetaUpdate(collectionId, { status: "Sent" }, { status: "Sent" });
     void logActivity(collectionId, "submission_created", `Submission #${row.index} sent to ReelForge`, row.id);
+
+    return resultError ? { ok: false, error: resultError } : { ok: true };
   }
 
   // Client-side upload of the actual delivered video for one reel, so the

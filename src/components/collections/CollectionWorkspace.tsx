@@ -74,7 +74,7 @@ export function CollectionWorkspace({
   onRemoveVideo: (videoId: string) => void;
   onSetConceptStatus: (videoId: string, status: ConceptStatus) => void;
   onSetConceptNotes: (videoId: string, notes: string) => void;
-  onSendSubmission: (note: string) => void;
+  onSendSubmission: (note: string) => Promise<{ ok: boolean; error?: string }>;
   // The next version's name is always computed fresh by the store at the
   // moment of creation — this component only supplies a display preview.
   onStartNext: () => void;
