@@ -673,6 +673,19 @@ export function SwipeResearchPlayer({
                 <Loader2 size={20} className="text-[#D39448] animate-spin" />
                 <p className="mt-3 text-[12.5px] text-neutral-400">Starting research in {wakeCountdown}…</p>
               </>
+            ) : sessionStatus === "connecting" ? (
+              // Covers both: the health-check wait right after a click
+              // (before a cold-launch countdown even starts, or when
+              // Connector was already running and there's no countdown at
+              // all), and the real session-establishing work after the
+              // countdown ends. Distinct from the generic "Loading your
+              // feed…" fallback below so a click always shows an immediate,
+              // clearly-labeled response instead of the same static text
+              // used for an unrelated already-active reload.
+              <>
+                <Loader2 size={20} className="text-[#D39448] animate-spin" />
+                <p className="mt-3 text-[12.5px] text-neutral-400">Starting Research…</p>
+              </>
             ) : (
               <>
                 <Loader2 size={20} className="text-[#D39448] animate-spin" />
