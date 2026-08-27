@@ -261,10 +261,19 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     // an attempt abandoned) while still connecting -- lock already acquired,
     // sessionRef never set -- never released it at all, since this whole
     // block was skipped by the early `if (!session) return` below.
+    //
+    // Awaited, not fire-and-forget: startSession() already does
+    // `await endSession()` as its first step before acquiring a new lock --
+    // but that only serialized on this function's synchronous part unless
+    // the release itself is also awaited. Without this, a fast End Research
+    // -> Start Research on the same tab could have the new acquisition's
+    // conditional UPDATE reach the database before this release's UPDATE
+    // did, finding the just-ended lock still present and reporting the
+    // account as already in use by its own prior holder.
     const lockedAccountId = lockedAccountIdRef.current;
     if (lockedAccountId) {
       lockedAccountIdRef.current = null;
-      void releaseLock(lockedAccountId);
+      await releaseLock(lockedAccountId);
     }
 
     if (!session) return;
