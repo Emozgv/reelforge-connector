@@ -165,18 +165,28 @@ const MEDIA_ADAPTER = {
   tiktok: { looksLikeMedia: looksLikeTikTokMedia, parseMedia: parseTikTokMedia },
 };
 
-function collectMediaFrom(node, out, seenIds, adapter, depth = 0) {
+function collectMediaFrom(node, out, seenIds, adapter, depth = 0, stats) {
   if (depth > 24 || !node) return;
   if (Array.isArray(node)) {
-    for (const item of node) collectMediaFrom(item, out, seenIds, adapter, depth + 1);
+    for (const item of node) collectMediaFrom(item, out, seenIds, adapter, depth + 1, stats);
     return;
   }
   if (typeof node !== "object") return;
   if (adapter.looksLikeMedia(node)) {
     const parsed = adapter.parseMedia(node);
-    if (parsed && !seenIds.has(parsed.id)) out.push(parsed);
+    if (parsed) {
+      // DIAGNOSTIC (temporary): stats is only ever passed by the trace
+      // instrumentation below -- no behavior change when omitted.
+      if (stats) stats.candidates++;
+      if (!seenIds.has(parsed.id)) {
+        out.push(parsed);
+      } else if (stats) {
+        stats.rejected++;
+        stats.rejectedIds.push(parsed.id);
+      }
+    }
   }
-  for (const key of Object.keys(node)) collectMediaFrom(node[key], out, seenIds, adapter, depth + 1);
+  for (const key of Object.keys(node)) collectMediaFrom(node[key], out, seenIds, adapter, depth + 1, stats);
 }
 
 async function sleep(ms) {
@@ -507,7 +517,7 @@ async function archiveLiveReel(session, reel) {
 }
 
 class Session {
-  constructor(id, secret, accountId, platform, token, lockSecret, browser, context, page) {
+  constructor(id, secret, accountId, platform, token, lockSecret, browser, context, page, initialSeenIds) {
     this.id = id;
     this.secret = secret;
     this.accountId = accountId;
@@ -528,7 +538,17 @@ class Session {
     this.history = []; // reels already shown this session, in order
     this.cursor = -1;
     this.pending = []; // extracted-but-not-yet-shown, a natural read-ahead
-    this.seenIds = new Set();
+    // Seeded from Archive's own permanent record (research_feed_items), not
+    // just this Session instance's own memory -- Archive already knows every
+    // reel id ever shown for this account, across every past session, so a
+    // reel Instagram re-serves (same continuous session after a silent
+    // recovery, or a brand new session days later) gets rejected here before
+    // it ever reaches pending, the same way an id this Session itself
+    // already showed always has been. Falls back to empty exactly like
+    // before if the caller has nothing to seed with (e.g. a genuinely new
+    // account, or the archive lookup failing) -- never a behavior change on
+    // its own, only ever narrows what gets shown.
+    this.seenIds = new Set(initialSeenIds ?? []);
     this.lastHeartbeat = Date.now();
     this.closed = false;
 
@@ -541,13 +561,39 @@ class Session {
         const body = await response.json().catch(() => null);
         if (!body) return;
         const found = [];
-        collectMediaFrom(body, found, this.seenIds, adapter);
+        // DIAGNOSTIC (temporary): proves the seenIds filter is actively
+        // rejecting candidates (from this session's own history, or seeded
+        // from Archive), not just that Instagram happened not to re-serve
+        // anything already known this time.
+        const stats = { candidates: 0, rejected: 0, rejectedIds: [] };
+        collectMediaFrom(body, found, this.seenIds, adapter, 0, stats);
+        if (stats.rejected > 0) {
+          console.log(`[trace-reject] session ${this.id}: response had ${stats.candidates} candidate(s), REJECTED ${stats.rejected} already-seen id(s): ${stats.rejectedIds.join(", ")}`);
+        }
+        // DIAGNOSTIC (temporary): does a single response ever contain the
+        // same id twice before seenIds gets updated below? collectMediaFrom
+        // only checks against seenIds as it walks, not against `found`
+        // itself, so this is the one place a same-response internal
+        // duplicate could slip past undetected.
+        const idsThisResponse = found.map((f) => f.id);
+        const internalDupes = idsThisResponse.filter((id, i) => idsThisResponse.indexOf(id) !== i);
+        if (internalDupes.length > 0) {
+          console.error(`[trace-dup] session ${this.id}: response itself contained duplicate id(s) within one body: ${[...new Set(internalDupes)].join(", ")} (url=${url.slice(0, 80)})`);
+        }
+        if (found.length > 0) {
+          console.log(`[trace] session ${this.id}: response -> ${found.length} new id(s): ${idsThisResponse.join(", ")}`);
+        }
         for (const item of found) {
+          // DIAGNOSTIC (temporary): pending should never already contain
+          // this id if seenIds is doing its job -- direct sanity check.
+          if (this.pending.some((p) => p.id === item.id)) {
+            console.error(`[trace-dup] session ${this.id}: ${item.id} was about to be pushed to pending but is ALREADY in pending`);
+          }
           this.seenIds.add(item.id);
           this.pending.push(item);
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error(`[trace-error] session ${this.id}: response handler failed: ${err?.message ?? err}`);
       }
     });
   }
@@ -560,8 +606,15 @@ class Session {
     const deadline = Date.now() + timeoutMs;
     if (this.pending.length > 0) return;
     // Nudge the real feed forward — this is the one moment "next" genuinely
-    // touches the live Instagram session rather than replaying memory.
-    await this.page.mouse.wheel(0, 1800).catch(() => {});
+    // touches the live Instagram session rather than replaying memory. Real
+    // per-reel navigation (ArrowDown), not a raw wheel-scroll jump: directly
+    // confirmed that repeated identical wheel jumps plateau after the first
+    // batch or two regardless of how many times they're repeated, while
+    // real per-reel navigation reliably triggers Instagram's own
+    // threshold-based FYP refill as it's exercised further into the
+    // currently loaded set -- matching how a genuine viewer actually
+    // advances, not an arbitrary large scroll delta.
+    await this.page.keyboard.press("ArrowDown").catch(() => {});
     while (this.pending.length === 0 && Date.now() < deadline) {
       await sleep(300);
     }
@@ -570,18 +623,35 @@ class Session {
   async next() {
     if (this.cursor < this.history.length - 1) {
       this.cursor += 1;
-      return { reel: this.current(), fresh: false };
+      const reel = this.current();
+      console.log(`[trace] session ${this.id} next(): REWIND to ${reel?.id} at history position ${this.cursor} (fresh=false, this is the user's own prev/next replay, not a new capture)`);
+      return { reel, fresh: false };
     }
+    const t0 = Date.now();
     await this.ensurePending(4000);
+    let waitedTwice = false;
     if (this.pending.length === 0) {
       // Try once more with a longer wait rather than reporting failure
       // immediately — Instagram's own response can just be slow.
+      waitedTwice = true;
       await this.ensurePending(4000);
     }
-    if (this.pending.length === 0) return { reel: null, fresh: false };
+    if (this.pending.length === 0) {
+      console.log(`[trace] session ${this.id} next(): feed exhausted after ${Date.now() - t0}ms (waitedTwice=${waitedTwice}), pending still empty, history so far=${this.history.length}`);
+      return { reel: null, fresh: false };
+    }
     const reel = this.pending.shift();
+    // DIAGNOSTIC (temporary): the ground-truth check -- has this exact id
+    // ever been delivered before in this Session's history? seenIds/pending
+    // should make this structurally impossible, but this proves it directly
+    // rather than assuming the upstream guards are airtight.
+    const priorIndex = this.history.findIndex((h) => h.id === reel.id);
+    if (priorIndex !== -1) {
+      console.error(`[trace-dup] session ${this.id}: DUPLICATE DELIVERED -- ${reel.id} was already shown at history position ${priorIndex}, now being delivered again at position ${this.history.length} (gap: ${this.history.length - priorIndex})`);
+    }
     this.history.push(reel);
     this.cursor = this.history.length - 1;
+    console.log(`[trace] session ${this.id} next(): delivered ${reel.id} at history position ${this.cursor} (fresh=true, waitedMs=${Date.now() - t0}, pendingRemaining=${this.pending.length})`);
     // The VA is now genuinely seeing this reel for the first time this
     // session — exactly the moment Archive is supposed to pick it up.
     // Fire-and-forget: never lets a slow/failed archive write hold up the
@@ -682,9 +752,10 @@ async function startSession(accountId, token, lockSecret) {
   if (!sessionRes.ok) {
     throw new Error(sessionBody.error ?? "Couldn't load this account's session.");
   }
-  const { platform, storageState } = sessionBody;
+  const { platform, storageState, seenReelIds } = sessionBody;
   if (!REEL_URL[platform]) throw new Error("This platform isn't supported for live research sessions yet.");
   console.log(`[timing] fetch-research-account-session: ${Date.now() - t0}ms`);
+  console.log(`[session] account ${accountId}: seeding with ${seenReelIds?.length ?? 0} already-archived id(s)`);
 
   const t1 = Date.now();
   const browser = await chromium.launch({ headless: true });
@@ -713,7 +784,7 @@ async function startSession(accountId, token, lockSecret) {
 
   const id = randomUUID();
   const secret = randomUUID();
-  const session = new Session(id, secret, accountId, platform, token, lockSecret, browser, context, page);
+  const session = new Session(id, secret, accountId, platform, token, lockSecret, browser, context, page, seenReelIds);
   sessions.set(id, session);
   console.log(`[session] started ${id} for account ${accountId} (${platform})`);
 
@@ -746,7 +817,7 @@ setInterval(() => {
   const now = Date.now();
   for (const session of sessions.values()) {
     if (!session.closed && now - session.lastHeartbeat > SESSION_TIMEOUT_MS) {
-      console.log(`[session] ${session.id} timed out (no heartbeat for ${SESSION_TIMEOUT_MS}ms) — closing`);
+      console.log(`[session] ${session.id} (account ${session.accountId}) timed out (no heartbeat for ${SESSION_TIMEOUT_MS}ms) — closing, delivered ${session.history.length} reel(s) this session`);
       void session.close();
       sessions.delete(session.id);
     }
@@ -848,7 +919,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true });
       }
       if (action === "end") {
-        console.log(`[session] ${id} ended explicitly`);
+        console.log(`[session] ${id} (account ${session.accountId}) ended explicitly, delivered ${session.history.length} reel(s) this session`);
         await session.close();
         sessions.delete(id);
         return json(res, 200, { ok: true });
