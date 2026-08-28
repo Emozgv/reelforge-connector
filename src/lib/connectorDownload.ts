@@ -1,12 +1,11 @@
-// ReelForge Connector installer downloads — hosted as plain public files in
-// the reelforge-connector-releases Supabase Storage bucket (same pattern
-// the ReelForge Internal app's own updater already uses for its releases),
-// under fixed, version-independent paths so this URL never needs to change
-// just because the app's internal version number does. Uploading a new
-// build means overwriting the object at the same path, not touching this
-// file. No signing/notarization is wired up yet — these are the plain
-// installers `tauri build` already produces.
-const RELEASES_BASE = "https://vbnilccvnygeedkdfbvd.supabase.co/storage/v1/object/public/reelforge-connector-releases/latest";
+// ReelForge Connector installer downloads — served directly from the
+// rolling "connector-latest" GitHub Release that connector-build.yml
+// publishes to on every push to main, under fixed, version-independent
+// asset names so this URL never needs to change just because the app's
+// internal version number does. This is the same release/latest.json the
+// in-app updater already polls, so the download button and auto-update can
+// never drift out of sync with each other again.
+const RELEASES_BASE = "https://github.com/Emozgv/reelforge-connector/releases/download/connector-latest";
 
 export type ConnectorOS = "macos" | "windows";
 
