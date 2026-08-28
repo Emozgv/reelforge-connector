@@ -68,7 +68,14 @@ jobs:
       # same run, which is exactly what's needed so the updater sees one
       # consistent version number for a given release regardless of which
       # platform's Connector is asking.
-      - name: Set release version
+      #
+      # The committed tauri.conf.json carries a dev-safe identity (identifier
+      # net.reelforge.connector.dev, scheme reelforge-connect-dev) so that
+      # any local `tauri dev`/`tauri build` can never register itself as, or
+      # hijack the deep-link scheme of, the real production Connector. Only
+      # this CI step restores the production identity/name/scheme, and only
+      # right before the official release build compiles.
+      - name: Set release version and production identity
         shell: bash
         run: |
           node -e "
@@ -76,6 +83,9 @@ jobs:
             const p = 'src-tauri/tauri.conf.json';
             const c = JSON.parse(fs.readFileSync(p, 'utf8'));
             c.version = '0.1.${{ github.run_number }}';
+            c.productName = 'ReelForge Connector';
+            c.identifier = 'net.reelforge.connector';
+            c.plugins['deep-link'].desktop.schemes = ['reelforge-connect'];
             fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
           "
 
