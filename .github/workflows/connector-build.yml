@@ -34,7 +34,6 @@ jobs:
         include:
           - os: macos-latest
             target: darwin
-            updater_platform: darwin-aarch64
           - os: windows-latest
             target: windows
             updater_platform: windows-x86_64
@@ -53,6 +52,16 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      # The macOS build produces one universal (arm64 + x86_64) binary so
+      # there's a single Mac download that works on every customer's
+      # machine — Apple Silicon or Intel — instead of splitting the release
+      # (and the download button, and the updater manifest) across two
+      # separate Mac artifacts that could drift out of sync with each
+      # other the way the old Supabase download link drifted from CI.
+      - name: Add macOS universal build targets
+        if: matrix.target == 'darwin'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
@@ -93,7 +102,14 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npm run build
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "darwin" ]; then
+            npm run prepare:runtime
+            npx tauri build --target universal-apple-darwin
+          else
+            npm run build
+          fi
 
       # The real Tauri-produced filenames carry the version number (e.g.
       # "ReelForge Connector_0.1.42_x64-setup.exe") — renaming to a fixed
@@ -103,31 +119,43 @@ jobs:
       # runner too (GitHub-hosted Windows runners ship Git Bash), so one
       # script covers both platforms instead of duplicating it per-shell.
       #
-      # Also writes a small JSON fragment with this platform's updater
-      # signature, version and download URL — publish-release merges both
-      # platforms' fragments into the one latest.json the updater polls.
+      # Also writes a small JSON fragment (or, for macOS, two — see below)
+      # with this platform's updater signature, version and download URL —
+      # publish-release merges every fragment into the one latest.json the
+      # updater polls.
       - name: Package installer + updater artifact
         shell: bash
         run: |
           set -e
           mkdir -p dist-release
           if [ "${{ matrix.target }}" = "darwin" ]; then
-            cp "src-tauri/target/release/bundle/dmg/"*.dmg "dist-release/ReelForge-Connector-macOS.dmg"
-            cp "src-tauri/target/release/bundle/macos/ReelForge Connector.app.tar.gz" "dist-release/ReelForge-Connector-macOS.app.tar.gz"
-            cp "src-tauri/target/release/bundle/macos/ReelForge Connector.app.tar.gz.sig" "dist-release/ReelForge-Connector-macOS.app.tar.gz.sig"
+            BUNDLE_DIR="src-tauri/target/universal-apple-darwin/release/bundle"
+            cp "$BUNDLE_DIR/dmg/"*.dmg "dist-release/ReelForge-Connector-macOS.dmg"
+            cp "$BUNDLE_DIR/macos/ReelForge Connector.app.tar.gz" "dist-release/ReelForge-Connector-macOS.app.tar.gz"
+            cp "$BUNDLE_DIR/macos/ReelForge Connector.app.tar.gz.sig" "dist-release/ReelForge-Connector-macOS.app.tar.gz.sig"
             SIG_FILE="dist-release/ReelForge-Connector-macOS.app.tar.gz.sig"
             ASSET_URL="https://github.com/${{ github.repository }}/releases/download/connector-latest/ReelForge-Connector-macOS.app.tar.gz"
+            VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+            SIG=$(cat "$SIG_FILE")
+            # One universal binary serves both Apple Silicon and Intel Macs,
+            # so it needs to satisfy both platform keys the updater plugin
+            # looks up depending on which architecture is asking.
+            for PLATFORM in darwin-aarch64 darwin-x86_64; do
+              printf '{"platform":"%s","version":"%s","signature":"%s","url":"%s"}\n' \
+                "$PLATFORM" "$VERSION" "$SIG" "$ASSET_URL" \
+                > "dist-release/$PLATFORM.fragment.json"
+            done
           else
             cp "src-tauri/target/release/bundle/nsis/"*.exe "dist-release/ReelForge-Connector-Windows-Setup.exe"
             cp "src-tauri/target/release/bundle/nsis/"*.exe.sig "dist-release/ReelForge-Connector-Windows-Setup.exe.sig"
             SIG_FILE="dist-release/ReelForge-Connector-Windows-Setup.exe.sig"
             ASSET_URL="https://github.com/${{ github.repository }}/releases/download/connector-latest/ReelForge-Connector-Windows-Setup.exe"
+            VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+            SIG=$(cat "$SIG_FILE")
+            printf '{"platform":"%s","version":"%s","signature":"%s","url":"%s"}\n' \
+              "${{ matrix.updater_platform }}" "$VERSION" "$SIG" "$ASSET_URL" \
+              > "dist-release/${{ matrix.target }}.fragment.json"
           fi
-          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          SIG=$(cat "$SIG_FILE")
-          printf '{"platform":"%s","version":"%s","signature":"%s","url":"%s"}\n' \
-            "${{ matrix.updater_platform }}" "$VERSION" "$SIG" "$ASSET_URL" \
-            > "dist-release/${{ matrix.target }}.fragment.json"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
