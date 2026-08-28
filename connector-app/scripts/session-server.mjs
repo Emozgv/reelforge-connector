@@ -36,11 +36,14 @@ const RESOLVE_TOKEN_URL = process.env.REELFORGE_RESOLVE_TOKEN_URL
 // maybePrefetch() below fires a background top-up. Deliberately not the
 // smallest value that would technically work (1) -- the V1 goal is making
 // batch boundaries feel invisible despite real, sometimes-long Instagram
-// refill latency, not minimizing prefetch nudges. 3 gives the background
-// ensurePending() call a real head start before the VA can possibly reach
-// the end of pending. Still env-overridable for local comparison if real
-// usage ever shows a concrete reason to revisit it.
-const PREFETCH_LOW_WATER_MARK = Number(process.env.REELFORGE_PREFETCH_THRESHOLD ?? 3);
+// refill latency, not minimizing prefetch nudges. Real [trace-prefetch]
+// evidence showed successful prefetches take ~41-57s even starting from 3,
+// so 3 rarely bought enough head start against faster swiping -- 10 is the
+// V1 balance between enough lead time to hide that latency more often and
+// staying reasonably close to recent interaction signals (Likes/Follows)
+// rather than preloading excessively far ahead. Still env-overridable for
+// local comparison if real usage ever shows a concrete reason to revisit it.
+const PREFETCH_LOW_WATER_MARK = Number(process.env.REELFORGE_PREFETCH_THRESHOLD ?? 10);
 // How long maybePrefetch() below keeps re-nudging (ArrowDown, then poll)
 // before giving up, once triggered. Based on real [trace] evidence from an
 // actual Connector run (session-server.log): once a batch was genuinely

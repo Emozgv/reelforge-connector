@@ -209,6 +209,11 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // signal; it doesn't change next()/prev()'s own gating.
   const [navBusy, setNavBusy] = useState(false);
   const pendingRef = useRef<{ accountId: string; platform: Platform } | null>(null);
+  // The account/platform behind whichever session most recently sat in
+  // "idle" (ended, or found reachable at initial check) -- kept only so the
+  // idle-reachability poll below has something to hand to needs_connector's
+  // pendingRef when Connector disappears while nothing else is watching it.
+  const lastIdleAccountRef = useRef<{ accountId: string; platform: Platform } | null>(null);
   // Which account this tab currently holds the live-research lock for, if
   // any — set the instant start-research-live-session actually acquires it,
   // well before sessionRef gets set (that only happens once Connector's own
@@ -270,6 +275,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // overwritten by "connecting" a moment later.
   const endSession = useCallback(async () => {
     const session = sessionRef.current;
+    if (session) lastIdleAccountRef.current = { accountId: session.accountId, platform: platformRef.current };
     sessionRef.current = null;
     stopHeartbeat();
     setCurrentReel(null);
@@ -326,12 +332,32 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     if (platform !== "instagram" && platform !== "tiktok") return;
     setStatus("checking");
     if (await checkHealth()) {
+      lastIdleAccountRef.current = { accountId, platform };
       setStatus("idle");
       return;
     }
     pendingRef.current = { accountId, platform };
     setStatus("needs_connector");
   }, []);
+
+  // "idle" (Research session ended, or the very first check already found
+  // Connector reachable) previously never re-verified Connector on its own
+  // -- only starting a new session, or a heartbeat/visibility check during
+  // an ACTIVE session, ever discovered it had gone away. That left "Research
+  // session ended" showing even after Connector was fully quit, instead of
+  // the real "Start ReelForge Connector" state. Polls only while sitting
+  // idle; stops the moment status moves on for any reason (a session
+  // starts, or it's already needs_connector). Same primitive (checkHealth)
+  // and same needs_connector transition already used everywhere else here.
+  useEffect(() => {
+    if (status !== "idle") return;
+    const interval = window.setInterval(async () => {
+      if (await checkHealth()) return;
+      if (lastIdleAccountRef.current) pendingRef.current = lastIdleAccountRef.current;
+      setStatus("needs_connector");
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [status]);
 
   // Marks Connector unreachable mid-session (heartbeat failure, or a
   // beginSession attempt that never resolved) and puts the UI back into the
