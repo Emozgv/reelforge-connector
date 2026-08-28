@@ -15,6 +15,21 @@ const WAKE_TIMEOUT_MS = 15_000;
 // (which only bounds how long we wait for it to become reachable at all).
 const WAKE_STARTUP_DELAY_SEC = 10;
 const BEGIN_SESSION_TIMEOUT_MS = 20_000;
+// A `next()` response with reel: null is Connector legitimately reporting
+// "the local buffer was empty and Instagram's own feed hasn't refilled it
+// yet" (see ensurePending() in session-server.mjs), not an error -- but
+// leaving it to the VA to notice and click Next again to "wake up" another
+// attempt is exactly the manual-retry UX this bounds away. NEXT_RETRY_TOTAL_MS
+// caps how long next() will keep quietly retrying on the VA's behalf before
+// giving up and surfacing the existing recovery banner; NEXT_RETRY_GAP_MS is
+// just a small pause between attempts, not a change to Connector's own
+// per-attempt timing (still exactly ensurePending's existing 2x4000ms).
+// Matches Connector's own PREFETCH_MAX_DURATION_MS (session-server.mjs) --
+// real [trace] evidence showed genuine post-exhaustion recovery can take
+// 60-70s, so this must not give up sooner than the server itself would
+// still be quietly trying on the VA's behalf in the background.
+const NEXT_RETRY_TOTAL_MS = 90_000;
+const NEXT_RETRY_GAP_MS = 500;
 
 interface RawLiveReel {
   id: string;
@@ -628,23 +643,51 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     if (!session || busyRef.current) return;
     busyRef.current = true;
     setNavBusy(true);
+    const deadline = Date.now() + NEXT_RETRY_TOTAL_MS;
     try {
-      const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/next`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionSecret: session.sessionSecret }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        if (isSessionGoneStatus(res.status)) {
-          recoverFromDeadSession(session.accountId);
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/next`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret }),
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          if (isSessionGoneStatus(res.status)) {
+            recoverFromDeadSession(session.accountId);
+            return;
+          }
+          throw new Error(body.error ?? "Couldn't load the next reel.");
+        }
+        setError(null);
+        setHasPrev(!!body.hasPrev);
+        if (body.reel) {
+          setCurrentReel(liveReelToVideo(body.reel, platformRef.current));
           return;
         }
-        throw new Error(body.error ?? "Couldn't load the next reel.");
+        // reel: null here means Connector's own refill wait (now up to
+        // ~90s of its own background retrying, see maybePrefetch in
+        // session-server.mjs) came up empty, not a failure -- retry
+        // automatically, within a bounded total window, instead of
+        // requiring the VA to click Next again. Bails out early if the
+        // session itself changed underneath this call (e.g. ended) so a
+        // stale retry loop never keeps running against a dead session.
+        if (sessionRef.current !== session) {
+          setError("This research session has changed. Try again.");
+          return;
+        }
+        if (Date.now() >= deadline) {
+          // Deliberately attributes the wait to Instagram, not to
+          // ReelForge/Connector -- this is reached only after both the
+          // background prefetch and this retry loop have already spent up
+          // to ~90s genuinely trying, matching real observed worst-case
+          // refill latency, not a quick give-up.
+          setError("Instagram's feed is taking longer than usual to load more reels. Try again.");
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, NEXT_RETRY_GAP_MS));
       }
-      setError(null);
-      if (body.reel) setCurrentReel(liveReelToVideo(body.reel, platformRef.current));
-      setHasPrev(!!body.hasPrev);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't load the next reel.");
     } finally {

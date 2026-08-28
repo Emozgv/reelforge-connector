@@ -32,6 +32,26 @@ const SUBMIT_LIVE_REEL_URL = process.env.REELFORGE_SUBMIT_LIVE_REEL_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/submit-research-live-reel";
 const RESOLVE_TOKEN_URL = process.env.REELFORGE_RESOLVE_TOKEN_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/resolve-live-session-token";
+// How low `pending` must drop (right after a fresh delivery) before
+// maybePrefetch() below fires a background top-up. Deliberately not the
+// smallest value that would technically work (1) -- the V1 goal is making
+// batch boundaries feel invisible despite real, sometimes-long Instagram
+// refill latency, not minimizing prefetch nudges. 3 gives the background
+// ensurePending() call a real head start before the VA can possibly reach
+// the end of pending. Still env-overridable for local comparison if real
+// usage ever shows a concrete reason to revisit it.
+const PREFETCH_LOW_WATER_MARK = Number(process.env.REELFORGE_PREFETCH_THRESHOLD ?? 3);
+// How long maybePrefetch() below keeps re-nudging (ArrowDown, then poll)
+// before giving up, once triggered. Based on real [trace] evidence from an
+// actual Connector run (session-server.log): once a batch was genuinely
+// exhausted, real recovery took 7-8 consecutive nudge-and-wait cycles
+// spread across roughly 60-70s before Instagram served anything new --
+// nowhere close to the single ~4-8s attempt the original ensurePending()
+// design assumed. 90s gives real margin above that observed worst case
+// without looping indefinitely. Each cycle reuses ensurePending(4000)
+// completely unmodified, so the actual nudge cadence (~1 press per ~4s)
+// matches what was observed to eventually work.
+const PREFETCH_MAX_DURATION_MS = 90_000;
 
 // The web app heartbeats every 15s while the tab is active — but browsers
 // throttle setInterval in a *backgrounded* tab (Chrome can drop to roughly
@@ -551,6 +571,9 @@ class Session {
     this.seenIds = new Set(initialSeenIds ?? []);
     this.lastHeartbeat = Date.now();
     this.closed = false;
+    // Guards maybePrefetch() so at most one background top-up is ever in
+    // flight per session -- see maybePrefetch() below.
+    this.prefetching = false;
 
     const domain = PLATFORM_DOMAIN[platform];
     const adapter = MEDIA_ADAPTER[platform];
@@ -620,6 +643,68 @@ class Session {
     }
   }
 
+  // Best-effort, fire-and-forget: called right after next() delivers a
+  // fresh reel, so the *next* time the VA reaches the end of pending,
+  // pending may already be topped up and next() returns instantly instead
+  // of making them wait through a live refill. Never awaited by next()/the
+  // HTTP handler, and failure here is completely invisible to the VA.
+  //
+  // Deliberately does NOT call ensurePending() -- that function only ever
+  // nudges when `pending` is fully empty (`if (this.pending.length > 0)
+  // return`), which is right for a real next() call (no need to nudge if
+  // there's already something to serve) but wrong here: maybePrefetch is
+  // meant to start EARLY, while pending still has up to
+  // PREFETCH_LOW_WATER_MARK items left, specifically to get ahead of
+  // exhaustion. Routing through ensurePending's own guard would make it a
+  // silent no-op until pending hit literal 0, defeating the whole point of
+  // triggering early. So this presses ArrowDown itself (same primitive,
+  // same real per-reel navigation ensurePending uses -- see its own
+  // comment above) and polls for `pending` to grow past whatever it was
+  // when this started, not just "become non-zero".
+  //
+  // Keeps re-nudging every ~4s for up to PREFETCH_MAX_DURATION_MS instead
+  // of trying once and giving up, because real [trace] evidence showed a
+  // single ~4-8s attempt is nowhere near enough: genuine post-exhaustion
+  // recovery took 7-8 such cycles over ~60-70s in an actual session. Stops
+  // the instant pending grows (from this loop, or from anything else --
+  // e.g. a real next() call's own nudge landing a response first, which
+  // races harmlessly with this) or the session closes -- never spins past
+  // either.
+  maybePrefetch() {
+    if (this.closed || this.prefetching || this.pending.length > PREFETCH_LOW_WATER_MARK) return;
+    this.prefetching = true;
+    const startedAt = Date.now();
+    const deadline = startedAt + PREFETCH_MAX_DURATION_MS;
+    const startingPendingCount = this.pending.length;
+    console.log(`[trace-prefetch] session ${this.id}: buffer low (pending=${startingPendingCount}, threshold=${PREFETCH_LOW_WATER_MARK}), starting background prefetch (bounded ${PREFETCH_MAX_DURATION_MS}ms)`);
+    (async () => {
+      try {
+        while (!this.closed && this.pending.length <= startingPendingCount && Date.now() < deadline) {
+          await this.page.keyboard.press("ArrowDown").catch(() => {});
+          const cycleDeadline = Math.min(deadline, Date.now() + 4000);
+          while (!this.closed && this.pending.length <= startingPendingCount && Date.now() < cycleDeadline) {
+            await sleep(300);
+          }
+        }
+        if (this.pending.length > startingPendingCount) {
+          console.log(`[trace-prefetch] session ${this.id}: prefetch succeeded after ${Date.now() - startedAt}ms, pending=${this.pending.length}`);
+        } else if (this.closed) {
+          console.log(`[trace-prefetch] session ${this.id}: prefetch stopped after ${Date.now() - startedAt}ms -- session closed`);
+        } else {
+          console.log(`[trace-prefetch] session ${this.id}: prefetch gave up after ${Date.now() - startedAt}ms (bounded window exhausted), pending still at ${this.pending.length} -- normal refill path is unaffected`);
+        }
+      } catch (err) {
+        // Same "best-effort, never lets this take anything else down"
+        // shape as archiveLiveReel/releaseLock elsewhere in this file --
+        // most relevant case is the session closing (browser.close())
+        // mid-loop.
+        console.log(`[trace-prefetch] session ${this.id}: prefetch failed (${err?.message ?? err}) -- normal refill path is unaffected`);
+      } finally {
+        this.prefetching = false;
+      }
+    })();
+  }
+
   async next() {
     if (this.cursor < this.history.length - 1) {
       this.cursor += 1;
@@ -657,6 +742,7 @@ class Session {
     // Fire-and-forget: never lets a slow/failed archive write hold up the
     // live feed the VA is actually looking at.
     void archiveLiveReel(this, reel);
+    this.maybePrefetch();
     return { reel, fresh: true };
   }
 
