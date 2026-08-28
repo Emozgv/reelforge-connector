@@ -17,6 +17,11 @@ tauri = { version = "2.11.5", features = [] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
 url = "2.5.7"
+# Already present transitively (tauri-plugin-updater's own HTTP client) --
+# declared directly only so spawn_update_check's own deferred-install check
+# (see lib.rs) can use them, not a new dependency footprint.
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
+tokio = { version = "1", default-features = false, features = ["time"] }
 
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = "2"

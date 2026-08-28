@@ -957,7 +957,12 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "GET" && req.url === "/health") {
-      json(res, 200, { ok: true });
+      // activeSessions lets the Connector's own updater (see lib.rs's
+      // spawn_update_check) know whether it's safe to restart right now --
+      // a genuine addition to what /health already reports, not a new
+      // endpoint or a change to what any existing caller (the web app's own
+      // checkHealth()) already does with this response.
+      json(res, 200, { ok: true, activeSessions: sessions.size });
       return;
     }
 

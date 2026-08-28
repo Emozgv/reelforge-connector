@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::PathBuf,
     process::Command,
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
 };
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -151,43 +154,143 @@ fn spawn_session_server(handle: &AppHandle) {
     }
 }
 
-// Checked exactly once, right at startup (never on any recurring timer) —
-// a VA's Connector is meant to just sit there and stay current without
-// anyone having to remember to re-download it by hand. Startup is the only
-// safe moment to restart the whole process afterward: no research session
-// has had a chance to begin yet, so there's nothing running to interrupt.
-// A later background check would risk killing a live session mid-swipe,
-// which is worse than shipping a fix a little late.
+// Appends a timestamped line to <app log dir>/updater.log, falling back to
+// eprintln! if the log directory/file can't be opened. Nothing previously
+// captured this process's own stdout/stderr at all (only the child
+// session-server.mjs's output was ever redirected to a file, see
+// spawn_session_server above) -- an update check succeeding, finding
+// nothing, or failing was completely invisible after the fact. No new
+// dependency for the timestamp: a plain UNIX-epoch-seconds prefix is enough
+// to correlate against session-server.log's own timestamps if needed.
+fn log_updater(handle: &AppHandle, msg: &str) {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let line = format!("[{ts}] {msg}\n");
+    if let Ok(log_dir) = handle.path().app_log_dir() {
+        let _ = std::fs::create_dir_all(&log_dir);
+        let log_path = log_dir.join("updater.log");
+        if let Ok(mut log_file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+            let _ = log_file.write_all(line.as_bytes());
+            return;
+        }
+    }
+    eprint!("{line}");
+}
+
+// Single-flight guard: with the update check now also triggered by every
+// relaunch/deep-link wake (see the single-instance callback below), several
+// wake attempts landing close together must not each start their own
+// concurrent check/download/install/restart race. Reset in every exit path
+// of spawn_update_check below, so a later relaunch still gets a fresh
+// attempt once the in-flight one has actually finished. Deliberately held
+// for the *entire* function, including the deferred-install wait below --
+// that's what stops a second wake arriving mid-wait from starting its own
+// redundant check/wait loop instead of just letting the first one finish.
+static UPDATE_CHECK_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+// A Research session's own activeSessions count, as reported by the exact
+// same /health endpoint the web app's own checkHealth() already polls (see
+// useLiveResearchSession.ts) -- reusing that existing signal rather than
+// inventing a new one. Fails SAFE: only a genuinely parsed
+// `activeSessions === 0` counts as confirmed-idle and lets the caller
+// proceed. Every other outcome -- confirmed activeSessions > 0, the client
+// failing to build, the request failing/timing out, an unparsable body, or
+// the field being missing/the wrong type -- returns true (keep deferring).
+// An update sitting pending a while longer because a health check happened
+// to fail is an acceptable cost; a restart landing mid-session because an
+// ambiguous check was read as "safe" is not -- see spawn_update_check's own
+// 30s retry loop, which means "unknown" here just means try again shortly,
+// never a stuck update.
+async fn research_session_active() -> bool {
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(1500))
+        .build()
+    else {
+        return true;
+    };
+    let Ok(res) = client.get("http://127.0.0.1:48211/health").send().await else {
+        return true;
+    };
+    let Ok(body) = res.json::<serde_json::Value>().await else {
+        return true;
+    };
+    match body.get("activeSessions").and_then(|v| v.as_u64()) {
+        Some(0) => false,
+        _ => true,
+    }
+}
+
+// Checked on real startup and on every relaunch/deep-link wake while
+// already running (see the single-instance callback below) -- that reuses
+// the exact same real Connector-launch moments the web app's own
+// retryWithWake() already exists for (see useLiveResearchSession.ts), not
+// an arbitrary background timer. Product rule: an update must never
+// interrupt an active Research session, so if one's active when an update
+// is found, this waits (polling the same /health signal) rather than
+// restarting immediately -- the actual download_and_install + restart
+// sequence itself is completely unmodified, just gated on *when* it starts.
 fn spawn_update_check(handle: &AppHandle) {
+    if UPDATE_CHECK_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+        log_updater(handle, "update check already in flight, skipping duplicate trigger");
+        return;
+    }
+    log_updater(handle, "update check starting");
     let handle = handle.clone();
     tauri::async_runtime::spawn(async move {
         let updater = match handle.updater() {
             Ok(updater) => updater,
             Err(e) => {
-                eprintln!("ReelForge Connector: updater unavailable: {e}");
+                log_updater(&handle, &format!("updater unavailable: {e}"));
+                UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
                 return;
             }
         };
 
         let update = match updater.check().await {
             Ok(Some(update)) => update,
-            Ok(None) => return,
+            Ok(None) => {
+                log_updater(&handle, "update check complete: already up to date");
+                UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
+                return;
+            }
             Err(e) => {
-                eprintln!("ReelForge Connector: update check failed (offline or update server unreachable): {e}");
+                log_updater(&handle, &format!("update check failed (offline or update server unreachable): {e}"));
+                UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
                 return;
             }
         };
 
-        eprintln!(
-            "ReelForge Connector: update {} -> {} found, downloading",
-            update.current_version, update.version
+        if research_session_active().await {
+            log_updater(
+                &handle,
+                &format!(
+                    "update {} -> {} found, but a Research session is active -- deferring install/restart until it ends",
+                    update.current_version, update.version
+                ),
+            );
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                if !research_session_active().await {
+                    break;
+                }
+            }
+            log_updater(&handle, "Research session ended, proceeding with deferred update");
+        }
+
+        log_updater(
+            &handle,
+            &format!("update {} -> {} found, downloading", update.current_version, update.version),
         );
         if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
-            eprintln!("ReelForge Connector: update download/install failed: {e}");
+            log_updater(&handle, &format!("update download/install failed: {e}"));
+            UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
             return;
         }
 
-        eprintln!("ReelForge Connector: update installed, restarting");
+        log_updater(&handle, "update installed, restarting");
+        UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
         handle.request_restart();
     });
 }
@@ -374,6 +477,15 @@ pub fn run() {
             if let Some(url) = argv.iter().find(|a| a.starts_with("reelforge-connect://")) {
                 handle_connect_url(app, url);
             }
+            // .setup() (and thus the update check normally spawned from it)
+            // never runs again for a relaunch while already running -- this
+            // plugin's whole purpose is forwarding argv to the existing
+            // instance instead of starting a second one. Without this call,
+            // an already-running Connector could go arbitrarily long without
+            // ever getting another chance to notice a new version, since
+            // every real "launch" it ever sees again is exactly this path
+            // (most commonly the web app's own wake deep link).
+            spawn_update_check(app);
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
