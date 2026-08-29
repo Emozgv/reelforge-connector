@@ -128,7 +128,7 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/chromium-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
           CERT_PATH="$RUNNER_TEMP/apple-cert.p12"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          echo "$APPLE_CERTIFICATE" | base64 -D > "$CERT_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
@@ -144,8 +144,9 @@ jobs:
           # carry neither a .dylib extension nor an executable permission
           # bit, so those heuristics alone would silently skip them.
           sign_if_macho() {
-            file "$1" | grep -q "Mach-O" && \
+            if file "$1" | grep -q "Mach-O"; then
               codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
+            fi
           }
           # Loose files outside any nested .app bundle first.
           find "$BROWSERS_DIR" -type f -not -path "*.app/*" -print0 |
