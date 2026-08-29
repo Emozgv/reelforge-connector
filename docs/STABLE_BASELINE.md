@@ -1,10 +1,10 @@
 # ReelForge Stable Product Baseline
 
-**Established:** 2026-08-29
-**Client OS (this repo) HEAD:** `e01d001` — "Connector: retry session-server bind on EADDRINUSE after an update restart"
-**Connector release:** `0.1.30` (same commit, published to the rolling `connector-latest` GitHub release)
+**Established:** 2026-08-29 (superseded/extended same day — see revision note below)
+**Client OS (this repo) HEAD:** `c5be603` — "Research Accounts: small polish pass (info popover, Archive engagement metrics)"
+**Connector release:** `0.1.30` (unchanged from `e01d001` — this update touched only web app files, no `connector-app/**` changes, so no new Connector release was produced or needed)
 
-This is a point-in-time documentation snapshot, not a code change. It exists so future V2/V3 work has a known-good reference to compare against — if a regression is reported, check it against the flows below before assuming a new bug. No cleanup, refactor, or architecture change was made to produce this document.
+This is the **first complete ReelForge stable baseline** — the original snapshot below (commit `e01d001`) plus one small, fully-verified Research Accounts polish pass on top. It is a point-in-time documentation snapshot, not a code change. It exists so future V2/V3 work has a known-good reference to compare against — if a regression is reported, check it against the flows below before assuming a new bug. No cleanup, refactor, or architecture change was made to produce this document.
 
 ## How to read this document
 
@@ -33,6 +33,9 @@ Entries also link back to persistent memory (`project_frozen_features.md`) where
 - **Live Research lock re-acquire race after End Research** — fixed (`36ec207`).
 - **Comments V1** (read-only, 5s dwell, first visible batch only, per-comment like counts, no pagination) — shipped and verified real end-to-end against live Instagram data (`f64819c`).
 - **Connector updater UX** (wake or already-running Connector → update check → clear "Updating…" state → real restart → fresh Connector → Research continues automatically, no second click, never the generic failure state) — verified real end-to-end today (`17da045`, `5d319ce`, `e01d001`, Connector `0.1.30`).
+- **Research Accounts info popover** — small info icon next to the page title, hover/click popover explaining supported training signals (likes/follows/blocks), the current watch-time limitation, and the pre-training recommendation (`c5be603`).
+- **Archive engagement metrics (Likes + Comments)** — shown on each Archive card, both confirmed 100% reliably persisted for archived reels via direct DB inspection (937/937 and 950/950 real rows respectively). Views was investigated and deliberately excluded: real testing (DOM text and network responses on the reel's own permalink page) confirmed Instagram essentially never exposes a real view count for Reels — 0 of 937 archived rows ever had one. Scoped to Archive only via a `showEngagement` prop on the shared `VideoCard`/`VideoGrid`; Creativity Hub is unaffected (`c5be603`).
+- **Archive card bottom-info spacing** — smaller bottom inset than other cards using the same component, since Archive never fills the tags/fit row Hub cards often do; purely a spacing nudge (`c5be603`).
 
 **Documented, not fixed:**
 - Older Archive reels lose in-app playback once their CDN-signed URL expires (falls back to "Watch on Instagram") — accepted product limitation, decided against fixing pre-launch.
@@ -89,4 +92,4 @@ No specific bug audit was performed on this area to produce this baseline — cu
 
 - Before treating a report as a new bug, check whether it touches a flow marked **Verified** above — if so, the root cause is very unlikely to be a reintroduction of an already-fixed issue; look for a new trigger instead.
 - Research Accounts, Connector updater/session/lock, and the startup/lock lifecycle are explicitly **frozen** (see `project_frozen_features` memory) — any change touching that code should be flagged before modification, not made silently.
-- This document reflects commit `e01d001` / Connector `0.1.30` as of 2026-08-29. It is not evergreen — update it explicitly the next time the user establishes a new baseline, rather than assuming it still applies after significant future changes.
+- This document reflects commit `c5be603` / Connector `0.1.30` as of 2026-08-29. It is not evergreen — update it explicitly the next time the user establishes a new baseline, rather than assuming it still applies after significant future changes.
