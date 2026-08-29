@@ -623,6 +623,15 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         await new Promise((r) => setTimeout(r, 800));
         const health = await fetchHealth();
         if (health.reachable && !health.updating) {
+          // The update itself is over -- switch out of "updating" before
+          // starting the (separately slow) session-start work below, so the
+          // VA sees an explicit "the update finished" transition instead of
+          // "Updating ReelForge Connector…" sitting on screen throughout a
+          // real Chromium launch + first-reel fetch that's no longer about
+          // the update at all. Reuses the exact status/copy retryWithWake's
+          // own "Connector is reachable, starting research" moment already
+          // shows -- no new status value.
+          setStatus("connecting");
           await beginSession(accountId, platform);
           return;
         }
@@ -770,6 +779,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       if (startInFlightRef.current) return;
       startInFlightRef.current = true;
       wakingRef.current = true;
+      // Immediate feedback the instant the click happens -- without this,
+      // the precheck below runs silently for up to UPDATE_PRECHECK_MAX_MS
+      // with no visible change at all, reading as "did my click register?"
+      // even though nothing is wrong. Matches retryWithWake's own
+      // equivalent first line for the cold-launch path.
+      setStatus("connecting");
+      setError(null);
       let updating = false;
       try {
         wakeConnector();
