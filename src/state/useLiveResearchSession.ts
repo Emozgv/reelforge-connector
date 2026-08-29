@@ -15,6 +15,22 @@ const WAKE_TIMEOUT_MS = 15_000;
 // (which only bounds how long we wait for it to become reachable at all).
 const WAKE_STARTUP_DELAY_SEC = 10;
 const BEGIN_SESSION_TIMEOUT_MS = 20_000;
+// Bounds waitForUpdateToFinish's poll once Connector has announced it's
+// updating -- generous enough for a real download+install+relaunch (the
+// macOS/Windows installers are tens of MB) on an ordinary connection, not
+// just a same-network unit-test-speed restart. Giving up after this just
+// means the VA sees a clear "taking longer than expected, try again"
+// message instead of waiting forever -- restart still completes on its own
+// in the background regardless.
+const UPDATE_WAIT_MAX_MS = 120_000;
+// How long startResearchFromClick waits, right after nudging an
+// already-running Connector to check for an update, before concluding "no
+// update, proceed normally". Deliberately short and fixed -- this runs on
+// every ordinary "Start research" click, not just the rarer wake path, so
+// it must stay small enough to be imperceptible when (the common case) no
+// update is found, while still giving Connector's own update-manifest fetch
+// a real chance to answer first.
+const UPDATE_PRECHECK_MAX_MS = 1600;
 // A `next()` response with reel: null is Connector legitimately reporting
 // "the local buffer was empty and Instagram's own feed hasn't refilled it
 // yet" (see ensurePending() in session-server.mjs), not an error -- but
@@ -79,37 +95,63 @@ function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
   };
 }
 
-async function checkHealth(): Promise<boolean> {
+// `updating` mirrors what lib.rs's spawn_update_check posts to Connector's
+// own /update-status the instant it's actually about to install an update
+// it's already decided is safe to install now (see session-server.mjs) --
+// reachable-but-updating is what lets the UI show a real "Connector is
+// updating" state instead of misreading the restart that follows as a
+// generic failure. Every existing checkHealth() caller only ever needed
+// reachability, so it stays a thin wrapper rather than being rewritten.
+async function fetchHealth(): Promise<{ reachable: boolean; updating: boolean }> {
   try {
     const res = await fetch(`${SESSION_SERVER_URL}/health`, { signal: AbortSignal.timeout(1500) });
-    return res.ok;
+    if (!res.ok) return { reachable: false, updating: false };
+    const body = await res.json().catch(() => null);
+    return { reachable: true, updating: !!body?.updating };
   } catch {
-    return false;
+    return { reachable: false, updating: false };
   }
+}
+
+async function checkHealth(): Promise<boolean> {
+  return (await fetchHealth()).reachable;
 }
 
 // A custom-scheme handoff doesn't navigate the page away, and when
 // Connector is already running (the normal case) nothing here ever runs —
-// checkHealth() alone already succeeded. This is ONLY reached from
-// retryWithWake(), which is only ever called from a real click (see
-// SwipeResearchPlayer's "needs_connector" button) — confirmed by direct
-// testing that navigating to a custom scheme from anywhere else (a mount
-// effect, a timer) does not reliably reach Connector, either because the
-// browser suppresses it outright or shows a permission prompt the VA never
-// expected and has no reason to trust enough to approve. A real, deliberate
-// click is what makes that prompt (if the OS/browser shows one at all)
-// legible instead of a mysterious interruption.
+// checkHealth() alone already succeeded. Reached from retryWithWake() (the
+// "needs_connector" button) and from startResearchFromClick() below (every
+// ordinary "Start research" click, to nudge an already-running Connector
+// into checking for an update too) — both only ever called from a real
+// click, confirmed by direct testing that navigating to a custom scheme
+// from anywhere else (a mount effect, a timer) does not reliably reach
+// Connector, either because the browser suppresses it outright or shows a
+// permission prompt the VA never expected and has no reason to trust enough
+// to approve. A real, deliberate click is what makes that prompt (if the
+// OS/browser shows one at all) legible instead of a mysterious interruption.
+//
+// Tauri's single-instance plugin means this reaches an already-running
+// Connector exactly the same way it reaches a cold-launched one (see
+// lib.rs's single_instance callback) — there's no separate "ping an
+// already-running instance" API needed, this already is one.
 function wakeConnector() {
   window.location.href = "reelforge-connect://wake?account=wake&token=wake";
 }
 
-async function waitForConnector(maxMs: number): Promise<boolean> {
+// Polls reachability like a plain wait would, but also watches for
+// Connector announcing it's installing an update it already decided is
+// safe to install now (see fetchHealth's own comment) so the caller can
+// switch into a clear "updating" state instead of only ever seeing
+// reachable/unreachable.
+async function waitForConnectorOrUpdate(maxMs: number): Promise<"ready" | "updating" | "timeout"> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 800));
-    if (await checkHealth()) return true;
+    const health = await fetchHealth();
+    if (health.reachable && health.updating) return "updating";
+    if (health.reachable) return "ready";
   }
-  return false;
+  return "timeout";
 }
 
 // A 403/404 from the session server means Connector itself is fine but this
@@ -177,7 +219,23 @@ async function releaseLock(accountId: string) {
 // drive it silently clobbered each other's cached sync_token). Set when
 // start-research-live-session reports the account's lock is currently held
 // by someone else; lockedByLabel names who.
-export type LiveSessionStatus = "idle" | "checking" | "connecting" | "active" | "error" | "needs_connector" | "in_use";
+// "updating" — Connector announced (via /health's `updating` flag) that
+// it's installing an update it already decided is safe to install right
+// now, found either by this wake or by an already-running instance being
+// nudged into checking (see startResearchFromClick). Distinct from "error"/
+// "needs_connector" specifically so this never reads as a broken Connector
+// -- it always resolves on its own into a real session once the updated
+// process comes back up (see waitForUpdateToFinish), never into a dead end
+// needing a VA click to recover from.
+export type LiveSessionStatus =
+  | "idle"
+  | "checking"
+  | "connecting"
+  | "updating"
+  | "active"
+  | "error"
+  | "needs_connector"
+  | "in_use";
 
 interface ActiveSession {
   accountId: string;
@@ -550,6 +608,31 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     [workspaceId, fallBackToNeedsConnector, stopHeartbeat]
   );
 
+  // Shared end of every path that discovers Connector is updating
+  // (retryWithWake below, and startResearchFromClick's own precheck) --
+  // reuses beginSession exactly as-is, so once the updated process reports
+  // healthy again this continues straight into a real session with no
+  // extra click, instead of landing back on "idle" waiting for the VA to
+  // press Start research a second time.
+  const waitForUpdateToFinish = useCallback(
+    async (accountId: string, platform: Platform) => {
+      setStatus("updating");
+      setError(null);
+      const deadline = Date.now() + UPDATE_WAIT_MAX_MS;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 800));
+        const health = await fetchHealth();
+        if (health.reachable && !health.updating) {
+          await beginSession(accountId, platform);
+          return;
+        }
+      }
+      setStatus("error");
+      setError("The Connector update is taking longer than expected. Please try again in a moment.");
+    },
+    [beginSession]
+  );
+
   // Opening a Research Account calls this automatically — it never attempts
   // to launch/wake Connector itself. If Connector is already running (the
   // normal case, e.g. it never fully quit, or the VA is on their second
@@ -621,9 +704,10 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     [workspaceId, endSession, beginSession]
   );
 
-  // The ONLY place that ever navigates to reelforge-connect:// to wake
-  // Connector — must only ever be called directly from a real click (see
-  // SwipeResearchPlayer), not from an effect or a timer.
+  // One of two places that ever navigate to reelforge-connect:// to wake
+  // Connector (the other is startResearchFromClick below) — must only ever
+  // be called directly from a real click (see SwipeResearchPlayer), not
+  // from an effect or a timer.
   const retryWithWake = useCallback(async () => {
     const pending = pendingRef.current;
     if (!pending || startInFlightRef.current) return;
@@ -633,31 +717,93 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       setStatus("connecting");
       setError(null);
       wakeConnector();
-      const ready = await waitForConnector(WAKE_TIMEOUT_MS);
-      if (!ready) {
+      const outcome = await waitForConnectorOrUpdate(WAKE_TIMEOUT_MS);
+      if (outcome === "timeout") {
         setStatus("error");
         setError("Couldn't reach ReelForge Connector. Make sure it's installed, then try again.");
         return;
       }
+      wakingRef.current = false;
 
-      // Connector is reachable now, but starting a real Research session is
-      // a separate, explicit action from waking Connector -- land back on
-      // the same ready screen startSession's "idle" status already shows
-      // (with its own "Start research" button) instead of chaining straight
-      // into the settle-time countdown and a session start. justWokeRef
-      // makes the *next* startSession() call show that countdown once,
-      // since this Connector process really did just cold-launch.
+      if (outcome === "updating") {
+        // Found an update on this same cold launch -- it should win over a
+        // stale Connector, not the other way around. waitForUpdateToFinish
+        // shows the dedicated "updating" state and, once the updated
+        // process is back up, continues straight into a real session
+        // itself -- no second "Start research" click needed.
+        await waitForUpdateToFinish(pending.accountId, pending.platform);
+        return;
+      }
+
+      // Connector is reachable now and not updating, but starting a real
+      // Research session is a separate, explicit action from waking
+      // Connector -- land back on the same ready screen startSession's
+      // "idle" status already shows (with its own "Start research" button)
+      // instead of chaining straight into the settle-time countdown and a
+      // session start. justWokeRef makes the *next* startSession() call
+      // show that countdown once, since this Connector process really did
+      // just cold-launch.
       //
       // Nothing is held at this point -- no session, no lock -- so a real
       // tab close can go back to being handled normally.
       justWokeRef.current = true;
-      wakingRef.current = false;
       setStatus("idle");
     } finally {
       wakingRef.current = false;
       startInFlightRef.current = false;
     }
-  }, []);
+  }, [waitForUpdateToFinish]);
+
+  // The already-running-Connector counterpart to retryWithWake: fired from
+  // the exact same "Start research" click startSession() already handles,
+  // just before it. Pings Connector via the identical wakeConnector()
+  // hand-off -- Tauri's single-instance plugin means that reaches an
+  // already-running process exactly the same way it reaches a cold-launched
+  // one (see lib.rs), re-running its own spawn_update_check with no second
+  // updater system involved. Waits only UPDATE_PRECHECK_MAX_MS (short and
+  // fixed, since this now runs on every ordinary start) for Connector to
+  // announce an update before giving up and proceeding with the completely
+  // unmodified startSession() -- so the common no-update case stays exactly
+  // as fast as it already was, plus one small fixed pre-check.
+  const startResearchFromClick = useCallback(
+    async (accountId: string, platform: Platform) => {
+      if (startInFlightRef.current) return;
+      startInFlightRef.current = true;
+      wakingRef.current = true;
+      let updating = false;
+      try {
+        wakeConnector();
+        const deadline = Date.now() + UPDATE_PRECHECK_MAX_MS;
+        while (Date.now() < deadline) {
+          const health = await fetchHealth();
+          if (health.reachable && health.updating) {
+            updating = true;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      } finally {
+        wakingRef.current = false;
+      }
+
+      if (updating) {
+        try {
+          await waitForUpdateToFinish(accountId, platform);
+        } finally {
+          startInFlightRef.current = false;
+        }
+        return;
+      }
+
+      // No update found in the short precheck window -- proceed exactly as
+      // an ordinary click always has. Cleared first so startSession's own
+      // identical guard (checked at its very top) doesn't mistake this
+      // precheck's still-true flag for a second call already in flight.
+      startInFlightRef.current = false;
+      await startSession(accountId, platform);
+    },
+    [startSession, waitForUpdateToFinish]
+  );
 
   // Shared by next/prev: a dead-session response (Connector's fine, this
   // particular session just isn't there anymore — see isSessionGoneStatus)
@@ -927,5 +1073,6 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     block,
     fetchComments,
     retryWithWake,
+    startResearchFromClick,
   };
 }

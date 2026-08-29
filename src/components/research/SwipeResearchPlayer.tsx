@@ -649,6 +649,20 @@ export function SwipeResearchPlayer({
                   Check again
                 </button>
               </>
+            ) : sessionStatus === "updating" ? (
+              // Connector found a newer version and is installing it before
+              // Research starts, rather than letting an outdated Connector
+              // start unnoticed -- this must never read as the generic
+              // needs_connector/error states below, since nothing is broken
+              // and no click is needed: it resolves into Research on its own
+              // once the updated Connector comes back up.
+              <>
+                <Loader2 size={20} className="text-[#D39448] animate-spin" />
+                <p className="mt-3 text-[12.5px] text-neutral-400">Updating ReelForge Connector…</p>
+                <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">
+                  Research will start automatically as soon as it's ready.
+                </p>
+              </>
             ) : sessionStatus === "needs_connector" ? (
               <>
                 <p className="text-[13px] text-neutral-300">ReelForge Connector needs to start.</p>

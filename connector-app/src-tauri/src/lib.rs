@@ -222,6 +222,26 @@ async fn research_session_active() -> bool {
     }
 }
 
+// Best-effort, fire-and-forget: the web app's own /health poll (see
+// useLiveResearchSession.ts) is what actually reads this back, not this
+// call's own success. A failure here (session server not up yet, e.g. a
+// fresh cold launch racing this) just means the client won't see "updating"
+// for this particular update -- it falls back to the existing generic
+// unreachable handling, not a crash or a stuck flag.
+async fn post_update_status(updating: bool) {
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(1500))
+        .build()
+    else {
+        return;
+    };
+    let _ = client
+        .post("http://127.0.0.1:48211/update-status")
+        .json(&serde_json::json!({ "updating": updating }))
+        .send()
+        .await;
+}
+
 // Checked on real startup and on every relaunch/deep-link wake while
 // already running (see the single-instance callback below) -- that reuses
 // the exact same real Connector-launch moments the web app's own
@@ -283,8 +303,14 @@ fn spawn_update_check(handle: &AppHandle) {
             &handle,
             &format!("update {} -> {} found, downloading", update.current_version, update.version),
         );
+        // Posted only now -- right after the "safe to update" gate above,
+        // not the instant an update is merely found -- so the web app never
+        // sees "updating" while an active session is intentionally still
+        // being left alone during the deferred-install wait above.
+        post_update_status(true).await;
         if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
             log_updater(&handle, &format!("update download/install failed: {e}"));
+            post_update_status(false).await;
             UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
             return;
         }

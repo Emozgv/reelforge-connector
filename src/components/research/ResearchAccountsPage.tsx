@@ -703,13 +703,15 @@ export function ResearchAccountsPage({
                   followStatus={followStatus}
                   onBlockCreator={handleBlockCreator}
                   blockStatus={blockStatus}
-                  onRefreshSession={() => void liveSession.startSession(currentAccount.id, currentAccount.platform)}
+                  onRefreshSession={() => void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform)}
                   onEndResearch={() => void liveSession.endSession()}
                   onRetryWake={() => {
                     // needs_connector -> the wake path (must run from this
-                    // real click); a plain error -> just start over.
+                    // real click); a plain error -> just start over. Both
+                    // startResearchFromClick and retryWithWake check for a
+                    // pending Connector update before actually starting.
                     if (liveSession.status === "needs_connector") void liveSession.retryWithWake();
-                    else void liveSession.startSession(currentAccount.id, currentAccount.platform);
+                    else void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform);
                   }}
                   active={active}
                 />

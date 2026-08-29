@@ -587,6 +587,12 @@ if (PARENT_PID) {
 /** @type {Map<string, Session>} */
 const sessions = new Map();
 
+// Set only via POST /update-status (lib.rs's spawn_update_check) -- see
+// that route and /health above. Always starts false: a fresh process (the
+// normal case, and also what a post-restart relaunch is) never carries a
+// stale "updating" flag over from before.
+let connectorUpdating = false;
+
 // research_accounts.sync_token is a single shared column per account -- a
 // second live session started for the same account (another tab, a
 // reconnect, another staff member) overwrites it in the DB, silently
@@ -1143,8 +1149,23 @@ const server = http.createServer(async (req, res) => {
       // spawn_update_check) know whether it's safe to restart right now --
       // a genuine addition to what /health already reports, not a new
       // endpoint or a change to what any existing caller (the web app's own
-      // checkHealth()) already does with this response.
-      json(res, 200, { ok: true, activeSessions: sessions.size });
+      // checkHealth()) already does with this response. `updating` is the
+      // reverse direction of the same idea: lib.rs posts to /update-status
+      // (below) right before it actually starts installing an update it's
+      // already decided is safe to install now, so the web app can show a
+      // clear "Connector is updating" state instead of misreading the
+      // restart that follows as a generic failure.
+      json(res, 200, { ok: true, activeSessions: sessions.size, updating: connectorUpdating });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/update-status") {
+      // Local-only signal from lib.rs, not from the web app -- no
+      // sessionSecret to check, same trust level as this server itself
+      // (both only ever bind 127.0.0.1). Never touches sessions/locks.
+      const { updating } = await readBody(req);
+      connectorUpdating = !!updating;
+      json(res, 200, { ok: true });
       return;
     }
 
