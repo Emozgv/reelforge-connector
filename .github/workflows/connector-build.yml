@@ -177,6 +177,19 @@ jobs:
           rm -f "$CERT_PATH"
 
           BROWSERS_DIR="$APP_PATH/Contents/Resources/node_modules/playwright-core/.local-browsers"
+
+          # Low-risk test: Google ships Chromium.app and its Framework
+          # already signed and notarized under their own identity. Local
+          # `codesign --verify` passes after we re-sign them, but Apple's
+          # remote notarization service consistently rejects exactly these
+          # two files as invalid while accepting everything else we sign —
+          # a documented Apple DTS-confirmed pattern where stale extended
+          # attributes left over from a prior signature/notarization ticket
+          # can confuse the remote check even though the embedded signature
+          # itself is fine. Clearing them here, before signing, removes
+          # that as a possible cause without changing anything else.
+          xattr -cr "$BROWSERS_DIR"
+
           sign_bundle() {
             codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
           }
