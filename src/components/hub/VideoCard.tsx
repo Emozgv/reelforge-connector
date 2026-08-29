@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Bookmark, Sparkles, FolderPlus, ExternalLink, Play, Eye } from "lucide-react";
+import { Bookmark, Sparkles, FolderPlus, ExternalLink, Play, Eye, Heart, MessageCircle } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
+import { formatViews } from "../../lib/researchFeedMapping";
 import { PlatformIcon } from "./PlatformIcon";
 
 export function VideoCard({
@@ -9,11 +10,14 @@ export function VideoCard({
   onSaveClick,
   onAddToCollection,
   onOpenDetail,
+  showEngagement = false,
 }: {
   video: ReelVideo;
   onSaveClick: (video: ReelVideo) => void;
   onAddToCollection?: (video: ReelVideo) => void;
   onOpenDetail?: (video: ReelVideo) => void;
+  // See VideoGrid's own comment -- Research Archive only.
+  showEngagement?: boolean;
 }) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
 
@@ -125,8 +129,12 @@ export function VideoCard({
         </button>
       </div>
 
-      {/* bottom content — identity, views, used-state, tags, and fit are all always visible now */}
-      <div className="absolute bottom-0 left-0 right-0 p-3">
+      {/* bottom content — identity, views, used-state, tags, and fit are all always visible now.
+          Archive cards (showEngagement) skip the tags/fit row in practice (no tags, no
+          creatorFit data), so the same p-3 leaves this block sitting noticeably higher than
+          on a card that has that row filled in -- a smaller bottom inset just for that case
+          is purely a spacing nudge, not a layout change. */}
+      <div className={["absolute bottom-0 left-0 right-0 p-3", showEngagement ? "pb-1.5" : ""].join(" ")}>
         <div className="flex items-center justify-between gap-1.5">
           <span className="text-[12.5px] text-white font-medium truncate">@{video.username}</span>
           {video.views && (
@@ -136,6 +144,23 @@ export function VideoCard({
             </span>
           )}
         </div>
+
+        {showEngagement && (video.likes !== undefined || video.comments !== undefined) && (
+          <div className="mt-1 flex items-center gap-3">
+            {video.likes !== undefined && (
+              <span className="flex items-center gap-1 text-[11px] text-white/70 tabular-nums">
+                <Heart size={10.5} className="text-white/40" />
+                {formatViews(video.likes)}
+              </span>
+            )}
+            {video.comments !== undefined && (
+              <span className="flex items-center gap-1 text-[11px] text-white/70 tabular-nums">
+                <MessageCircle size={10.5} className="text-white/40" />
+                {formatViews(video.comments)}
+              </span>
+            )}
+          </div>
+        )}
 
         {video.used && (
           <div className="mt-1 flex items-center gap-1.5">

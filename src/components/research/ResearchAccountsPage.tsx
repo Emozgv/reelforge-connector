@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw, Info } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
@@ -17,6 +17,66 @@ import { SwipeResearchPlayer, type LikeStatus, type FollowStatus } from "./Swipe
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: "IG Research", tiktok: "TikTok Research" };
+
+// Same hover-or-click, click-outside-to-close pattern as
+// DownloadConnectorButton's platform choice popover — hover is the primary
+// path (a quick "what does this mean" glance), click keeps it open for
+// anyone on touch/trackpad-without-hover.
+function ResearchInfoPopover() {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    window.addEventListener("mousedown", onClickOutside);
+    return () => window.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="About Research training signals"
+        className="w-5 h-5 rounded-full flex items-center justify-center text-neutral-600 hover:text-neutral-300 transition-colors duration-150"
+      >
+        <Info size={14} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-7 z-20 w-[300px] rounded-xl bg-[#141416] border border-white/[0.09] shadow-2xl p-4 animate-fade-in">
+          <p className="text-[11px] tracking-[0.08em] uppercase text-neutral-500 font-medium mb-1">What works</p>
+          <p className="text-[12.5px] text-neutral-400 leading-relaxed mb-3">
+            Likes, follows, blocks, and other supported interactions are applied to the connected Research Account
+            and can help shape the feed.
+          </p>
+          <p className="text-[11px] tracking-[0.08em] uppercase text-neutral-500 font-medium mb-1">
+            Current limitation
+          </p>
+          <p className="text-[12.5px] text-neutral-400 leading-relaxed mb-3">
+            Watch-time signals are not fully supported inside ReelForge yet.
+          </p>
+          <p className="text-[11px] tracking-[0.08em] uppercase text-[#D39448]/85 font-medium mb-1">
+            Recommendation <span className="normal-case tracking-normal text-neutral-600">(optional)</span>
+          </p>
+          <p className="text-[12.5px] text-neutral-400 leading-relaxed">
+            For the best starting experience, pre-train the Research Account directly on Instagram before connecting
+            it to ReelForge. This gives a stronger initial feed while ReelForge continues training through supported
+            interactions.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function accountsFor(accounts: ResearchAccount[], creatorId: string, platform: Platform): ResearchAccount[] {
   return accounts
@@ -494,8 +554,9 @@ export function ResearchAccountsPage({
                 Research Accounts
               </span>
             </div>
-            <h1 className="text-[26px] font-serif font-medium text-neutral-50">
+            <h1 className="text-[26px] font-serif font-medium text-neutral-50 flex items-center gap-2">
               Research from your own trained feeds
+              <ResearchInfoPopover />
             </h1>
             <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
               Swipe through a Creator's own Instagram/TikTok research account, then save straight into the same
@@ -728,6 +789,7 @@ export function ResearchAccountsPage({
                   onAddToCollection={() => setSavedPopoverOpen(true)}
                   onOpenDetail={(video) => setDetailVideoId(video.id)}
                   spacious
+                  showEngagement
                   loading={loadingFeed}
                   loadingLabel="Loading this account's archive…"
                   emptyTitle={

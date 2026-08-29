@@ -85,12 +85,20 @@ export function VideoGrid({
   onCancelLoading,
   emptyTitle = "No results match your search.",
   emptyHint = "Try a different keyword or platform.",
+  showEngagement = false,
 }: {
   videos: ReelVideo[];
   onSaveClick: (video: ReelVideo) => void;
   onAddToCollection?: (video: ReelVideo) => void;
   onOpenDetail?: (video: ReelVideo) => void;
   spacious?: boolean;
+  // Research Archive-only: shows real Likes/Comments counts on each card
+  // (see VideoCard) -- reliably persisted for archived reels (100% of real
+  // rows have both), unlike Views, which real testing confirmed Instagram
+  // essentially never exposes for Reels. Left off by default so Creativity
+  // Hub's search results (a different data source, not audited for this)
+  // are completely unaffected.
+  showEngagement?: boolean;
   // True while a fetch is in flight. Whenever this is true, the grid (even a
   // previous batch still sitting in state) is fully replaced by a dedicated
   // "working" panel — see SearchingPanel above for why that's deliberate.
@@ -141,6 +149,7 @@ export function VideoGrid({
             onSaveClick={onSaveClick}
             onAddToCollection={onAddToCollection}
             onOpenDetail={onOpenDetail}
+            showEngagement={showEngagement}
           />
         </div>
       ))}
