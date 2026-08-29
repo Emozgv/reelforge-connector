@@ -139,26 +139,35 @@ jobs:
           rm -f "$CERT_PATH"
 
           BROWSERS_DIR="node_modules/playwright-core/.local-browsers"
+          sign_bundle() {
+            codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
+          }
           # Checked by actual file type, not by name/permission pattern —
           # some framework binaries (e.g. "Chromium Framework" itself)
           # carry neither a .dylib extension nor an executable permission
           # bit, so those heuristics alone would silently skip them.
           sign_if_macho() {
-            if file "$1" | grep -q "Mach-O"; then
-              codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
-            fi
+            file "$1" | grep -q "Mach-O" && sign_bundle "$1"
+            true
           }
-          # Loose files outside any nested .app bundle first.
-          find "$BROWSERS_DIR" -type f -not -path "*.app/*" -print0 |
+          # Loose Mach-O files living outside any nested .app or .framework
+          # bundle first (standalone dylibs and helper executables).
+          find "$BROWSERS_DIR" -type f -not -path "*.app/*" -not -path "*.framework/*" -print0 |
             while IFS= read -r -d '' f; do sign_if_macho "$f"; done
-          # Nested .app bundles, innermost first: sign each one's own
-          # contents, then the bundle itself.
-          find "$BROWSERS_DIR" -name "*.app" -depth -print0 |
-            while IFS= read -r -d '' app; do
-              find "$app/Contents" -type f -print0 |
-                while IFS= read -r -d '' f; do sign_if_macho "$f"; done
-              codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$app"
-            done
+          # Nested .app and .framework bundles, innermost first — a single
+          # `-depth` traversal already yields a bundle nested inside another
+          # before the outer one, regardless of which of the two types each
+          # is (e.g. a Helper .app that lives inside Chromium Framework's
+          # Versions/.../Helpers/ comes before the framework, which comes
+          # before Chromium.app itself). Each is signed as a whole bundle —
+          # via its directory, not its raw internal binary file — so
+          # codesign resolves the framework's Versions/Current symlink and
+          # embeds the bundle-aware signature Apple's notarization service
+          # actually requires; re-signing the raw binary in place (what an
+          # earlier version of this step did) produced a flat, non-bundle
+          # signature that notarization rejected as invalid.
+          find "$BROWSERS_DIR" \( -name "*.app" -o -name "*.framework" \) -depth -print0 |
+            while IFS= read -r -d '' bundle; do sign_bundle "$bundle"; done
 
       # APPLE_CERTIFICATE/APPLE_CERTIFICATE_PASSWORD/APPLE_SIGNING_IDENTITY
       # are picked up directly by Tauri's bundler on macOS: it imports the
