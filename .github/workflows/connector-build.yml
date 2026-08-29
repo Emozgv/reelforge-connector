@@ -104,22 +104,15 @@ jobs:
 
       # APPLE_CERTIFICATE/APPLE_CERTIFICATE_PASSWORD/APPLE_SIGNING_IDENTITY
       # are picked up directly by Tauri's bundler on macOS: it imports the
-      # certificate into a temporary keychain itself and signs the .app.
-      # APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID are also needed here even
-      # though this build's own notarization attempt is discarded (see
-      # --skip-stapling below): Tauri's comprehensive per-file codesign pass
-      # — which walks and signs every nested Mach-O in the bundled
-      # Playwright Chromium runtime, not just the outer .app — only runs
-      # when notarization credentials are present at all; without them
-      # Tauri signs just the outer .app and main executable, leaving every
-      # nested file completely unsigned. --skip-stapling makes Tauri submit
-      # for notarization but NOT wait for or fail on the result, since its
-      # codesign pass still leaves the bundled Chromium's own .framework
-      # invalidly signed (a known Tauri bundler limitation:
-      # https://github.com/tauri-apps/tauri/issues/7690) — the next step
-      # fixes just that framework and performs the real notarization+staple
-      # itself, after this comprehensive signing pass has already run.
-      # No-op on the Windows leg.
+      # certificate into a temporary keychain itself and signs the outer
+      # .app and its main executable. Deliberately not passing
+      # APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID here — Tauri's own bundler
+      # never reaches into arbitrary bundled resources like the Playwright
+      # Chromium runtime under Contents/Resources regardless of whether
+      # notarization credentials are present, so there is nothing for those
+      # credentials to do at this point; the next step does the real,
+      # comprehensive signing pass plus notarization itself. No-op on the
+      # Windows leg.
       - name: Build ReelForge Connector (${{ matrix.target }})
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -127,31 +120,34 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
           if [ "${{ matrix.target }}" = "darwin" ]; then
-            npx tauri build --target universal-apple-darwin --skip-stapling
+            npx tauri build --target universal-apple-darwin
           else
             npm run build
           fi
 
-      # Tauri has already signed the .app above, but (per the known bundler
-      # limitation linked in the previous step) the bundled Chromium
-      # Framework specifically ends up with an invalid, non-bundle-aware
-      # signature. Fixed here by re-signing just that framework properly —
-      # as its bundle directory, so codesign resolves its Versions/Current
-      # symlink and embeds a real framework-bundle signature — then
-      # re-signing the outer .app so its CodeResources manifest picks up
-      # the framework's corrected hash. Only then is this submitted to
-      # Apple for notarization and stapled; the DMG and updater .tar.gz
-      # Tauri built above are stale at this point (built from the
-      # not-yet-fixed, not-yet-notarized app), so both are rebuilt from
-      # this final stapled .app afterward — a customer must never receive
-      # an artifact containing the pre-fix app.
-      - name: Fix framework signature, notarize and staple (darwin)
+      # Tauri's own signing above only covers the outer .app and its main
+      # executable — it never reaches the bundled Playwright Chromium
+      # runtime under Contents/Resources, which still carries its original
+      # Google/Playwright signatures at this point. This step does the real
+      # signing pass: every loose Mach-O file first, then every nested
+      # .app/.framework bundle signed as a whole bundle directory
+      # (innermost first, via a single `-depth` traversal, so codesign
+      # resolves the Chromium Framework's Versions/Current symlink and a
+      # nested Helper .app is fully signed before its containing
+      # Chromium.app), and only then the outer .app re-signed once more so
+      # its CodeResources manifest picks up every corrected hash — doing
+      # this re-sign of the outer .app AFTER fixing everything nested is
+      # what actually survives; doing it the other way round (nested fixes
+      # applied before Tauri's own build/sign step) got silently
+      # overwritten by Tauri's own final pass on the outer .app every time.
+      # Only after all of that is this submitted to Apple for notarization
+      # and stapled — the DMG and updater .tar.gz Tauri built above are
+      # stale at this point (built from the unsigned-nested, unstapled
+      # app), so both are rebuilt from this final stapled .app afterward.
+      - name: Sign Chromium runtime, notarize and staple (darwin)
         if: matrix.target == 'darwin'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -180,15 +176,23 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
           rm -f "$CERT_PATH"
 
-          # Path resolved by search rather than hardcoding the bundled
-          # Chromium build number, so a future Playwright version bump
-          # can't silently make this a no-op.
-          FRAMEWORK=$(find "$APP_PATH/Contents/Resources/node_modules/playwright-core/.local-browsers" -name "Chromium Framework.framework" -maxdepth 8)
-          if [ -z "$FRAMEWORK" ]; then
-            echo "Could not locate Chromium Framework.framework inside the bundled app — aborting rather than shipping a mis-signed build."
-            exit 1
-          fi
-          codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$FRAMEWORK"
+          BROWSERS_DIR="$APP_PATH/Contents/Resources/node_modules/playwright-core/.local-browsers"
+          sign_bundle() {
+            codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
+          }
+          # Checked by actual file type, not by name/permission pattern —
+          # some framework binaries (e.g. "Chromium Framework" itself)
+          # carry neither a .dylib extension nor an executable permission
+          # bit, so those heuristics alone would silently skip them.
+          sign_if_macho() {
+            file "$1" | grep -q "Mach-O" && sign_bundle "$1"
+            true
+          }
+          find "$BROWSERS_DIR" -type f -not -path "*.app/*" -not -path "*.framework/*" -print0 |
+            while IFS= read -r -d '' f; do sign_if_macho "$f"; done
+          find "$BROWSERS_DIR" \( -name "*.app" -o -name "*.framework" \) -depth -print0 |
+            while IFS= read -r -d '' bundle; do sign_bundle "$bundle"; done
+
           codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$APP_PATH"
 
           # Fail fast on a native, immediately-readable signature error
