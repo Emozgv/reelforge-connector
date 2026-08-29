@@ -178,20 +178,42 @@ jobs:
 
           BROWSERS_DIR="$APP_PATH/Contents/Resources/node_modules/playwright-core/.local-browsers"
 
-          # Low-risk test: Google ships Chromium.app and its Framework
-          # already signed and notarized under their own identity. Local
-          # `codesign --verify` passes after we re-sign them, but Apple's
-          # remote notarization service consistently rejects exactly these
-          # two files as invalid while accepting everything else we sign —
-          # a documented Apple DTS-confirmed pattern where stale extended
-          # attributes left over from a prior signature/notarization ticket
-          # can confuse the remote check even though the embedded signature
-          # itself is fine. Clearing them here, before signing, removes
-          # that as a possible cause without changing anything else.
-          xattr -cr "$BROWSERS_DIR"
+          # Chromium.app and its Framework are the only two files that
+          # consistently fail Apple's remote notarization check as "invalid"
+          # while local `codesign --verify` passes — every other bundled
+          # file (helpers, dylibs) signs cleanly. Chromium's own main
+          # executable and its V8 JavaScript engine (in the Framework) both
+          # need JIT-compiled executable memory at runtime; under Hardened
+          # Runtime that's disallowed unless the signature explicitly grants
+          # it via entitlements. Signed with plain `--options runtime` and
+          # no entitlements (as every previous attempt did), Apple's remote
+          # check appears to specifically flag that mismatch for these two
+          # JIT-using binaries, even though the signature is otherwise
+          # well-formed. Applied only to the Chromium.app/.framework family
+          # signed as bundles below — not to the outer ReelForge Connector
+          # app, which doesn't run untrusted JIT code and needs no such
+          # entitlement.
+          ENTITLEMENTS_PATH="$RUNNER_TEMP/chromium-entitlements.plist"
+          {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+            echo '<plist version="1.0">'
+            echo '<dict>'
+            echo '  <key>com.apple.security.cs.allow-jit</key>'
+            echo '  <true/>'
+            echo '  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>'
+            echo '  <true/>'
+            echo '  <key>com.apple.security.cs.disable-library-validation</key>'
+            echo '  <true/>'
+            echo '</dict>'
+            echo '</plist>'
+          } > "$ENTITLEMENTS_PATH"
 
           sign_bundle() {
             codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
+          }
+          sign_bundle_with_jit_entitlements() {
+            codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS_PATH" --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
           }
           # Checked by actual file type, not by name/permission pattern —
           # some framework binaries (e.g. "Chromium Framework" itself)
@@ -204,7 +226,7 @@ jobs:
           find "$BROWSERS_DIR" -type f -not -path "*.app/*" -not -path "*.framework/*" -print0 |
             while IFS= read -r -d '' f; do sign_if_macho "$f"; done
           find "$BROWSERS_DIR" \( -name "*.app" -o -name "*.framework" \) -depth -print0 |
-            while IFS= read -r -d '' bundle; do sign_bundle "$bundle"; done
+            while IFS= read -r -d '' bundle; do sign_bundle_with_jit_entitlements "$bundle"; done
 
           codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$APP_PATH"
 
