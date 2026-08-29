@@ -1235,6 +1235,30 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`ReelForge Connector session server listening on 127.0.0.1:${PORT}`);
-});
+// An update's restart kills the old Connector process and relaunches the
+// new one almost immediately -- far faster than the OLD process's own
+// orphaned session-server child can notice (it only polls for its parent's
+// death every 4000ms, see PARENT_PID above) and free this exact port. Real
+// testing of the update flow (see lib.rs's spawn_update_check) hit this
+// directly: the new process's one and only listen() attempt landed on the
+// still-held port, and with no error handler an unhandled 'error' event
+// crashed this whole process outright -- leaving the freshly-updated
+// Connector with no live session server at all, forever, since nothing
+// here ever retried. Retrying for up to twice the old child's own poll
+// interval is what actually recovers instead of crashing on this race.
+function bindSessionServer(deadline) {
+  function onError(err) {
+    if (err.code === "EADDRINUSE" && Date.now() < deadline) {
+      setTimeout(() => bindSessionServer(deadline), 500);
+      return;
+    }
+    throw err;
+  }
+  server.once("error", onError);
+  server.listen(PORT, "127.0.0.1", () => {
+    server.removeListener("error", onError);
+    console.log(`ReelForge Connector session server listening on 127.0.0.1:${PORT}`);
+  });
+}
+
+bindSessionServer(Date.now() + 8000);
