@@ -252,6 +252,25 @@ async fn post_update_status(updating: bool) {
 // restarting immediately -- the actual download_and_install + restart
 // sequence itself is completely unmodified, just gated on *when* it starts.
 fn spawn_update_check(handle: &AppHandle) {
+    // A local `cargo tauri dev`/`pnpm tauri dev` run always uses the
+    // committed dev-safe tauri.conf.json as-is -- its "version" stays the
+    // "0.1.0" placeholder, since CI only ever patches that to the real
+    // version for the one release-profile build it produces (`tauri build`,
+    // see connector-build.yml). That means a dev build's own update check
+    // always finds the real published release as "newer" and tries to
+    // self-update a `tauri dev` process, which just restarts back into the
+    // same unpatched "0.1.0" config and loops forever -- confirmed directly
+    // via updater.log (`update 0.1.0 -> 0.1.30 found, downloading` /
+    // `update installed, restarting`, repeating indefinitely). Never
+    // meaningful for a dev build, so this returns before doing anything.
+    // `cfg!(debug_assertions)` is true only for that local debug-profile
+    // run -- CI's release-profile build (both the dev-safe and
+    // production-patched identities were only ever built that way) has it
+    // false, so this never affects a real shipped Connector.
+    if cfg!(debug_assertions) {
+        return;
+    }
+
     if UPDATE_CHECK_IN_FLIGHT.swap(true, Ordering::SeqCst) {
         log_updater(handle, "update check already in flight, skipping duplicate trigger");
         return;
