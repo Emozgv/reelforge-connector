@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square } from "lucide-react";
+import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
-import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
+import type { LiveComment, LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { formatDuration } from "../../lib/researchFeedMapping";
 import { DownloadConnectorLink } from "./DownloadConnectorButton";
+import { CommentsPanel } from "./CommentsPanel";
 
 export type LikeStatus = "pending" | "liked" | "failed";
 export type FollowStatus = "pending" | "following" | "failed";
@@ -34,6 +35,8 @@ function SwipeSlide({
   onBlockCreator,
   blockStatus,
   canLike,
+  commentsOpen,
+  onCommentsClick,
 }: {
   video: ReelVideo;
   active: boolean;
@@ -47,6 +50,8 @@ function SwipeSlide({
   onBlockCreator: () => void;
   blockStatus?: BlockStatus;
   canLike: boolean;
+  commentsOpen: boolean;
+  onCommentsClick: () => void;
 }) {
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -273,6 +278,22 @@ function SwipeSlide({
           </span>
           <span className="text-[9.5px] text-white/80">Collection</span>
         </button>
+        <button
+          type="button"
+          onClick={onCommentsClick}
+          className="flex flex-col items-center gap-1 text-white group"
+          title={commentsOpen ? "Hide comments" : "View comments (read-only)"}
+        >
+          <span
+            className={[
+              "w-11 h-11 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors",
+              commentsOpen ? "bg-white/25" : "bg-black/45 group-hover:bg-black/65",
+            ].join(" ")}
+          >
+            <MessageCircle size={19} />
+          </span>
+          <span className="text-[9.5px] text-white/80">Comments</span>
+        </button>
       </div>
 
       <div className="absolute top-3 left-3 flex items-center gap-1.5">
@@ -407,6 +428,7 @@ export function SwipeResearchPlayer({
   onRetryWake,
   onRefreshSession,
   onEndResearch,
+  fetchComments,
   active,
 }: {
   account: ResearchAccount;
@@ -440,6 +462,7 @@ export function SwipeResearchPlayer({
   // start state — never touches Archive, Saves, Collections, or the
   // account's connection. Just the active viewing session.
   onEndResearch: () => void;
+  fetchComments: (reelId: string, sourceUrl: string) => Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string }>;
   // Whether Research Accounts is the section actually on screen — the page
   // itself stays mounted across navigation now (see App.tsx), so this is
   // what gates video playback and the arrow-key shortcuts instead.
@@ -449,6 +472,11 @@ export function SwipeResearchPlayer({
   const wheelAccum = useRef(0);
   const touchStartY = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Lives here, not inside SwipeSlide -- SwipeSlide remounts fresh on every
+  // reel (see its `key={currentReel.id}` below), so "is the panel open"
+  // would otherwise reset on every Next/Prev instead of staying open across
+  // them the way the product spec requires.
+  const [commentsOpen, setCommentsOpen] = useState(false);
   // One deliberate navigation action must move exactly one reel — a fast
   // trackpad flick fires many wheel events in quick succession (each with
   // its own large deltaY), and without a cooldown each one could cross the
@@ -556,6 +584,7 @@ export function SwipeResearchPlayer({
         )}
       </div>
 
+      <div className="flex items-start gap-3">
       <div
         ref={containerRef}
         onWheel={handleWheel}
@@ -586,6 +615,8 @@ export function SwipeResearchPlayer({
             onBlockCreator={() => onBlockCreator(currentReel)}
             blockStatus={blockStatus[currentReel.id]}
             canLike={currentReel.platform === "instagram" || currentReel.platform === "tiktok"}
+            commentsOpen={commentsOpen}
+            onCommentsClick={() => setCommentsOpen((v) => !v)}
           />
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center bg-[#0d0d0f] text-center px-6">
@@ -763,6 +794,9 @@ export function SwipeResearchPlayer({
             {loading || navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
           </button>
         )}
+      </div>
+
+      <CommentsPanel video={currentReel} isOpen={commentsOpen} fetchComments={fetchComments} />
       </div>
 
       <p className="mt-3 text-[11px] text-neutral-600">Scroll, swipe, or use ↑ / ↓ to move between reels.</p>

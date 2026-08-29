@@ -31,6 +31,14 @@ const BEGIN_SESSION_TIMEOUT_MS = 20_000;
 const NEXT_RETRY_TOTAL_MS = 90_000;
 const NEXT_RETRY_GAP_MS = 500;
 
+export interface LiveComment {
+  id: string;
+  username: string | null;
+  text: string;
+  postedAt: number | null;
+  likeCount: number | null;
+}
+
 interface RawLiveReel {
   id: string;
   sourceUrl: string;
@@ -804,6 +812,43 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, []);
 
+  // Read-only, on-demand only (see CommentsPanel — it only calls this once
+  // the VA has stayed on a reel for a few seconds with the panel open,
+  // never for every reel while scrolling). reelId is passed back through so
+  // the caller can discard a response that arrives after the VA has since
+  // moved to a different reel, the same defensive check next()/prev() use.
+  const fetchComments = useCallback(
+    async (
+      reelId: string,
+      sourceUrl: string
+    ): Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string }> => {
+      const session = sessionRef.current;
+      if (!session) return { available: false, comments: [], reelId, error: "No active research session." };
+      try {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/comments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, reelId, sourceUrl }),
+        });
+        const body = await res.json();
+        return {
+          available: !!body.available,
+          comments: Array.isArray(body.comments) ? body.comments : [],
+          reelId,
+          error: body.error,
+        };
+      } catch (err) {
+        return {
+          available: false,
+          comments: [],
+          reelId,
+          error: err instanceof Error ? err.message : "Couldn't load comments for this reel.",
+        };
+      }
+    },
+    []
+  );
+
   // A VA closing the tab (not just navigating within ReelForge) should end
   // the session too. Neither event is guaranteed to fire or to finish its
   // fetch before the page is actually torn down (pagehide fires more
@@ -880,6 +925,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     like,
     follow,
     block,
+    fetchComments,
     retryWithWake,
   };
 }

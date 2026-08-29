@@ -222,6 +222,107 @@ async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
+// Comments are read-only in ReelForge and only ever fetched on demand (see
+// Session.comments() below). Four real attempts at sniffing Instagram's own
+// network traffic for a comments-shaped response never found one — every
+// GraphQL call captured was ordinary feed/clips pagination, not comments,
+// and nothing in the traffic was ever named or shaped like comment data.
+// Rather than keep guessing at Instagram's private API, this parses the
+// page's OWN rendered text instead (see Session.comments(), which diffs
+// document.body.innerText before/after opening the panel — whatever's new
+// on screen IS the comment content by definition). Real Instagram comment
+// rendering puts each commenter's username alone on its own line
+// (usernames can only contain letters/digits/periods/underscores, so
+// that's a reliable-enough marker), followed by the comment text, followed
+// by metadata lines (timestamp, like count, "Reply") that aren't part of
+// the comment itself and get filtered out here.
+const USERNAME_LINE_RE = /^[a-zA-Z0-9_.]{1,30}$/;
+// A relative-timeago token ("1w", "2h", "3d") immediately follows every real
+// username line in Instagram's rendered comment list -- unlike the username
+// pattern alone (which e.g. the panel's own "Comments" header also matches),
+// this pair reliably confirms a line actually starts a new comment. Verified
+// against a real captured comment list (reel instagram:DcHVbYbRCWj) before
+// shipping this pattern.
+const TIMEAGO_LINE_RE = /^\d+\s*[hdwmy]$/i;
+// Comma-grouped counts ("12,565 likes") need their own pattern -- \d+ alone
+// doesn't span the comma, so a plain \d+-based check silently fails to
+// recognize these as metadata and lets them leak into comment text instead.
+const LIKE_COUNT_LINE_RE = /^([\d,]+)\s*(like|likes)$/i;
+const METADATA_LINE_RE = /^(\d+\s*[hdwmy]|[\d,]+\s*(like|likes)|verified|reply|view (all|replies).*|•)$/i;
+
+function isCommentStart(lines, index) {
+  return USERNAME_LINE_RE.test(lines[index] ?? "") && TIMEAGO_LINE_RE.test(lines[index + 1] ?? "");
+}
+
+function parseCommentLines(lines) {
+  const comments = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (!isCommentStart(lines, i)) {
+      i++;
+      continue;
+    }
+    const username = lines[i];
+    let j = i + 2; // skip the username and its timeago line
+    const textParts = [];
+    // The like count, when Instagram shows one, always renders as the first
+    // metadata line right after a comment's text (before "Reply"/"View
+    // replies") -- confirmed across every real captured sample. Only that
+    // first metadata line is ever checked, so a later unrelated number
+    // (e.g. from "View all N replies") can never be mistaken for it.
+    let likeCount = null;
+    let sawMetadata = false;
+    while (j < lines.length && !isCommentStart(lines, j) && textParts.length < 5) {
+      const line = lines[j];
+      if (METADATA_LINE_RE.test(line)) {
+        if (!sawMetadata) {
+          const match = line.match(LIKE_COUNT_LINE_RE);
+          if (match) likeCount = parseInt(match[1].replace(/,/g, ""), 10);
+          sawMetadata = true;
+        }
+      } else {
+        textParts.push(line);
+      }
+      j++;
+    }
+    const text = textParts.join(" ").trim();
+    if (text) comments.push({ id: `${username}-${i}`, username, text, postedAt: null, likeCount });
+    i = j > i ? j : i + 1;
+  }
+  return comments;
+}
+
+// Best-effort click to open each platform's own native comments panel —
+// same accessible-name/attribute pattern already used for Like above.
+// Never throws: a failed click just means no comments response gets
+// sniffed, which Session.comments() below already treats as "unavailable"
+// rather than an error.
+async function openInstagramComments(page) {
+  const commentIcon = page.locator('svg[aria-label="Comment" i]').first();
+  if (!(await commentIcon.isVisible().catch(() => false))) return { found: false, clicked: false };
+  let clicked = true;
+  await commentIcon
+    .locator("xpath=ancestor::*[@role='button' or self::button][1]")
+    .first()
+    .click()
+    .catch(async () => {
+      await commentIcon.click().catch(() => {
+        clicked = false;
+      });
+    });
+  return { found: true, clicked };
+}
+
+async function openTikTokComments(page) {
+  const commentIcon = page.locator('[data-e2e="comment-icon"], [data-e2e="browse-comment-icon"]').first();
+  const found = await commentIcon.isVisible().catch(() => false);
+  let clicked = false;
+  if (found) clicked = await commentIcon.click().then(() => true).catch(() => false);
+  return { found, clicked };
+}
+
+const COMMENTS_OPEN_HANDLER = { instagram: openInstagramComments, tiktok: openTikTokComments };
+
 // Instagram's web client labels the like control's accessible name "Like"
 // (unliked) / "Unlike" (already liked) — the one part of its otherwise-
 // obfuscated class names that's stayed stable and is meaningful to target on
@@ -825,6 +926,73 @@ class Session {
     return result;
   }
 
+  // Read-only, on-demand only (see the web app's CommentsPanel — it only
+  // calls this once the VA has stayed on a reel for a few seconds with the
+  // panel open, never for every reel while scrolling). A real, separate
+  // page in the same authenticated context, exactly like like()/follow()/
+  // block() above — the live Reels/For-You tab's own scroll position is
+  // never touched. `reelId`/`sourceUrl` come from the client's own
+  // already-known current reel rather than this.current(), so a slow
+  // fetch that resolves after the VA has already moved on can't silently
+  // attach comments to the wrong reel — the client checks the id itself.
+  async comments(reelId, sourceUrl) {
+    if (!sourceUrl) return { available: false, comments: [] };
+
+    // Real network sniffing (four live attempts) never found a
+    // "/comment"-named endpoint, and every GraphQL response seen turned out
+    // to be ordinary feed/clips pagination -- Instagram's private API
+    // shape for this isn't something worth continuing to guess at. This
+    // reads whatever the VA would actually SEE instead: opens the same
+    // real comments panel Like/Follow already click into on this exact
+    // page, and diffs the page's own rendered text before vs. after
+    // opening it. Whatever's new on screen IS the comments content by
+    // definition, with zero assumption about Instagram's internal API or
+    // DOM class names (which are obfuscated and rotate) -- the same
+    // "trust only what's provably true, not what a click probably did"
+    // rule Like/Follow already follow, just applied to reading instead of
+    // clicking.
+    const commentsPage = await this.context.newPage();
+    try {
+      await commentsPage.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await sleep(1500);
+
+      const beforeText = await commentsPage.evaluate(() => document.body.innerText).catch(() => "");
+      const openResult = await COMMENTS_OPEN_HANDLER[this.platform](commentsPage).catch(() => ({ found: false, clicked: false }));
+      if (!openResult.found || !openResult.clicked) {
+        return { available: false, comments: [] };
+      }
+
+      await sleep(3000);
+      const afterText = await commentsPage.evaluate(() => document.body.innerText).catch(() => "");
+
+      const beforeLines = new Set(beforeText.split("\n").map((l) => l.trim()).filter(Boolean));
+      const newLines = afterText
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l && !beforeLines.has(l));
+
+      const comments = parseCommentLines(newLines);
+
+      // Going beyond this first batch was investigated and dropped: scrolling
+      // the comment thread's own container -- even anchored to a DOM node
+      // holding a real, already-extracted comment -- reliably surfaced
+      // unrelated feed content (other reels' captions/like counts) instead of
+      // more of the same thread, across two independent real reels; and no
+      // stable native "load more comments" control (button/link, as opposed
+      // to scroll-triggered pagination) was found in the opened panel either.
+      // So this only ever returns the first batch that's already visible
+      // when the panel opens -- typically 8-10 top-level comments in real
+      // testing, occasionally fewer.
+      if (comments.length === 0) return { available: false, comments: [] };
+      return { available: true, comments: comments.slice(0, 50), reelId };
+    } catch (err) {
+      console.error(`[comments] reel ${reelId}: ${err?.message}`);
+      return { available: false, comments: [], error: err?.message ?? "Couldn't load comments for this reel." };
+    } finally {
+      await commentsPage.close().catch(() => {});
+    }
+  }
+
   async close() {
     if (this.closed) return;
     this.closed = true;
@@ -991,10 +1159,10 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|heartbeat|end)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
 
@@ -1021,6 +1189,11 @@ const server = http.createServer(async (req, res) => {
         // specific error string on failure, but nothing ever logged it, so
         // every failure looked identical from the outside ("Retry").
         if (!result.blocked) console.error(`[block] session ${id} failed: ${result.error ?? "(no error message)"}`);
+        return json(res, 200, result);
+      }
+      if (action === "comments") {
+        const result = await session.comments(reelId, sourceUrl);
+        if (!result.available) console.error(`[comments] session ${id} unavailable for reel ${reelId ?? "(unknown)"}: ${result.error ?? "no comments response captured"}`);
         return json(res, 200, result);
       }
       if (action === "heartbeat") {

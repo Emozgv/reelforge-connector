@@ -1,0 +1,165 @@
+import { useEffect, useRef, useState } from "react";
+import { MessageCircle, Loader2 } from "lucide-react";
+import type { ReelVideo } from "../../types";
+import type { LiveComment } from "../../state/useLiveResearchSession";
+
+// Read-only, on-demand only -- never prefetched, never polled. Two distinct
+// load moments, both deliberate:
+//  1. The panel is opened for the reel currently in view -> load right away.
+//  2. The panel stays open and the VA moves to a different reel (Next/Prev)
+//     -> wait DWELL_MS of them actually staying on that reel before loading
+//     its comments, so a quick skim through several reels with the panel
+//     open never fires a burst of comment fetches for reels nobody actually
+//     paused on. Skipping away before the dwell elapses cancels the pending
+//     load entirely -- nothing was ever requested for that reel.
+// Closing the panel (isOpen false) tears down any pending timer and fetches
+// nothing until it's reopened -- there is no comment-fetch activity at all
+// while it's closed.
+const DWELL_MS = 5000;
+
+type ReelResult =
+  | { status: "loaded"; comments: LiveComment[] }
+  | { status: "empty" }
+  | { status: "unavailable"; error?: string };
+
+export function CommentsPanel({
+  video,
+  isOpen,
+  fetchComments,
+}: {
+  video: ReelVideo | null;
+  isOpen: boolean;
+  fetchComments: (reelId: string, sourceUrl: string) => Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string }>;
+}) {
+  const [displayReelId, setDisplayReelId] = useState<string | null>(null);
+  const [dwelling, setDwelling] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const wasOpenRef = useRef(false);
+  const dwellTimerRef = useRef<number | null>(null);
+  const requestIdRef = useRef(0);
+  // Every reel this panel-open session has actually finished fetching for,
+  // so bouncing back to a reel already loaded (e.g. a dwell for a different
+  // reel gets cancelled by returning here) shows its real result again
+  // instead of a stale "loading" left over from that cancelled dwell.
+  const resultsRef = useRef<Map<string, ReelResult>>(new Map());
+
+  useEffect(() => {
+    function clearDwellTimer() {
+      if (dwellTimerRef.current !== null) {
+        window.clearTimeout(dwellTimerRef.current);
+        dwellTimerRef.current = null;
+      }
+    }
+
+    async function runFetch(targetVideo: ReelVideo) {
+      const myRequestId = ++requestIdRef.current;
+      setLoading(true);
+      setDwelling(false);
+      setDisplayReelId(targetVideo.id);
+      const result = await fetchComments(targetVideo.id, targetVideo.sourceUrl);
+      // A newer open/close/reel-change already superseded this request --
+      // never let a late response overwrite what's currently shown.
+      if (myRequestId !== requestIdRef.current) return;
+      const stored: ReelResult = !result.available
+        ? { status: "unavailable", error: result.error }
+        : result.comments.length === 0
+          ? { status: "empty" }
+          : { status: "loaded", comments: result.comments };
+      resultsRef.current.set(targetVideo.id, stored);
+      setLoading(false);
+    }
+
+    clearDwellTimer();
+
+    if (!isOpen || !video) {
+      wasOpenRef.current = isOpen;
+      // Invalidate any fetch already in flight so its response, if it
+      // lands after this, is discarded rather than shown once reopened.
+      requestIdRef.current++;
+      setLoading(false);
+      setDwelling(false);
+      return;
+    }
+
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+
+    if (justOpened) {
+      resultsRef.current = new Map();
+      void runFetch(video);
+      return;
+    }
+
+    if (resultsRef.current.has(video.id)) {
+      // Already have a real result for this reel (it was fully loaded
+      // before, or the VA is back after an in-flight fetch already
+      // finished) -- show it again, no new request.
+      requestIdRef.current++;
+      setLoading(false);
+      setDwelling(false);
+      setDisplayReelId(video.id);
+      return;
+    }
+
+    // Panel was already open and the reel changed under it (Next/Prev) --
+    // only load after a genuine dwell, never on every swipe. Deliberately
+    // leaves displayReelId/loading alone here -- whatever was on screen for
+    // the previous reel just stays there until this dwell actually
+    // completes, rather than flashing to empty the instant the VA moves on.
+    setDwelling(true);
+    dwellTimerRef.current = window.setTimeout(() => {
+      dwellTimerRef.current = null;
+      void runFetch(video);
+    }, DWELL_MS);
+
+    return () => clearDwellTimer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, video?.id]);
+
+  if (!isOpen) return null;
+
+  const result = displayReelId ? resultsRef.current.get(displayReelId) : undefined;
+
+  return (
+    <div className="w-[300px] h-[min(76vh,660px)] rounded-2xl border border-white/[0.08] bg-[#141416] flex flex-col overflow-hidden">
+      <div className="px-4 py-3 border-b border-white/[0.08] flex items-center gap-2 text-white/90">
+        <MessageCircle size={14} />
+        <span className="text-[13px] font-medium">Comments</span>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {dwelling ? (
+          <div className="h-full flex items-center justify-center text-center">
+            <p className="text-[11.5px] text-neutral-600">·</p>
+          </div>
+        ) : loading || !result ? (
+          <div className="h-full flex flex-col items-center justify-center text-center gap-2">
+            <Loader2 size={16} className="animate-spin text-white/40" />
+            <p className="text-[11.5px] text-neutral-500">Loading comments…</p>
+          </div>
+        ) : result.status === "unavailable" ? (
+          <div className="h-full flex flex-col items-center justify-center text-center gap-1.5 px-2">
+            <p className="text-[12.5px] text-neutral-400">Comments aren't available for this reel right now.</p>
+            {result.error && <p className="text-[11px] text-neutral-600">{result.error}</p>}
+          </div>
+        ) : result.status === "empty" ? (
+          <div className="h-full flex items-center justify-center text-center">
+            <p className="text-[12.5px] text-neutral-500">No comments yet on this reel.</p>
+          </div>
+        ) : (
+          <ul className="space-y-3">
+            {result.comments.map((c) => (
+              <li key={c.id} className="text-[12.5px] leading-snug">
+                <span className="text-neutral-200 font-medium">{c.username ?? "unknown"}</span>{" "}
+                <span className="text-neutral-400">{c.text}</span>
+                {typeof c.likeCount === "number" && (
+                  <div className="text-[11px] text-neutral-600 mt-0.5">{c.likeCount.toLocaleString()} likes</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

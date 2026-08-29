@@ -698,6 +698,7 @@ export function ResearchAccountsPage({
                   onExitToArchive={() => setMode("archive")}
                   onLikeClick={handleLikeClick}
                   likeStatus={likeStatus}
+                  fetchComments={liveSession.fetchComments}
                   onFollowClick={handleFollowClick}
                   followStatus={followStatus}
                   onBlockCreator={handleBlockCreator}
