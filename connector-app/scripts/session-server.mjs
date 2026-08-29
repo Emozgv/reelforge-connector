@@ -1165,6 +1165,7 @@ const server = http.createServer(async (req, res) => {
       // (both only ever bind 127.0.0.1). Never touches sessions/locks.
       const { updating } = await readBody(req);
       connectorUpdating = !!updating;
+      console.log(`[update] connectorUpdating=${connectorUpdating}`);
       json(res, 200, { ok: true });
       return;
     }
