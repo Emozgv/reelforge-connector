@@ -98,6 +98,67 @@ jobs:
             fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
           "
 
+      - name: Prepare bundled runtime (darwin)
+        if: matrix.target == 'darwin'
+        run: npm run prepare:runtime
+
+      # Tauri's own codesign pass only covers the app bundle and its main
+      # executable — it does not reach into arbitrary files under
+      # Contents/Resources, which is where the bundled Playwright Chromium
+      # browser (needed for real Instagram logins) ends up. Apple's
+      # notarization service inspects every Mach-O binary in the archive
+      # regardless of where it lives, so without this step notarization was
+      # rejected outright: every nested Chromium helper .app, framework and
+      # .dylib still carried its original Google/Playwright signature
+      # instead of ours, with no hardened runtime or secure timestamp.
+      # Signing them here, before `tauri build` copies them into the .app,
+      # means the file each carries a valid Developer ID signature by the
+      # time notarization runs — signed innermost-first (`find -depth`) so
+      # a nested Helper .app is fully signed before its containing
+      # Chromium.app is re-signed over it.
+      - name: Sign bundled Chromium runtime for notarization (darwin)
+        if: matrix.target == 'darwin'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        shell: bash
+        run: |
+          set -e
+          KEYCHAIN_PATH="$RUNNER_TEMP/chromium-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERT_PATH="$RUNNER_TEMP/apple-cert.p12"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          rm -f "$CERT_PATH"
+
+          BROWSERS_DIR="node_modules/playwright-core/.local-browsers"
+          # Checked by actual file type, not by name/permission pattern —
+          # some framework binaries (e.g. "Chromium Framework" itself)
+          # carry neither a .dylib extension nor an executable permission
+          # bit, so those heuristics alone would silently skip them.
+          sign_if_macho() {
+            file "$1" | grep -q "Mach-O" && \
+              codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
+          }
+          # Loose files outside any nested .app bundle first.
+          find "$BROWSERS_DIR" -type f -not -path "*.app/*" -print0 |
+            while IFS= read -r -d '' f; do sign_if_macho "$f"; done
+          # Nested .app bundles, innermost first: sign each one's own
+          # contents, then the bundle itself.
+          find "$BROWSERS_DIR" -name "*.app" -depth -print0 |
+            while IFS= read -r -d '' app; do
+              find "$app/Contents" -type f -print0 |
+                while IFS= read -r -d '' f; do sign_if_macho "$f"; done
+              codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$app"
+            done
+
       # APPLE_CERTIFICATE/APPLE_CERTIFICATE_PASSWORD/APPLE_SIGNING_IDENTITY
       # are picked up directly by Tauri's bundler on macOS: it imports the
       # certificate into a temporary keychain itself, no separate `security
@@ -120,7 +181,6 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.target }}" = "darwin" ]; then
-            npm run prepare:runtime
             npx tauri build --target universal-apple-darwin
           else
             npm run build
