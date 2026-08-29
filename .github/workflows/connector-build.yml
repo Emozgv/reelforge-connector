@@ -104,18 +104,22 @@ jobs:
 
       # APPLE_CERTIFICATE/APPLE_CERTIFICATE_PASSWORD/APPLE_SIGNING_IDENTITY
       # are picked up directly by Tauri's bundler on macOS: it imports the
-      # certificate into a temporary keychain itself and signs the .app —
-      # no separate `security import` step needed for this part. Deliberately
-      # NOT passing APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID here: Tauri would
-      # otherwise also submit for notarization as part of this same build,
-      # but its codesign pass re-signs every nested Mach-O file (including
-      # the bundled Playwright Chromium runtime) as a flat, non-bundle-aware
-      # signature — which is fine for plain executables/dylibs, but Apple's
-      # notarization service rejects Chromium's own nested .framework when
-      # signed that way (a known Tauri bundler limitation:
-      # https://github.com/tauri-apps/tauri/issues/7690). The next step
-      # fixes just that one framework and handles notarization itself, after
-      # Tauri's signing pass has already run. No-op on the Windows leg.
+      # certificate into a temporary keychain itself and signs the .app.
+      # APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID are also needed here even
+      # though this build's own notarization attempt is discarded (see
+      # --skip-stapling below): Tauri's comprehensive per-file codesign pass
+      # — which walks and signs every nested Mach-O in the bundled
+      # Playwright Chromium runtime, not just the outer .app — only runs
+      # when notarization credentials are present at all; without them
+      # Tauri signs just the outer .app and main executable, leaving every
+      # nested file completely unsigned. --skip-stapling makes Tauri submit
+      # for notarization but NOT wait for or fail on the result, since its
+      # codesign pass still leaves the bundled Chromium's own .framework
+      # invalidly signed (a known Tauri bundler limitation:
+      # https://github.com/tauri-apps/tauri/issues/7690) — the next step
+      # fixes just that framework and performs the real notarization+staple
+      # itself, after this comprehensive signing pass has already run.
+      # No-op on the Windows leg.
       - name: Build ReelForge Connector (${{ matrix.target }})
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -123,10 +127,13 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
           if [ "${{ matrix.target }}" = "darwin" ]; then
-            npx tauri build --target universal-apple-darwin
+            npx tauri build --target universal-apple-darwin --skip-stapling
           else
             npm run build
           fi
