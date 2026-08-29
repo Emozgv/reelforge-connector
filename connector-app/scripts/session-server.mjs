@@ -84,6 +84,12 @@ const AUTOMATION_CONTEXT_OPTIONS = {
   extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
 };
 
+// macOS doesn't bundle a downloaded Chromium (see prepare-bundled-runtime.mjs
+// and connect-worker.mjs's IS_MAC — same reasoning) — every live Research
+// session instead drives the VA's own already-installed Google Chrome.
+// Windows keeps the bundled Chromium exactly as before.
+const IS_MAC = process.platform === "darwin";
+
 function looksLikeInstagramMedia(node) {
   return (
     node &&
@@ -847,7 +853,15 @@ async function startSession(accountId, token, lockSecret) {
   console.log(`[session] account ${accountId}: seeding with ${seenReelIds?.length ?? 0} already-archived id(s)`);
 
   const t1 = Date.now();
-  const browser = await chromium.launch({ headless: true });
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, ...(IS_MAC ? { channel: "chrome" } : {}) });
+  } catch (err) {
+    if (IS_MAC) {
+      throw new Error("Research needs Google Chrome installed on this Mac. Install Chrome, then try again.");
+    }
+    throw err;
+  }
   const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
   console.log(`[timing] chromium launch + context: ${Date.now() - t1}ms`);
 

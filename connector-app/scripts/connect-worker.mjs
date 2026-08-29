@@ -46,6 +46,16 @@ const AUTOMATION_CONTEXT_OPTIONS = {
   extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
 };
 
+// macOS doesn't bundle a downloaded Chromium at all (see
+// prepare-bundled-runtime.mjs) — the notarization pipeline can't ship one
+// (Chromium's own nested Framework consistently fails Apple's remote
+// signature check, independent of how it's signed). Every launch on macOS
+// instead drives the VA's own already-installed Google Chrome via
+// `channel: "chrome"` — the exact same mechanism already used for TikTok
+// login on every platform below, just applied more broadly here. Windows
+// keeps the bundled Chromium exactly as before.
+const IS_MAC = process.platform === "darwin";
+
 function emit(event, extra = {}) {
   console.log(JSON.stringify({ event, ...extra }));
 }
@@ -247,15 +257,18 @@ async function connectMain(platform, account, token) {
   if (platform === "tiktok") {
     launchOptions.channel = "chrome";
     launchOptions.args = ["--renderer-process-limit=1"];
+  } else if (IS_MAC) {
+    launchOptions.channel = "chrome";
   }
 
   let browser;
   try {
     browser = await chromium.launch(launchOptions);
   } catch (err) {
-    if (platform === "tiktok") {
+    if (launchOptions.channel === "chrome") {
       await notifyCancelled(account, token);
-      emit("error", { message: "TikTok login needs Google Chrome installed on this computer. Install Chrome, then press Reconnect." });
+      const platformLabel = platform === "tiktok" ? "TikTok" : "Instagram";
+      emit("error", { message: `${platformLabel} login needs Google Chrome installed on this computer. Install Chrome, then press Reconnect.` });
       process.exit(1);
     }
     throw err;
@@ -390,7 +403,16 @@ async function resyncMain(accountId, token) {
 
   emit("loading_feed");
 
-  const browser = await chromium.launch({ headless: true });
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, ...(IS_MAC ? { channel: "chrome" } : {}) });
+  } catch (err) {
+    if (IS_MAC) {
+      emit("error", { message: "Feed sync needs Google Chrome installed on this Mac. Install Chrome, then try again." });
+      process.exit(1);
+    }
+    throw err;
+  }
   const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
   const page = await context.newPage();
   const feedItems = await captureInstagramFeed(context, page);
@@ -449,7 +471,16 @@ async function likeMain(accountId, token, targetUrl) {
   const { storageState } = sessionBody;
   emit("liking");
 
-  const browser = await chromium.launch({ headless: true });
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, ...(IS_MAC ? { channel: "chrome" } : {}) });
+  } catch (err) {
+    if (IS_MAC) {
+      emit("error", { message: "Like needs Google Chrome installed on this Mac. Install Chrome, then try again." });
+      process.exit(1);
+    }
+    throw err;
+  }
   const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
   const page = await context.newPage();
 

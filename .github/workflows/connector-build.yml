@@ -104,15 +104,17 @@ jobs:
 
       # APPLE_CERTIFICATE/APPLE_CERTIFICATE_PASSWORD/APPLE_SIGNING_IDENTITY
       # are picked up directly by Tauri's bundler on macOS: it imports the
-      # certificate into a temporary keychain itself and signs the outer
-      # .app and its main executable. Deliberately not passing
-      # APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID here — Tauri's own bundler
-      # never reaches into arbitrary bundled resources like the Playwright
-      # Chromium runtime under Contents/Resources regardless of whether
-      # notarization credentials are present, so there is nothing for those
-      # credentials to do at this point; the next step does the real,
-      # comprehensive signing pass plus notarization itself. No-op on the
-      # Windows leg.
+      # certificate into a temporary keychain itself and signs the .app.
+      # APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID let it notarize and staple the
+      # signed .app with Apple automatically as part of this same build.
+      # This now works with Tauri's plain, built-in signing — macOS no
+      # longer bundles a downloaded Chromium at all (Research drives the
+      # VA's own installed Google Chrome instead, see
+      # connect-worker.mjs/session-server.mjs's IS_MAC and
+      # prepare-bundled-runtime.mjs), so there's no longer a nested
+      # Chromium Framework for Apple's notarization service to reject —
+      # that was the entire cause of every custom signing step this
+      # workflow used to need. No-op on the Windows leg.
       - name: Build ReelForge Connector (${{ matrix.target }})
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -120,6 +122,9 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
           if [ "${{ matrix.target }}" = "darwin" ]; then
@@ -127,147 +132,6 @@ jobs:
           else
             npm run build
           fi
-
-      # Tauri's own signing above only covers the outer .app and its main
-      # executable — it never reaches the bundled Playwright Chromium
-      # runtime under Contents/Resources, which still carries its original
-      # Google/Playwright signatures at this point. This step does the real
-      # signing pass: every loose Mach-O file first, then every nested
-      # .app/.framework bundle signed as a whole bundle directory
-      # (innermost first, via a single `-depth` traversal, so codesign
-      # resolves the Chromium Framework's Versions/Current symlink and a
-      # nested Helper .app is fully signed before its containing
-      # Chromium.app), and only then the outer .app re-signed once more so
-      # its CodeResources manifest picks up every corrected hash — doing
-      # this re-sign of the outer .app AFTER fixing everything nested is
-      # what actually survives; doing it the other way round (nested fixes
-      # applied before Tauri's own build/sign step) got silently
-      # overwritten by Tauri's own final pass on the outer .app every time.
-      # Only after all of that is this submitted to Apple for notarization
-      # and stapled — the DMG and updater .tar.gz Tauri built above are
-      # stale at this point (built from the unsigned-nested, unstapled
-      # app), so both are rebuilt from this final stapled .app afterward.
-      - name: Sign Chromium runtime, notarize and staple (darwin)
-        if: matrix.target == 'darwin'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        shell: bash
-        run: |
-          set -e
-          BUNDLE_DIR="src-tauri/target/universal-apple-darwin/release/bundle"
-          APP_PATH="$BUNDLE_DIR/macos/ReelForge Connector.app"
-
-          KEYCHAIN_PATH="$RUNNER_TEMP/apple-signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(uuidgen)"
-          CERT_PATH="$RUNNER_TEMP/apple-cert.p12"
-          echo "$APPLE_CERTIFICATE" | base64 -D > "$CERT_PATH"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
-          rm -f "$CERT_PATH"
-
-          BROWSERS_DIR="$APP_PATH/Contents/Resources/node_modules/playwright-core/.local-browsers"
-
-          # Chromium.app and its Framework are the only two files that
-          # consistently fail Apple's remote notarization check as "invalid"
-          # while local `codesign --verify` passes — every other bundled
-          # file (helpers, dylibs) signs cleanly. Chromium's own main
-          # executable and its V8 JavaScript engine (in the Framework) both
-          # need JIT-compiled executable memory at runtime; under Hardened
-          # Runtime that's disallowed unless the signature explicitly grants
-          # it via entitlements. Signed with plain `--options runtime` and
-          # no entitlements (as every previous attempt did), Apple's remote
-          # check appears to specifically flag that mismatch for these two
-          # JIT-using binaries, even though the signature is otherwise
-          # well-formed. Applied only to the Chromium.app/.framework family
-          # signed as bundles below — not to the outer ReelForge Connector
-          # app, which doesn't run untrusted JIT code and needs no such
-          # entitlement.
-          ENTITLEMENTS_PATH="$RUNNER_TEMP/chromium-entitlements.plist"
-          {
-            echo '<?xml version="1.0" encoding="UTF-8"?>'
-            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
-            echo '<plist version="1.0">'
-            echo '<dict>'
-            echo '  <key>com.apple.security.cs.allow-jit</key>'
-            echo '  <true/>'
-            echo '  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>'
-            echo '  <true/>'
-            echo '  <key>com.apple.security.cs.disable-library-validation</key>'
-            echo '  <true/>'
-            echo '</dict>'
-            echo '</plist>'
-          } > "$ENTITLEMENTS_PATH"
-
-          sign_bundle() {
-            codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
-          }
-          sign_bundle_with_jit_entitlements() {
-            codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS_PATH" --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$1"
-          }
-          # Checked by actual file type, not by name/permission pattern —
-          # some framework binaries (e.g. "Chromium Framework" itself)
-          # carry neither a .dylib extension nor an executable permission
-          # bit, so those heuristics alone would silently skip them.
-          sign_if_macho() {
-            file "$1" | grep -q "Mach-O" && sign_bundle "$1"
-            true
-          }
-          find "$BROWSERS_DIR" -type f -not -path "*.app/*" -not -path "*.framework/*" -print0 |
-            while IFS= read -r -d '' f; do sign_if_macho "$f"; done
-          find "$BROWSERS_DIR" \( -name "*.app" -o -name "*.framework" \) -depth -print0 |
-            while IFS= read -r -d '' bundle; do sign_bundle_with_jit_entitlements "$bundle"; done
-
-          codesign --force --options runtime --timestamp --keychain "$KEYCHAIN_PATH" --sign "$APPLE_SIGNING_IDENTITY" "$APP_PATH"
-
-          # Fail fast on a native, immediately-readable signature error
-          # rather than waiting on an Apple notarization round-trip for
-          # something codesign itself can already tell is broken.
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-
-          ZIP_PATH="$RUNNER_TEMP/ReelForge-Connector-notarize.zip"
-          ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
-
-          RESULT_JSON="$RUNNER_TEMP/notarize-result.json"
-          xcrun notarytool submit "$ZIP_PATH" \
-            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" \
-            --wait --output-format json | tee "$RESULT_JSON"
-          STATUS=$(python3 -c "import json; print(json.load(open('$RESULT_JSON'))['status'])")
-          if [ "$STATUS" != "Accepted" ]; then
-            SUB_ID=$(python3 -c "import json; print(json.load(open('$RESULT_JSON'))['id'])")
-            echo "Notarization did not succeed (status: $STATUS) — full log:"
-            xcrun notarytool log "$SUB_ID" \
-              --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID"
-            exit 1
-          fi
-
-          xcrun stapler staple "$APP_PATH"
-          spctl --assess --type execute --verbose "$APP_PATH"
-
-          # Tauri's own DMG and updater .tar.gz (built during "Build
-          # ReelForge Connector" above) reflect the app BEFORE this fix and
-          # BEFORE stapling — rebuilt here from the final, notarized app so
-          # nothing pre-fix ever reaches a customer.
-          rm -f "$BUNDLE_DIR/dmg/"*.dmg
-          DMG_STAGING="$RUNNER_TEMP/dmg-staging"
-          rm -rf "$DMG_STAGING" && mkdir -p "$DMG_STAGING"
-          cp -R "$APP_PATH" "$DMG_STAGING/"
-          ln -s /Applications "$DMG_STAGING/Applications"
-          hdiutil create -volname "ReelForge Connector" -srcfolder "$DMG_STAGING" -ov -format UDZO "$BUNDLE_DIR/dmg/ReelForge Connector.dmg"
-
-          rm -f "$BUNDLE_DIR/macos/ReelForge Connector.app.tar.gz" "$BUNDLE_DIR/macos/ReelForge Connector.app.tar.gz.sig"
-          tar -czf "$BUNDLE_DIR/macos/ReelForge Connector.app.tar.gz" -C "$BUNDLE_DIR/macos" "ReelForge Connector.app"
-          npx tauri signer sign "$BUNDLE_DIR/macos/ReelForge Connector.app.tar.gz"
 
       # The real Tauri-produced filenames carry the version number (e.g.
       # "ReelForge Connector_0.1.42_x64-setup.exe") — renaming to a fixed
