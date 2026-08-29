@@ -98,10 +98,25 @@ jobs:
             fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
           "
 
+      # APPLE_CERTIFICATE/APPLE_CERTIFICATE_PASSWORD/APPLE_SIGNING_IDENTITY
+      # are picked up directly by Tauri's bundler on macOS: it imports the
+      # certificate into a temporary keychain itself, no separate `security
+      # import` step needed. APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID then let
+      # it notarize the signed .app with Apple automatically as part of the
+      # same `tauri build` — without this, macOS Gatekeeper always shows
+      # "Apple could not verify this app is free of malware" on first open,
+      # for every user, not just local/dev builds. These are no-ops on the
+      # Windows leg (unused there).
       - name: Build ReelForge Connector (${{ matrix.target }})
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
           if [ "${{ matrix.target }}" = "darwin" ]; then
