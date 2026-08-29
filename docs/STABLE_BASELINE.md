@@ -1,10 +1,10 @@
 # ReelForge Stable Product Baseline
 
-**Established:** 2026-08-29 (superseded/extended same day — see revision note below)
-**Client OS (this repo) HEAD:** `c5be603` — "Research Accounts: small polish pass (info popover, Archive engagement metrics)"
-**Connector release:** `0.1.30` (unchanged from `e01d001` — this update touched only web app files, no `connector-app/**` changes, so no new Connector release was produced or needed)
+**Established:** 2026-08-29 (extended twice same day — see revision note below)
+**Client OS (this repo) HEAD:** `cc4a74e` — "Connector: skip update check entirely in local dev builds"
+**Connector release:** `0.1.31` (same commit — touches `connector-app/**`, so CI built and published a new release; both build legs and the release publish step confirmed successful)
 
-This is the **first complete ReelForge stable baseline** — the original snapshot below (commit `e01d001`) plus one small, fully-verified Research Accounts polish pass on top. It is a point-in-time documentation snapshot, not a code change. It exists so future V2/V3 work has a known-good reference to compare against — if a regression is reported, check it against the flows below before assuming a new bug. No cleanup, refactor, or architecture change was made to produce this document.
+This is the **first complete ReelForge stable baseline** — the original snapshot (commit `e01d001`), a Research Accounts polish pass (`c5be603`: info popover, Archive Likes+Comments, Archive card spacing), and a dev-only Connector fix (`cc4a74e`: local `tauri dev` runs no longer loop on a spurious self-update, since their unpatched dev config always looks "outdated" against the real published release — production's release-profile build is provably unaffected, gated by `cfg!(debug_assertions)`). It is a point-in-time documentation snapshot, not a code change. It exists so future V2/V3 work has a known-good reference to compare against — if a regression is reported, check it against the flows below before assuming a new bug. No cleanup, refactor, or architecture change was made to produce this document.
 
 ## How to read this document
 
@@ -43,13 +43,14 @@ Entries also link back to persistent memory (`project_frozen_features.md`) where
 
 ## 3. Connector
 
-**Current release:** `0.1.30` (`e01d001`).
+**Current release:** `0.1.31` (`cc4a74e`).
 
 **Shipped / verified:**
 - macOS drives the VA's own installed Google Chrome (`channel: "chrome"`), not a bundled Chromium — eliminated the prior notarization blocker entirely. Signed, notarized, and stapled (confirmed via `codesign`/`spctl`/`stapler validate` on release `0.1.25`).
 - Universal (arm64 + x86_64) bundled Node runtime (fixed a "Bad CPU type" regression).
 - Dev/prod identity separation: `net.reelforge.connector` vs `net.reelforge.connector.dev` bundle IDs and URL schemes.
-- Auto-updater: rolling `connector-latest` GitHub release, version `0.1.<CI run number>`, built by `.github/workflows/connector-build.yml` on every push touching `connector-app/**`. Update-in-progress state is now signalled end-to-end (see Research Accounts above) and survives the restart race that previously crashed the freshly-updated session server.
+- Auto-updater: rolling `connector-latest` GitHub release, version `0.1.<CI run number>`, built by `.github/workflows/connector-build.yml` on every push touching `connector-app/**`. Update-in-progress state is signalled end-to-end (see Research Accounts above) and survives the restart race that previously crashed the freshly-updated session server.
+- Local `cargo`/`pnpm tauri dev` runs no longer spuriously self-update-loop: a dev run always uses the unpatched dev-safe `tauri.conf.json` (version stays the `0.1.0` placeholder, since CI only patches that for its one release-profile build), which previously made every dev-mode update check find the real published release as "newer" and try to self-update a `tauri dev` process forever. Guarded with `cfg!(debug_assertions)` — true only for that local debug-profile run, false for CI's only build path (`tauri build`), so production is provably unaffected (`cc4a74e`). Verified live: dev Connector no longer loops, Start Research proceeds immediately.
 - Windows still bundles its own Chromium (unaffected by the macOS system-Chrome change — no notarization equivalent needed there).
 
 **Known, not yet resolved (tracked in memory, not part of this baseline's verified set):**
@@ -92,4 +93,4 @@ No specific bug audit was performed on this area to produce this baseline — cu
 
 - Before treating a report as a new bug, check whether it touches a flow marked **Verified** above — if so, the root cause is very unlikely to be a reintroduction of an already-fixed issue; look for a new trigger instead.
 - Research Accounts, Connector updater/session/lock, and the startup/lock lifecycle are explicitly **frozen** (see `project_frozen_features` memory) — any change touching that code should be flagged before modification, not made silently.
-- This document reflects commit `c5be603` / Connector `0.1.30` as of 2026-08-29. It is not evergreen — update it explicitly the next time the user establishes a new baseline, rather than assuming it still applies after significant future changes.
+- This document reflects commit `cc4a74e` / Connector `0.1.31` as of 2026-08-29. It is not evergreen — update it explicitly the next time the user establishes a new baseline, rather than assuming it still applies after significant future changes.
