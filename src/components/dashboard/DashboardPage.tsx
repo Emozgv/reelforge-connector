@@ -301,7 +301,7 @@ export function DashboardPage({
             up as the eyebrow text, the CTA, and a handful of tiny star
             accents, never as a background tint. */}
         <div
-          className="relative flex flex-col gap-[6px] overflow-hidden px-[48px] pt-[48px] pb-[54px]"
+          className="relative flex flex-col gap-[6px] overflow-hidden px-[48px] pt-[48px] pb-[46px]"
           style={{
             background:
               "radial-gradient(560px 260px at 88% 4%, rgba(211,148,72,0.05), transparent 70%), #000000",
@@ -381,9 +381,9 @@ export function DashboardPage({
             <div className="flex w-[212px] shrink-0 flex-col gap-[8px] px-[22px] py-[17px]">
               <div className="flex items-center gap-[7px]">
                 <Activity size={13} className="text-[#eccca2]" />
-                <p className="text-[9px] tracking-[1.4px] text-[#eccca2]">OPERATIONAL PULSE</p>
+                <p className="text-[9.5px] tracking-[1.4px] text-[#eccca2]">OPERATIONAL PULSE</p>
               </div>
-              <p className="text-[9px] leading-snug text-[#79746b]">Live overview of your workspace</p>
+              <p className="text-[9.5px] leading-snug text-[#79746b]">Live overview of your workspace</p>
             </div>
             <PulseTile icon={<Users size={18} />} label="Active Creators" value={creators.length} onClick={onOpenCreators} />
             <PulseTile icon={<FolderOpen size={18} />} label="Saved Concepts" value={savedTotal} onClick={onOpenCollections} />
@@ -398,7 +398,7 @@ export function DashboardPage({
               <PanelHeading title="NEEDS YOUR ATTENTION" subtitle="Items that need your action" badge={needsAttention.length} onViewAll={onOpenProduction} />
               <div className="flex flex-col gap-[8px] px-[18px] pt-[14px]">
                 {needsAttention.length === 0 ? (
-                  <p className="py-[10px] text-[10px] text-[#878278]">Everything is moving smoothly. Nothing needs your input right now.</p>
+                  <p className="py-[10px] text-[10.5px] text-[#878278]">Everything is moving smoothly. Nothing needs your input right now.</p>
                 ) : (
                   needsAttention.slice(0, 3).map((s) => {
                     const creator = creatorById.get(s.collection.creatorId);
@@ -416,19 +416,19 @@ export function DashboardPage({
                           {creator?.profileImage && <img src={creator.profileImage} alt="" className="h-full w-full object-cover" />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[11px] font-medium text-[#eae4d9]">{s.collection.name}</p>
+                          <p className="truncate text-[11.5px] font-medium text-[#eae4d9]">{s.collection.name}</p>
                           <div className="mt-[5px] flex items-center gap-[7px]">
-                            <p className="truncate text-[9px] text-[#878278]">Submission #{s.index}</p>
+                            <p className="truncate text-[9.5px] text-[#878278]">Submission #{s.index}</p>
                             <span
-                              className="shrink-0 rounded-[4px] border border-[#5a2c26] px-[6px] py-[2px] text-[7.5px] tracking-[0.5px] text-[#e88a70]"
+                              className="shrink-0 rounded-[4px] border border-[#5a2c26] px-[6px] py-[2px] text-[8px] tracking-[0.5px] text-[#e88a70]"
                               style={{ background: "linear-gradient(180deg, #3a211d, #2b1a1a)", boxShadow: "0 0 6px rgba(224,102,79,0.15)" }}
                             >
                               CHECK INBOX
                             </span>
                           </div>
                         </div>
-                        <p className="shrink-0 text-[9px] text-[#79746b]">{formatRelativeTime(s.collection.updatedAt)}</p>
-                        <span className="shrink-0 rounded-[7px] border border-[#242429] bg-[#111114] px-[12px] py-[7px] text-[10px] text-[#ded7cb]">
+                        <p className="shrink-0 text-[9.5px] text-[#79746b]">{formatRelativeTime(s.collection.updatedAt)}</p>
+                        <span className="shrink-0 rounded-[7px] border border-[#242429] bg-[#111114] px-[12px] py-[7px] text-[10.5px] text-[#ded7cb]">
                           Review
                         </span>
                       </button>
@@ -436,7 +436,7 @@ export function DashboardPage({
                   })
                 )}
               </div>
-              <p className="px-[18px] pb-[15px] pt-[10px] text-[10px] text-[#878278]">Everything is prioritized. Keep it moving. 🚀</p>
+              <p className="px-[18px] pb-[15px] pt-[10px] text-[10.5px] text-[#878278]">Everything is prioritized. Keep it moving. 🚀</p>
             </div>
 
             <div className={["flex flex-1 min-w-0 flex-col justify-between", PANEL].join(" ")} style={PANEL_STYLE}>
@@ -448,15 +448,15 @@ export function DashboardPage({
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #d9a86322" }}>
                         <FolderOpen size={13} className="text-[#d9a863]" />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Saved Concepts</span>
-                      <span className="text-[10px] text-[#aaa49a]">{savedTotal}</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Saved Concepts</span>
+                      <span className="text-[10.5px] text-[#aaa49a]">{savedTotal}</span>
                     </button>
                     <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4a90d926, #4a90d908 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4a90d922" }}>
                         <Clapperboard size={13} className="text-[#6ba3d9]" />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Active Collections</span>
-                      <span className="text-[10px] text-[#aaa49a]">{activeCollectionsCount}</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Active Collections</span>
+                      <span className="text-[10.5px] text-[#aaa49a]">{activeCollectionsCount}</span>
                     </button>
                     <button onClick={onOpenProduction} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
                       <span
@@ -468,22 +468,22 @@ export function DashboardPage({
                       >
                         <AlertTriangle size={13} className={needsAttention.length > 0 ? "text-[#e0664f]" : "text-[#d9a863]"} />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Needs Attention</span>
-                      <span className="text-[10px] text-[#aaa49a]">{needsAttention.length}</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Needs Attention</span>
+                      <span className="text-[10.5px] text-[#aaa49a]">{needsAttention.length}</span>
                     </button>
                     <button onClick={onOpenHub} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4fb37a26, #4fb37a08 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4fb37a22" }}>
                         <Radar size={13} className="text-[#6bc797]" />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Creativity Hub</span>
-                      <span className="text-[10px] text-[#aaa49a] opacity-70">↗</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Creativity Hub</span>
+                      <span className="text-[10.5px] text-[#aaa49a] opacity-70">↗</span>
                     </button>
                   </div>
                   <div className="w-[164px] max-w-[42%] shrink">
-                    <p className="text-[8px] tracking-[1.2px] text-[#878278]">RECENTLY SAVED</p>
+                    <p className="text-[8.5px] tracking-[1.2px] text-[#878278]">RECENTLY SAVED</p>
                     <div className="mt-[11px] flex flex-col">
                       {recentConcepts.length === 0 ? (
-                        <p className="pt-[8px] text-[9px] text-[#79746b]">Nothing saved yet.</p>
+                        <p className="pt-[8px] text-[9.5px] text-[#79746b]">Nothing saved yet.</p>
                       ) : (
                         recentConcepts.map(({ concept, collection }) => (
                           <button
@@ -500,8 +500,8 @@ export function DashboardPage({
                               }
                             />
                             <div className="min-w-0">
-                              <p className="line-clamp-2 text-[9px] leading-snug text-[#ded7cb]">{collection.name}</p>
-                              <p className="mt-[6px] text-[8.5px] text-[#79746b]">{formatRelativeTime(collection.updatedAt)}</p>
+                              <p className="line-clamp-2 text-[9.5px] leading-snug text-[#ded7cb]">{collection.name}</p>
+                              <p className="mt-[6px] text-[9px] text-[#79746b]">{formatRelativeTime(collection.updatedAt)}</p>
                             </div>
                           </button>
                         ))
@@ -523,8 +523,8 @@ export function DashboardPage({
                     />
                     <StageDonut counts={stageCounts} total={collections.length} />
                     <div className="absolute flex flex-col items-center gap-[2px]">
-                      <Num className="text-[21px] leading-none text-[#f0eadf]">{stageCounts["In Production"]}</Num>
-                      <p className="text-[9px] text-[#948d82]">In Production</p>
+                      <Num className="text-[21.5px] leading-none text-[#f0eadf]">{stageCounts["In Production"]}</Num>
+                      <p className="text-[9.5px] text-[#948d82]">In Production</p>
                     </div>
                   </div>
                   <div className="flex flex-1 min-w-[104px] flex-col gap-[10px]">
@@ -534,8 +534,8 @@ export function DashboardPage({
                           className="h-[7px] w-[7px] shrink-0 rounded-full"
                           style={{ background: STAGE_COLOR[stage], boxShadow: `0 0 4px ${STAGE_COLOR[stage]}80` }}
                         />
-                        <span className="flex-1 truncate text-[11px] font-medium text-[#ded7cb]">{stage}</span>
-                        <span className="text-[11px] text-[#aaa49a]">{stageCounts[stage]}</span>
+                        <span className="flex-1 truncate text-[11.5px] font-medium text-[#ded7cb]">{stage}</span>
+                        <span className="text-[11.5px] text-[#aaa49a]">{stageCounts[stage]}</span>
                       </div>
                     ))}
                   </div>
@@ -549,7 +549,7 @@ export function DashboardPage({
             <div className={["flex flex-[1.5] min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
               <PanelHeading title="RECENT CONCEPTS" subtitle="Latest concepts from your workspace" onViewAll={onOpenCollections} />
               {recentCollections.length === 0 ? (
-                <p className="px-[18px] pb-[16px] pt-[13px] text-[10px] text-[#878278]">Save your first concept from the Creativity Hub.</p>
+                <p className="px-[18px] pb-[16px] pt-[13px] text-[10.5px] text-[#878278]">Save your first concept from the Creativity Hub.</p>
               ) : (
                 <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
                   {recentCollections.map((c) => {
@@ -573,8 +573,8 @@ export function DashboardPage({
                           <Bookmark size={11} />
                         </div>
                         <div className="absolute bottom-[11px] left-[11px] flex flex-col gap-[5px]">
-                          <p className="text-[10.5px] font-medium text-white">{c.name}</p>
-                          <p className="text-[9px] text-[#c6c0b6]">{formatRelativeTime(c.updatedAt)}</p>
+                          <p className="text-[11px] font-medium text-white">{c.name}</p>
+                          <p className="text-[9.5px] text-[#c6c0b6]">{formatRelativeTime(c.updatedAt)}</p>
                         </div>
                         <div className="absolute bottom-[12px] right-[11px] text-white/85">
                           <ExternalLink size={13} />
@@ -589,9 +589,9 @@ export function DashboardPage({
             <div className={["flex flex-1 min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
               <PanelHeading title="RECENT ACTIVITY" subtitle="What's happening in your workspace" onViewAll={onOpenCollections} />
               <div className="mt-[10px] flex flex-col">
-                {activity.loading && <p className="px-[18px] py-[10px] text-[10px] text-[#79746b]">Loading…</p>}
+                {activity.loading && <p className="px-[18px] py-[10px] text-[10.5px] text-[#79746b]">Loading…</p>}
                 {!activity.loading && activity.items.length === 0 && (
-                  <p className="px-[18px] py-[10px] text-[10px] text-[#79746b]">Nothing yet — activity shows up here as you go.</p>
+                  <p className="px-[18px] py-[10px] text-[10.5px] text-[#79746b]">Nothing yet — activity shows up here as you go.</p>
                 )}
                 {activity.items.slice(0, 5).map((item) => {
                   const relatedCollection = item.collectionId ? collectionById.get(item.collectionId) : undefined;
@@ -609,7 +609,7 @@ export function DashboardPage({
                       </span>
                     ) : relatedCreator ? (
                       <span
-                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#202024] text-[9px] font-medium text-[#e8e1d5]"
+                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#202024] text-[9.5px] font-medium text-[#e8e1d5]"
                         style={{ background: relatedCreator.avatarColor ?? "#3d362f" }}
                       >
                         {relatedCreator.name?.slice(0, 2).toUpperCase()}
@@ -622,10 +622,10 @@ export function DashboardPage({
                         <Clock size={11} />
                       </span>
                     )}
-                    <p className={["flex-1 truncate text-[10.5px] font-medium text-[#d9d2c6]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
+                    <p className={["flex-1 truncate text-[11px] font-medium text-[#d9d2c6]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
                       {item.message}
                     </p>
-                    <span className="shrink-0 text-[9px] text-[#79746b]">{item.relativeTime}</span>
+                    <span className="shrink-0 text-[9.5px] text-[#79746b]">{item.relativeTime}</span>
                   </button>
                   );
                 })}
