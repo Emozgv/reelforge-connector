@@ -1,8 +1,47 @@
-import { Clapperboard, CheckCircle2, Clock, FolderHeart, FolderOpen, Inbox, Sparkles, Users } from "lucide-react";
-import type { Collection, Creator, CreatorPackage } from "../../types";
+import {
+  AlertTriangle,
+  Bookmark,
+  CheckCircle2,
+  Clapperboard,
+  Clock,
+  ExternalLink,
+  FolderOpen,
+  Radar,
+  Users,
+} from "lucide-react";
+import type { Collection, Creator } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import { formatRelativeTime } from "../../lib/relativeTime";
+import { PlatformIcon } from "../hub/PlatformIcon";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
+
+// Panel surface — deep, flat near-black. No lighter top stop, no highlight
+// line — just a hair darker than the inner cards below, so it reads as
+// black, not as a lit/gray gradient.
+const PANEL = "rounded-[12px] border border-[#151519]";
+const PANEL_STYLE: React.CSSProperties = {
+  background: "linear-gradient(180deg, #0d0d10 0%, #08080a 100%)",
+};
+
+// Nested "card within a panel" surface — Needs Attention rows, Content
+// Momentum stat rows, Production Pulse's legend box. A flat, distinctly
+// separate dark tone from the panel behind it, not a lighter gradient.
+const CARD = "rounded-[10px] border border-[#1c1c21]";
+const CARD_STYLE: React.CSSProperties = {
+  background: "#0e0e11",
+};
+const CARD_HOVER = "hover:border-[#28282e]";
+
+// Fixed, hand-placed positions for the hero's very sparse warm-star
+// accents — deliberately not randomized like the white starfield, and
+// deliberately few, so they read as a couple of deliberate points of
+// warmth rather than a colored effect.
+const WARM_STARS = [
+  { left: 20, top: 18, size: 1.6, duration: 7, delay: 0.5 },
+  { left: 68, top: 26, size: 1.4, duration: 8, delay: 2.4 },
+  { left: 85, top: 12, size: 1.8, duration: 6.5, delay: 1.1 },
+  { left: 40, top: 44, size: 1.3, duration: 7.5, delay: 3.6 },
+];
 
 // Local time of the person actually looking at the screen — already
 // naturally "session aware" without any extra plumbing.
@@ -14,101 +53,28 @@ function greeting(): string {
   return "Good evening";
 }
 
-// A purely decorative curve — never tied to real historical usage numbers
-// (we don't store daily snapshots yet), it's the same visual flourish for
-// every workspace. The real number lives in the progress bar above it. In
-// normal document flow with its own height, not overlaid on other content.
-function GrowthSparkline() {
-  return (
-    <div className="mt-auto pt-2 h-9">
-      <svg viewBox="0 0 220 44" className="w-full h-full" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="spark-line" x1="0" y1="0" x2="220" y2="0">
-            <stop offset="0%" stopColor="#A97942" stopOpacity="0.75" />
-            <stop offset="100%" stopColor="#F0C987" stopOpacity="1" />
-          </linearGradient>
-          <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="44" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#D39448" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="#D39448" stopOpacity="0" />
-          </linearGradient>
-          <filter id="spark-glow" x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur stdDeviation="2.4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <path
-          d="M0 36 C 16 35, 26 31, 36 30 S 54 26, 64 24 S 82 29, 92 26 S 110 16, 122 14 S 140 20, 152 16 S 170 8, 182 6 S 204 4, 220 4 L220 44 L0 44 Z"
-          fill="url(#spark-fill)"
-        />
-        <path
-          d="M0 36 C 16 35, 26 31, 36 30 S 54 26, 64 24 S 82 29, 92 26 S 110 16, 122 14 S 140 20, 152 16 S 170 8, 182 6 S 204 4, 220 4"
-          stroke="url(#spark-line)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <circle cx="220" cy="4" r="3" fill="#F0C987" filter="url(#spark-glow)" />
-      </svg>
-    </div>
-  );
-}
+// The five real stages a Collection can read as, in pipeline order —
+// deliberately NOT "Waiting for Creator"/"Needs Review"/"Ready" (those
+// aren't real states in the data model; SubmissionStatus is only Sent/
+// In Progress/Check Inbox/Cancelled/Finished). "Check Inbox" folds into
+// "In Production" here on purpose — it's surfaced as its own, more
+// prominent thing in Needs Your Attention instead.
+const STAGE_ORDER = ["Saved", "In Review", "In Production", "Delivered", "Cancelled"] as const;
+type Stage = (typeof STAGE_ORDER)[number];
 
-function StatChip({
-  icon,
-  label,
-  sublabel,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  sublabel: string;
-  value: number;
-}) {
-  return (
-    <div className="flex-1 flex items-center gap-3.5 px-5 xl:px-6 py-5">
-      <div className="w-11 h-11 rounded-lg shrink-0 flex items-center justify-center border border-[#D39448]/25 bg-white/[0.015] text-[#D39448]">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] tracking-wide uppercase text-neutral-500 truncate">{label}</p>
-        <p className="text-[22px] font-serif text-neutral-50 tabular-nums leading-tight">{value}</p>
-        <p className="text-[10.5px] text-neutral-600">{sublabel}</p>
-      </div>
-    </div>
-  );
-}
-
-function PanelHeader({ title, onViewAll, cta = "View all" }: { title: string; onViewAll?: () => void; cta?: string }) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <h2 className="text-[13px] font-medium text-neutral-200">{title}</h2>
-      {onViewAll && (
-        <button
-          onClick={onViewAll}
-          className="text-[11px] font-medium text-[#D39448] hover:brightness-110 transition-[filter] duration-150"
-        >
-          {cta}
-        </button>
-      )}
-    </div>
-  );
-}
-
-const CONCEPT_STAGE_STYLES: Record<string, string> = {
-  Saved: "text-neutral-400 bg-white/[0.05]",
-  "In Review": "text-sky-300/85 bg-sky-400/10",
-  "In Production": "text-[#D39448] bg-[#D39448]/15",
-  Cancelled: "text-neutral-500 bg-white/[0.04]",
-  Delivered: "text-emerald-300/85 bg-emerald-400/10",
+// Dot/segment colors — exact Figma reference pipeline-state palette
+// (blue/amber/red/green/gray), adapted onto our five real stages.
+const STAGE_COLOR: Record<Stage, string> = {
+  Saved: "#7c7f85",
+  "In Review": "#4a90d9",
+  "In Production": "#d8a03c",
+  Delivered: "#4fb37a",
+  Cancelled: "#c0503f",
 };
 
-// Real production stage for a Collection, reused to badge its most recent
-// concept preview — derived from actual Collection/Submission state, never
-// a separate stored field.
-function collectionStage(c: Collection): string {
+// Real production stage for a Collection — derived from actual Collection/
+// Submission state, never a separate stored field.
+function collectionStage(c: Collection): Stage {
   if (c.status === "Completed") return "Delivered";
   if (c.status === "Draft") return "Saved";
   const latest = c.submissions[c.submissions.length - 1];
@@ -117,30 +83,180 @@ function collectionStage(c: Collection): string {
   return "In Review";
 }
 
+// Figma's Manrope ExtraLight display numerals/headline treatment.
+function Num({
+  children,
+  className = "",
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span className={["font-mn font-extralight", className].join(" ")} style={style}>
+      {children}
+    </span>
+  );
+}
+
+function PanelHeading({
+  title,
+  subtitle,
+  badge,
+  onViewAll,
+}: {
+  title: string;
+  subtitle: string;
+  badge?: number;
+  onViewAll?: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between px-[18px] pt-[16px]">
+      <div className="flex flex-col gap-[8px]">
+        <div className="flex items-center gap-[9px]">
+          <h2 className="text-[10.5px] tracking-[1.1px] text-[#ddd6c9]">{title}</h2>
+          {typeof badge === "number" && badge > 0 && (
+            <span className="rounded-[16px] bg-[#3a2a17] px-[6px] py-[1.5px] text-[8.5px] tracking-[1.1px] text-[#e8b273]">
+              {badge}
+            </span>
+          )}
+        </div>
+        <p className="text-[9px] text-[#79746b]">{subtitle}</p>
+      </div>
+      {onViewAll && (
+        <button onClick={onViewAll} className="flex shrink-0 items-center gap-[4px] text-[10px] text-[#aaa094] hover:text-[#e8b273] transition-colors duration-150">
+          View all <span aria-hidden className="text-[9px]">›</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FooterLink({ label, onClick }: { label: string; onClick?: () => void }) {
+  if (!onClick) return null;
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center justify-between border-t border-[#1a1a1f] px-[18px] py-[13px] text-[10.5px] text-[#cfc8bc] hover:text-[#e8b273] transition-colors duration-150"
+    >
+      {label} <span aria-hidden className="text-[10.5px] opacity-60">›</span>
+    </button>
+  );
+}
+
+// One segment of the Operational Pulse strip — a real KPI and a real nav
+// shortcut. Gold stays reserved for the three plain counters (matching the
+// reference's restrained, muted-khaki icon tint); the two status-carrying
+// tiles get real semantic color (danger/success) instead, each with a very
+// faint matching glow — subtle, not neon.
+const PULSE_TONE: Record<"gold" | "danger" | "success", { color: string; glow: string }> = {
+  gold: { color: "#d9a863", glow: "rgba(217,168,99,0.3)" },
+  danger: { color: "#e0664f", glow: "rgba(224,102,79,0.3)" },
+  success: { color: "#4fb37a", glow: "rgba(79,179,122,0.3)" },
+};
+
+function PulseTile({
+  icon,
+  label,
+  value,
+  tone = "gold",
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tone?: "gold" | "danger" | "success";
+  onClick?: () => void;
+}) {
+  const active = tone !== "gold" && value > 0;
+  const { color, glow } = PULSE_TONE[tone];
+  const iconColor = active ? color : "#d9a863";
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className="flex flex-1 min-w-[140px] flex-col gap-[6px] border-l border-[#1a1a1f] px-[22px] py-[17px] text-left disabled:cursor-default"
+    >
+      <div className="flex items-center gap-[9px]">
+        <span
+          className="relative flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px]"
+          style={{
+            background: `radial-gradient(circle at 50% 40%, ${iconColor}26, ${iconColor}08 70%, transparent 100%)`,
+            boxShadow: `inset 0 0 0 1px ${iconColor}22`,
+          }}
+        >
+          <span style={{ color: iconColor, filter: active ? `drop-shadow(0 0 4px ${glow})` : undefined }}>{icon}</span>
+        </span>
+        <Num className={["text-[21px] leading-none", active ? "" : "text-[#f0eadf]"].join(" ")} style={active ? { color } : undefined}>
+          {value}
+        </Num>
+      </div>
+      <p className="text-[10.5px] text-[#aaa49a]">{label}</p>
+      <p className="text-[9px] text-[#646058]">—</p>
+    </button>
+  );
+}
+
+// A restrained ring donut, real segments only — built from the exact same
+// per-collection stage breakdown the legend already uses.
+function StageDonut({ counts, total }: { counts: Record<Stage, number>; total: number }) {
+  const size = 132;
+  const stroke = 14;
+  const r = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+  let offset = 0;
+  const segments = STAGE_ORDER.filter((s) => counts[s] > 0).map((stage) => {
+    const fraction = total > 0 ? counts[stage] / total : 0;
+    const dash = fraction * circumference;
+    const seg = { stage, dash, offset };
+    offset += dash;
+    return seg;
+  });
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
+      {segments.map(({ stage, dash, offset: segOffset }) => (
+        <circle
+          key={stage}
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={STAGE_COLOR[stage]}
+          strokeWidth={stroke}
+          strokeDasharray={`${dash} ${circumference - dash}`}
+          strokeDashoffset={-segOffset}
+          strokeLinecap="butt"
+        />
+      ))}
+    </svg>
+  );
+}
+
 export function DashboardPage({
   userName,
   creators,
   collections,
   activity,
-  creatorPackages,
   onOpenHub,
-  onOpenCreator,
+  onOpenResearch,
   onOpenCollection,
   onOpenCollections,
   onOpenCreators,
-  onOpenBilling,
+  onOpenProduction,
 }: {
   userName?: string;
   creators: Creator[];
   collections: Collection[];
   activity: { items: ActivityFeedItem[]; loading: boolean };
-  creatorPackages: Map<string, CreatorPackage>;
   onOpenHub: () => void;
-  onOpenCreator: (creatorId: string) => void;
+  onOpenResearch: () => void;
   onOpenCollection: (collectionId: string) => void;
   onOpenCollections: () => void;
   onOpenCreators: () => void;
-  onOpenBilling: () => void;
+  onOpenProduction: () => void;
 }) {
   const allSubmissions = collections.flatMap((c) => c.submissions.map((s) => ({ ...s, collection: c })));
   const activeSubmissions = allSubmissions.filter((s) => s.status !== "Finished" && s.status !== "Cancelled");
@@ -151,271 +267,333 @@ export function DashboardPage({
 
   const recentCollections = [...collections]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 4);
+
+  // Most recently saved individual concepts across all collections, newest
+  // first — the "Recently Saved" reel-level column.
+  const recentConcepts = [...collections]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .flatMap((c) => c.concepts.map((k) => ({ concept: k, collection: c })))
     .slice(0, 3);
 
-  const creatorsWithPlan = creators.filter((c) => creatorPackages.has(c.id)).length;
+  const creatorById = new Map(creators.map((c) => [c.id, c]));
+
+  const stageCounts = STAGE_ORDER.reduce((acc, stage) => ({ ...acc, [stage]: 0 }), {} as Record<Stage, number>);
+  for (const c of collections) stageCounts[collectionStage(c)] += 1;
 
   const firstName = userName ? (userName.includes("@") ? userName.split("@")[0] : userName) : "";
 
+  const statusLine =
+    needsAttention.length > 0
+      ? `${needsAttention.length} item${needsAttention.length === 1 ? "" : "s"} need${needsAttention.length === 1 ? "s" : ""} your input right now.`
+      : "Your content engine is running strong.";
+
   return (
-    <div className="h-full overflow-y-auto">
-      {/* hero — a real night-sky photograph with a few very slow, layered motion
-          cues (photo drift, breathing glow, independently-drifting stars, tiny
-          dust) so it reads as a living scene instead of a still with effects
-          bolted on. Every layer is transform/opacity only and pauses when the
-          tab is hidden, same as the rest of the app's ambient animation. */}
-      <div className="relative overflow-hidden px-8 xl:px-12 pt-14 xl:pt-16 pb-6 h-[255px] xl:h-[270px] bg-[#020508] animate-rise-in">
+    <div className="h-full overflow-auto" style={{ background: "#020203" }}>
+      <div className="mx-auto w-full max-w-[1560px]">
+        {/* Hero — same night-sky starfield used across Login/Hub. Background
+            is the Figma reference's exact cool dark radial (near-black
+            fading to near-black, not a warm/brown wash) — gold only shows
+            up as the eyebrow text, the CTA, and a handful of tiny star
+            accents, never as a background tint. */}
         <div
-          className="hero-photo-layer"
+          className="relative flex flex-col gap-[6px] overflow-hidden px-[48px] pt-[48px] pb-[54px]"
           style={{
-            backgroundImage: "url(/images/dashboard-hero-sky.jpg)",
-            backgroundSize: "cover",
-            backgroundPosition: "center 28%",
+            background:
+              "radial-gradient(1200px 500px at 58% -20%, rgba(16,13,19,1), rgba(2,2,3,1) 70%), radial-gradient(560px 260px at 88% 4%, rgba(211,148,72,0.05), transparent 70%)",
           }}
-        />
-        <div className="pointer-events-none absolute inset-0 bg-black/30" />
-        {/* the photo's own horizon glow reads as too big/blob-like at this crop —
-            darken it back down to a restrained hint instead of a visible cloud */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: "radial-gradient(680px 320px at 82% 96%, rgba(2,5,8,0.6), transparent 72%)" }}
-        />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#020508]" />
-        <StarfieldBackground starCount={70} dustCount={10} />
-        <div className="relative z-10 max-w-[1200px] mx-auto flex items-end justify-between gap-8 flex-wrap">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2.5 mb-3.5">
-              <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
-              <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448]/85 font-medium">
-                Dashboard
-              </span>
+        >
+          <div className="dashboard-starfield-boost absolute inset-0">
+            <StarfieldBackground starCount={230} dustCount={5} />
+          </div>
+          {/* A couple of tiny warm/gold points among the white starfield —
+              deliberately very sparse, so the sky reads as elegant depth
+              rather than a colored effect. */}
+          {WARM_STARS.map((s, i) => (
+            <span
+              key={i}
+              className="star-twinkle pointer-events-none absolute rounded-full"
+              style={{
+                left: `${s.left}%`,
+                top: `${s.top}%`,
+                width: s.size,
+                height: s.size,
+                background: "#dcb083",
+                boxShadow: "0 0 4px 1px rgba(220,176,131,0.4)",
+                animationDuration: `${s.duration}s`,
+                animationDelay: `${s.delay}s`,
+                ["--star-peak" as string]: 0.65,
+              } as React.CSSProperties}
+            />
+          ))}
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-24"
+            style={{ background: "linear-gradient(to bottom, transparent, #020203)" }}
+          />
+          <p className="relative text-[10.5px] tracking-[1.8px] text-[#c08e4e]">REELFORGE COMMAND CENTER</p>
+          <h1 className="relative font-mn font-light text-[42px] tracking-[-0.8px] text-[#f2ece1]">
+            {greeting()}
+            {firstName && <>, {firstName}</>}.
+          </h1>
+          <p className="relative text-[14px] text-[#b1aba0]">{statusLine}</p>
+          <div className="relative flex items-center gap-[8px] pt-[6px]">
+            <span
+              className="h-[6px] w-[6px] shrink-0 rounded-[3px]"
+              style={{
+                background: needsAttention.length > 0 ? "#e0664f" : "#4ec27a",
+                boxShadow: needsAttention.length > 0 ? "0 0 6px #e0664f" : "0 0 6px #4ec27a",
+              }}
+            />
+            <span className="text-[11px] text-[#c3bdb2]">
+              {needsAttention.length > 0 ? "Action needed" : "All systems operational"}
+            </span>
+          </div>
+
+          <div className="absolute right-[48px] top-[90px] z-10 flex w-[196px] flex-col gap-[13px]">
+            <button
+              onClick={onOpenResearch}
+              className="flex h-[44px] w-full items-center justify-center gap-[9px] rounded-[10px] text-[12px] font-medium text-[#2a1c0e] press-feedback"
+              style={{
+                background: "linear-gradient(90deg, #D39448, #EAC088)",
+                boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)",
+              }}
+            >
+              <Radar size={14} />
+              Start Research
+            </button>
+            <button
+              onClick={onOpenProduction}
+              className="flex h-[44px] w-full items-center justify-center gap-[9px] rounded-[10px] border border-[#1e1e22] bg-[#0f0f12] text-[12px] text-[#ece5d9] hover:bg-[#141417] hover:border-[#26262a] transition-colors duration-150 press-feedback"
+            >
+              <Clapperboard size={13} />
+              Open Production
+            </button>
+          </div>
+        </div>
+
+        <div className="px-[48px] pb-[48px]">
+          {/* Operational Pulse */}
+          <div className={["flex items-center px-[4px]", PANEL].join(" ")} style={PANEL_STYLE}>
+            <div className="flex w-[212px] shrink-0 flex-col gap-[8px] px-[22px] py-[17px]">
+              <div className="flex items-center gap-[7px]">
+                <Radar size={13} className="text-[#eccca2]" />
+                <p className="text-[9px] tracking-[1.4px] text-[#eccca2]">OPERATIONAL PULSE</p>
+              </div>
+              <p className="text-[9px] leading-snug text-[#79746b]">Live overview of your workspace</p>
             </div>
-            <h1 className="text-[42px] xl:text-[46px] leading-[1.1] font-serif font-medium text-neutral-50">
-              {greeting()}
-              {firstName && <>, {firstName}</>}
-            </h1>
-            <p className="mt-2.5 text-[14px] text-neutral-400 max-w-md">
-              Here's where everything stands right now.
-            </p>
+            <PulseTile icon={<Users size={18} />} label="Active Creators" value={creators.length} onClick={onOpenCreators} />
+            <PulseTile icon={<FolderOpen size={18} />} label="Saved Concepts" value={savedTotal} onClick={onOpenCollections} />
+            <PulseTile icon={<Clapperboard size={18} />} label="In Production" value={activeSubmissions.length} onClick={onOpenProduction} />
+            <PulseTile icon={<AlertTriangle size={18} />} label="Needs Attention" value={needsAttention.length} tone="danger" onClick={onOpenProduction} />
+            <PulseTile icon={<CheckCircle2 size={18} />} label="Delivered" value={finishedCount} tone="success" onClick={onOpenProduction} />
+          </div>
 
-            <div className="mt-6 flex items-center gap-3">
-              <button
-                onClick={onOpenHub}
-                className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-[#D39448] text-[#020508] text-[13px] font-medium hover:brightness-110 transition-[filter] duration-150 press-feedback"
-              >
-                <Sparkles size={14} />
-                Find your next concept
-              </button>
+          {/* Row 2 — Needs Your Attention / Content Momentum / Production Pulse */}
+          <div className="mt-[22px] flex items-stretch gap-[20px]">
+            <div className={["flex flex-1 min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
+              <PanelHeading title="NEEDS YOUR ATTENTION" subtitle="Items that need your action" badge={needsAttention.length} onViewAll={onOpenProduction} />
+              <div className="flex flex-col gap-[8px] px-[18px] pt-[14px]">
+                {needsAttention.length === 0 ? (
+                  <p className="py-[10px] text-[10px] text-[#878278]">Everything is moving smoothly. Nothing needs your input right now.</p>
+                ) : (
+                  needsAttention.slice(0, 3).map((s) => {
+                    const creator = creatorById.get(s.collection.creatorId);
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => onOpenCollection(s.collection.id)}
+                        className={["flex items-center gap-[11px] p-[8px] text-left transition-colors duration-150", CARD, CARD_HOVER].join(" ")}
+                        style={CARD_STYLE}
+                      >
+                        <div
+                          className="h-[44px] w-[44px] shrink-0 overflow-hidden rounded-[7px] ring-1 ring-white/10"
+                          style={creator?.profileImage ? {} : { background: creator?.avatarColor ?? "#3d362f" }}
+                        >
+                          {creator?.profileImage && <img src={creator.profileImage} alt="" className="h-full w-full object-cover" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[11px] text-[#eae4d9]">{s.collection.name}</p>
+                          <div className="mt-[5px] flex items-center gap-[7px]">
+                            <p className="truncate text-[9px] text-[#878278]">Submission #{s.index}</p>
+                            <span className="shrink-0 rounded-[4px] border border-[#452626] bg-[#2b1a1a] px-[6px] py-[2px] text-[7.5px] tracking-[0.5px] text-[#d98a7a]">
+                              CHECK INBOX
+                            </span>
+                          </div>
+                        </div>
+                        <p className="shrink-0 text-[9px] text-[#79746b]">{formatRelativeTime(s.collection.updatedAt)}</p>
+                        <span className="shrink-0 rounded-[7px] border border-[#222227] bg-[#111114] px-[12px] py-[7px] text-[10px] text-[#ded7cb]">
+                          Review
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <p className="px-[18px] pb-[15px] pt-[10px] text-[10px] text-[#878278]">Everything is prioritized. Keep it moving. 🚀</p>
+            </div>
 
-              {collections.length > 0 && (
-                <button
-                  onClick={onOpenCollections}
-                  className="flex items-center gap-2.5 h-11 pl-4 pr-5 rounded-full surface-panel hover:bg-white/[0.06] transition-colors duration-150"
-                >
-                  <FolderHeart size={14} className="text-[#D39448]" />
-                  <span className="text-[12.5px] text-neutral-300">
-                    <span className="text-neutral-100 font-medium">{activeCollectionsCount}</span> active collection
-                    {activeCollectionsCount === 1 ? "" : "s"}
-                  </span>
-                </button>
+            <div className={["flex flex-1 min-w-0 flex-col justify-between", PANEL].join(" ")} style={PANEL_STYLE}>
+              <div>
+                <PanelHeading title="CONTENT MOMENTUM" subtitle="Your ideas. Saved. Organized." />
+                <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
+                  <div className="flex flex-1 min-w-[130px] flex-col gap-[8px]">
+                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
+                      <FolderOpen size={14} className="shrink-0 text-[#aaa49a]" />
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Saved Concepts</span>
+                      <span className="text-[10px] text-[#aaa49a]">{savedTotal}</span>
+                    </button>
+                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
+                      <Clapperboard size={14} className="shrink-0 text-[#aaa49a]" />
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Active Collections</span>
+                      <span className="text-[10px] text-[#aaa49a]">{activeCollectionsCount}</span>
+                    </button>
+                    <button onClick={onOpenProduction} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
+                      <AlertTriangle size={14} className="shrink-0 text-[#aaa49a]" />
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Needs Attention</span>
+                      <span className="text-[10px] text-[#aaa49a]">{needsAttention.length}</span>
+                    </button>
+                    <button onClick={onOpenHub} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
+                      <Radar size={14} className="shrink-0 text-[#aaa49a]" />
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Creativity Hub</span>
+                      <span className="text-[10px] text-[#aaa49a] opacity-70">↗</span>
+                    </button>
+                  </div>
+                  <div className="w-[164px] max-w-[42%] shrink">
+                    <p className="text-[8px] tracking-[1.2px] text-[#878278]">RECENTLY SAVED</p>
+                    <div className="mt-[11px] flex flex-col">
+                      {recentConcepts.length === 0 ? (
+                        <p className="pt-[8px] text-[9px] text-[#79746b]">Nothing saved yet.</p>
+                      ) : (
+                        recentConcepts.map(({ concept, collection }) => (
+                          <button
+                            key={concept.video.id}
+                            onClick={() => onOpenCollection(collection.id)}
+                            className="flex items-center gap-[8px] border-t border-[#17171b] py-[8px] text-left"
+                          >
+                            <div
+                              className="h-[40px] w-[33px] shrink-0 overflow-hidden rounded-[5px] bg-cover bg-center"
+                              style={
+                                concept.video.thumbnailUrl
+                                  ? { backgroundImage: `url(${concept.video.thumbnailUrl})` }
+                                  : { background: concept.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }
+                              }
+                            />
+                            <div className="min-w-0">
+                              <p className="line-clamp-2 text-[9px] leading-snug text-[#ded7cb]">{collection.name}</p>
+                              <p className="mt-[6px] text-[8.5px] text-[#79746b]">{formatRelativeTime(collection.updatedAt)}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <FooterLink label="Go to Creativity Hub" onClick={onOpenHub} />
+            </div>
+
+            <div className={["flex flex-1 min-w-0 flex-col justify-between", PANEL].join(" ")} style={PANEL_STYLE}>
+              <div>
+                <PanelHeading title="PRODUCTION PULSE" subtitle="Real-time status of your pipeline" />
+                <div className="flex items-center gap-[14px] px-[18px] pt-[8px]">
+                  <div className="relative flex h-[132px] w-[132px] shrink-0 items-center justify-center">
+                    <div
+                      className="pointer-events-none absolute inset-[-14px] rounded-full"
+                      style={{ background: "radial-gradient(circle, rgba(74,144,217,0.08), rgba(216,160,60,0.05) 55%, transparent 75%)" }}
+                    />
+                    <StageDonut counts={stageCounts} total={collections.length} />
+                    <div className="absolute flex flex-col items-center gap-[2px]">
+                      <Num className="text-[21px] leading-none text-[#f0eadf]">{stageCounts["In Production"]}</Num>
+                      <p className="text-[9px] text-[#948d82]">In Production</p>
+                    </div>
+                  </div>
+                  <div className={["flex flex-1 min-w-0 flex-col overflow-hidden", CARD].join(" ")} style={CARD_STYLE}>
+                    {STAGE_ORDER.map((stage, i) => (
+                      <div
+                        key={stage}
+                        className={["flex items-center gap-[9px] px-[12px] py-[8px]", i < STAGE_ORDER.length - 1 ? "border-b border-[#1a1a1f]" : ""].join(" ")}
+                      >
+                        <span
+                          className="h-[6px] w-[6px] shrink-0 rounded-[3px]"
+                          style={{ background: STAGE_COLOR[stage], boxShadow: `0 0 4px ${STAGE_COLOR[stage]}80` }}
+                        />
+                        <span className="flex-1 truncate text-[10px] text-[#ded7cb]">{stage}</span>
+                        <span className="text-[10px] text-[#aaa49a]">{stageCounts[stage]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <FooterLink label="Open Production" onClick={onOpenProduction} />
+            </div>
+          </div>
+
+          {/* Row 3 — Recent Concepts / Recent Activity */}
+          <div className="mt-[20px] flex items-stretch gap-[20px]">
+            <div className={["flex flex-[1.5] min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
+              <PanelHeading title="RECENT CONCEPTS" subtitle="Latest concepts from your workspace" onViewAll={onOpenCollections} />
+              {recentCollections.length === 0 ? (
+                <p className="px-[18px] pb-[16px] pt-[13px] text-[10px] text-[#878278]">Save your first concept from the Creativity Hub.</p>
+              ) : (
+                <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
+                  {recentCollections.map((c) => {
+                    const preview = c.concepts[0];
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => onOpenCollection(c.id)}
+                        className="group relative h-[172px] flex-1 overflow-hidden rounded-[10px] text-left ring-1 ring-white/[0.07] hover:ring-white/[0.14] transition-[box-shadow] duration-150"
+                      >
+                        {preview?.video.thumbnailUrl ? (
+                          <img src={preview.video.thumbnailUrl} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                        ) : (
+                          <div className="absolute inset-0" style={{ background: preview?.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }} />
+                        )}
+                        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.75))" }} />
+                        <div className="absolute left-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/55">
+                          <PlatformIcon platform={preview?.video.platform ?? "instagram"} size={11} />
+                        </div>
+                        <div className="absolute right-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/55 text-white/80 group-hover:text-[#e8b273] transition-colors duration-150">
+                          <Bookmark size={11} />
+                        </div>
+                        <div className="absolute bottom-[11px] left-[11px] flex flex-col gap-[5px]">
+                          <p className="text-[10.5px] text-white">{c.name}</p>
+                          <p className="text-[9px] text-[#c6c0b6]">{formatRelativeTime(c.updatedAt)}</p>
+                        </div>
+                        <div className="absolute bottom-[12px] right-[11px] text-white/85">
+                          <ExternalLink size={13} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="relative max-w-[1200px] mx-auto px-8 pt-7 pb-8">
-        {/* a few faint stars bleeding down from the hero so this gap reads as
-            the same night sky continuing, not a hard cut to flat dark */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 overflow-hidden -z-10">
-          <StarfieldBackground starCount={20} shootingStars={false} />
-        </div>
-        {needsAttention.length > 0 && (
-          <div
-            className="mb-5 rounded-xl border border-[#D39448]/25 bg-[#D39448]/[0.06] p-4 animate-rise-in"
-            style={{ animationDelay: "40ms" }}
-          >
-            <div className="flex items-center gap-1.5 mb-2.5">
-              <Inbox size={13} className="text-[#D39448]" />
-              <h2 className="text-[13px] font-medium text-neutral-100">Needs your attention</h2>
-            </div>
-            <div className="space-y-1">
-              {needsAttention.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => onOpenCollection(s.collection.id)}
-                  className="w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-lg hover:bg-white/[0.05] transition-colors duration-150 text-left"
-                >
-                  <span className="text-[12.5px] text-neutral-200 truncate">
-                    {s.collection.name} <span className="text-neutral-600">· Submission #{s.index}</span>
-                  </span>
-                  <span className="shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] text-[#D39448] bg-[#D39448]/20 animate-pulse">
-                    Check Inbox
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div
-          className="rounded-xl surface-panel-strong flex divide-x divide-white/[0.06] overflow-hidden animate-rise-in"
-          style={{ animationDelay: "80ms" }}
-        >
-          <StatChip icon={<Users size={16} />} label="Creators" sublabel="active" value={creators.length} />
-          <StatChip
-            icon={<FolderOpen size={16} />}
-            label="Saved concepts"
-            sublabel="concepts"
-            value={savedTotal}
-          />
-          <StatChip
-            icon={<Clapperboard size={16} />}
-            label="In production"
-            sublabel="projects"
-            value={activeSubmissions.length}
-          />
-          <StatChip icon={<CheckCircle2 size={16} />} label="Delivered" sublabel="completed" value={finishedCount} />
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-5 items-stretch">
-          <div className="rounded-xl surface-panel p-4 animate-rise-in" style={{ animationDelay: "110ms" }}>
-            <PanelHeader title="Creators" onViewAll={onOpenCreators} />
-            {creators.length === 0 ? (
-              <p className="text-[12px] text-neutral-500">No creators yet.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2.5">
-                {creators.map((c) => (
+            <div className={["flex flex-1 min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
+              <PanelHeading title="RECENT ACTIVITY" subtitle="What's happening in your workspace" onViewAll={onOpenCollections} />
+              <div className="mt-[10px] flex flex-col">
+                {activity.loading && <p className="px-[18px] py-[10px] text-[10px] text-[#79746b]">Loading…</p>}
+                {!activity.loading && activity.items.length === 0 && (
+                  <p className="px-[18px] py-[10px] text-[10px] text-[#79746b]">Nothing yet — activity shows up here as you go.</p>
+                )}
+                {activity.items.slice(0, 5).map((item) => (
                   <button
-                    key={c.id}
-                    onClick={() => onOpenCreator(c.id)}
-                    title={c.name}
-                    className="flex items-center gap-2 pl-1 pr-3 h-9 rounded-full border border-white/[0.08] hover:border-white/[0.16] hover:bg-white/[0.04] transition-colors duration-150"
+                    key={item.id}
+                    onClick={() => item.collectionId && onOpenCollection(item.collectionId)}
+                    disabled={!item.collectionId}
+                    className="group flex items-center gap-[11px] border-t border-[#17171b] px-[18px] py-[9.5px] text-left first:border-t-0 disabled:cursor-default"
                   >
-                    <div
-                      className="w-6.5 h-6.5 rounded-full shrink-0 ring-1 ring-white/15 overflow-hidden"
-                      style={{ width: 26, height: 26, ...(c.profileImage ? {} : { background: c.avatarColor }) }}
-                    >
-                      {c.profileImage && <img src={c.profileImage} alt={c.name} className="w-full h-full object-cover" />}
-                    </div>
-                    <span className="text-[12.5px] text-neutral-200">{c.name}</span>
+                    <span className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[12px] bg-[#16161a] text-[#878278]">
+                      <Clock size={11} />
+                    </span>
+                    <p className={["flex-1 truncate text-[10.5px] text-[#d9d2c6]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
+                      {item.message}
+                    </p>
+                    <span className="shrink-0 text-[9px] text-[#79746b]">{item.relativeTime}</span>
                   </button>
                 ))}
               </div>
-            )}
-            {creators.length === 0 && (
-              <p className="mt-1 text-[11.5px] text-neutral-500 flex items-center gap-2">
-                <Users size={13} className="text-neutral-600 shrink-0" /> Add a Creator to get started.
-              </p>
-            )}
-          </div>
-
-          <div
-            className="rounded-xl surface-panel p-4 flex flex-col animate-rise-in"
-            style={{ animationDelay: "140ms" }}
-          >
-            <PanelHeader title="Plans" onViewAll={onOpenBilling} cta="View billing" />
-            {creators.length === 0 ? (
-              <p className="text-[12px] text-neutral-500">Add a Creator to set up a plan.</p>
-            ) : (
-              <>
-                <p className="text-[13px] text-neutral-200">
-                  <span className="text-[19px] font-serif text-neutral-50">{creatorsWithPlan}</span>
-                  <span className="text-neutral-500"> / {creators.length} creators on an active plan</span>
-                </p>
-                <div className="relative mt-2.5 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#A97942] to-[#D39448]"
-                    style={{ width: `${(creatorsWithPlan / creators.length) * 100}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-[11px] text-neutral-600 leading-relaxed">
-                  Every ReelForge plan is per creator — see what's active and current usage in Billing.
-                </p>
-                <GrowthSparkline />
-              </>
-            )}
-          </div>
-
-          <div className="rounded-xl surface-panel p-4 animate-rise-in" style={{ animationDelay: "170ms" }}>
-            <PanelHeader title="Recent Concepts" onViewAll={onOpenCollections} />
-            {recentCollections.length === 0 ? (
-              <p className="text-[12px] text-neutral-500">Save your first concept from the Creativity Hub.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {recentCollections.map((c) => {
-                  const stage = collectionStage(c);
-                  const preview = c.concepts[0];
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => onOpenCollection(c.id)}
-                      className="text-left rounded-lg overflow-hidden border border-white/[0.06] hover:border-white/[0.14] transition-colors duration-150"
-                    >
-                      {preview?.video.thumbnailUrl ? (
-                        <img
-                          src={preview.video.thumbnailUrl}
-                          alt=""
-                          loading="lazy"
-                          className="h-16 w-full object-cover"
-                        />
-                      ) : (
-                        <div
-                          className="h-16 w-full"
-                          style={{ background: preview?.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }}
-                        />
-                      )}
-                      <div className="p-2">
-                        <p className="text-[11.5px] text-neutral-200 truncate">{c.name}</p>
-                        <p className="text-[10px] text-neutral-600 mt-0.5">{c.concepts.length} concepts</p>
-                        <span
-                          className={[
-                            "mt-1.5 inline-block text-[9.5px] font-medium px-1.5 py-[2px] rounded-[4px]",
-                            CONCEPT_STAGE_STYLES[stage],
-                          ].join(" ")}
-                        >
-                          {stage}
-                        </span>
-                        <p className="mt-1 text-[9.5px] text-neutral-700">Updated {formatRelativeTime(c.updatedAt)}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl surface-panel p-4 animate-rise-in" style={{ animationDelay: "200ms" }}>
-            <div className="flex items-center gap-1.5 mb-3">
-              <Clock size={11} className="text-neutral-500" />
-              <h2 className="text-[13px] font-medium text-neutral-200">Recent Activity</h2>
-            </div>
-            <div className="space-y-2.5">
-              {activity.loading && <p className="text-[11.5px] text-neutral-600">Loading…</p>}
-              {!activity.loading && activity.items.length === 0 && (
-                <p className="text-[11.5px] text-neutral-600">Nothing yet — activity shows up here as you go.</p>
-              )}
-              {activity.items.slice(0, 6).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => item.collectionId && onOpenCollection(item.collectionId)}
-                  disabled={!item.collectionId}
-                  className="w-full flex items-start gap-2 text-left disabled:cursor-default group"
-                >
-                  <div className="mt-[5px] w-1 h-1 rounded-full bg-[#D39448]/60 shrink-0" />
-                  <div className="min-w-0">
-                    <p
-                      className={[
-                        "text-[11.5px] text-neutral-300 leading-snug",
-                        item.collectionId && "group-hover:text-[#D39448] transition-colors duration-150",
-                      ].join(" ")}
-                    >
-                      {item.message}
-                    </p>
-                    <p className="text-[10.5px] text-neutral-600">{item.relativeTime}</p>
-                  </div>
-                </button>
-              ))}
             </div>
           </div>
         </div>

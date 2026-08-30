@@ -12,6 +12,7 @@ const PAGE_LABELS: Record<Page, string> = {
   billing: "Billing",
   settings: "Settings",
   admin: "Admin Dashboard",
+  syd: "Sydney Studio",
 };
 import { DashboardPage } from "./components/dashboard/DashboardPage";
 import { CreativityHubPage } from "./components/hub/CreativityHubPage";
@@ -23,6 +24,7 @@ import { BillingPage } from "./components/billing/BillingPage";
 import { ResearchAccountsPage } from "./components/research/ResearchAccountsPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { AdminDashboardPage } from "./components/admin/AdminDashboardPage";
+import { SydOwnerPage } from "./components/syd/SydOwnerPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { FullScreenLoader } from "./components/auth/FullScreenLoader";
 import { NoWorkspaceAccess } from "./components/auth/NoWorkspaceAccess";
@@ -34,6 +36,7 @@ import { useCreatorsStore } from "./state/useCreatorsStore";
 import { useAuthSession } from "./state/useAuthSession";
 import { useWorkspace } from "./state/useWorkspace";
 import { useAdminAccess } from "./state/useAdminAccess";
+import { useSydAccess } from "./state/useSydAccess";
 import { useActivityFeed } from "./state/useActivityFeed";
 import { useCreatorPackages } from "./state/useCreatorPackages";
 import { useResearchAccounts } from "./state/useResearchAccounts";
@@ -70,11 +73,6 @@ function App() {
     }
   }
 
-  function navigateToCreator(creatorId: string) {
-    setOpenCreatorId(creatorId);
-    setPage("creators");
-  }
-
   const { user, loading: authLoading, signIn, signOut } = useAuthSession();
   const {
     workspace,
@@ -86,6 +84,7 @@ function App() {
     updateDisplayName,
   } = useWorkspace(user?.id);
   const { isAdmin: isPlatformAdmin } = useAdminAccess(user?.id);
+  const { isSydOwner } = useSydAccess(user?.id);
   const displayName = workspace?.displayName || user?.email;
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
@@ -121,6 +120,8 @@ function App() {
             onSignOut={signOut}
             activity={{ items: [], loading: false }}
             onOpenCollection={() => {}}
+            creators={[]}
+            creatorPackages={new Map()}
           />
           <div className="relative z-10 flex-1 min-w-0 h-full">
             <AdminDashboardPage />
@@ -176,9 +177,12 @@ function App() {
         workspaceId={workspace.id}
         role={workspace.role}
         isPlatformAdmin={isPlatformAdmin}
+        isSydOwner={isSydOwner}
         onSignOut={signOut}
         activity={activity}
         onOpenCollection={navigateToCollection}
+        creators={creatorsStore.creators}
+        creatorPackages={creatorPackages}
       />
       <div className="relative z-10 flex-1 min-w-0 h-full">
         {/* Kept mounted (just hidden) rather than conditionally rendered like
@@ -223,19 +227,19 @@ function App() {
         {page !== "hub" && page !== "research" && (
           <div key={page} className="h-full animate-fade-in">
             {page === "admin" && isPlatformAdmin && <AdminDashboardPage />}
+            {page === "syd" && isSydOwner && <SydOwnerPage />}
             {page === "dashboard" && (
               <DashboardPage
                 userName={displayName}
                 creators={creatorsStore.creators}
                 collections={collectionsStore.collections}
                 activity={activity}
-                creatorPackages={creatorPackages}
                 onOpenHub={() => setPage("hub")}
-                onOpenCreator={navigateToCreator}
+                onOpenResearch={() => setPage("research")}
                 onOpenCollection={navigateToCollection}
                 onOpenCollections={() => setPage("collections")}
                 onOpenCreators={() => setPage("creators")}
-                onOpenBilling={() => setPage("billing")}
+                onOpenProduction={() => setPage("production")}
               />
             )}
             {page === "collections" && (
@@ -246,6 +250,7 @@ function App() {
                 onOpenCollectionIdChange={setOpenCollectionId}
                 onCloseCollection={closeCollectionWorkspace}
                 backLabel={PAGE_LABELS[collectionOrigin]}
+                isSydOwner={isSydOwner}
               />
             )}
             {page === "creators" && (

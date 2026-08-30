@@ -92,6 +92,13 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* Dashboard 2.0's Figma reference uses Manrope ExtraLight for its display
+   numerals and headline — distinct from every other headline typeface in
+   the app on purpose, scoped to just that page. */
+.font-mn {
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+}
+
 /* faint film grain — tactile, not decorative */
 .grain-overlay {
   position: fixed;
@@ -266,6 +273,27 @@ html[data-tab-hidden="true"] .hero-photo-layer {
 @keyframes star-twinkle {
   0%, 100% { opacity: 0.15; }
   50% { opacity: var(--star-peak, 0.75); }
+}
+
+/* Dashboard-only boost — a brighter, more crowded resting sky than the
+   shared component's default (Login/Hub stay untouched since this only
+   applies inside the Dashboard hero's own wrapper). Raises the resting
+   (non-peak) opacity and adds a soft glow to every star, not just the
+   ~12% "accent" ones, so the sky reads as a genuinely rich night sky. */
+.dashboard-starfield-boost .star-twinkle {
+  opacity: 0.32;
+  box-shadow: 0 0 3px rgba(255, 250, 240, 0.35);
+}
+@keyframes star-twinkle-boosted {
+  0%, 100% { opacity: 0.32; }
+  50% { opacity: var(--star-peak, 0.9); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-starfield-boost .star-twinkle {
+    animation-name: star-twinkle-boosted;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
 }
 
 .shooting-star-instance {

@@ -3,6 +3,7 @@ import { FolderHeart, Plus, Archive, ArchiveRestore } from "lucide-react";
 import type { Creator } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { groupCollectionsByFamily } from "../../lib/collectionNaming";
+import { supabase } from "../../lib/supabase";
 import { CreatorFilterBar } from "./CreatorFilterBar";
 import { CollectionRow } from "./CollectionRow";
 import { CollectionWorkspace } from "./CollectionWorkspace";
@@ -15,6 +16,7 @@ export function CollectionsPage({
   onOpenCollectionIdChange,
   onCloseCollection,
   backLabel,
+  isSydOwner,
 }: {
   creators: Creator[];
   collectionsStore: CollectionsStore;
@@ -27,6 +29,9 @@ export function CollectionsPage({
   // used for in-page navigation (switching tabs, opening a different row).
   onCloseCollection: () => void;
   backLabel: string;
+  // Gates the private SYD send button — UI hint only, create_syd_submission
+  // re-checks client_os.is_syd_owner() server-side regardless.
+  isSydOwner?: boolean;
 }) {
   const { collections, renameCollection, duplicateCollection, deleteCollection } = collectionsStore;
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
@@ -82,6 +87,14 @@ export function CollectionsPage({
           collectionsStore.updateConceptNotes(activeCollection.id, videoId, notes)
         }
         onSendSubmission={(note) => collectionsStore.sendSubmission(activeCollection.id, note)}
+        isSydOwner={isSydOwner}
+        onSendToSyd={async (note) => {
+          const { error } = await supabase
+            .schema("client_os")
+            .rpc("create_syd_submission", { p_collection_id: activeCollection.id, p_note: note || null });
+          if (error) return { ok: false, error: error.message };
+          return { ok: true };
+        }}
         siblingCollections={collections
           .filter((c) => c.creatorId === activeCollection.creatorId && c.id !== activeCollection.id)
           .map((c) => ({ id: c.id, name: c.name, status: c.status, submissions: c.submissions }))}

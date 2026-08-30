@@ -14,6 +14,7 @@ import { collectionFamily, isVersionableCollection, nextCollectionName } from ".
 import { resolveReelVideo } from "../../lib/searchReels";
 import { ConceptGrid } from "./ConceptGrid";
 import { SendToReelForgePanel } from "./SendToReelForgePanel";
+import { SendToSydPanel } from "./SendToSydPanel";
 import { DriveGlyph } from "./DriveGlyph";
 import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "./CollectionRow";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
@@ -53,6 +54,8 @@ export function CollectionWorkspace({
   onRestore,
   onReassignConcept,
   onAssignConceptToAnother,
+  isSydOwner,
+  onSendToSyd,
 }: {
   collection: Collection;
   creators: Creator[];
@@ -84,10 +87,16 @@ export function CollectionWorkspace({
   onRestore?: () => void;
   onReassignConcept: (videoId: string, targetCreatorId: string, targetCollectionId: string | undefined) => Promise<{ error: string | null }>;
   onAssignConceptToAnother: (videoId: string, targetCreatorId: string, targetCollectionId: string | undefined) => Promise<{ error: string | null }>;
+  // Private SYD route — only ever shown to the Owner (see useSydAccess).
+  // Entirely separate action from onSendSubmission: different table,
+  // different destination, zero effect on the normal customer flow below.
+  isSydOwner?: boolean;
+  onSendToSyd?: (note: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const archived = !!collection.archivedAt;
   const [notes, setNotes] = useState(collection.notes);
   const [sendOpen, setSendOpen] = useState(false);
+  const [sydOpen, setSydOpen] = useState(false);
   const [conceptFilter, setConceptFilter] = useState<ConceptFilter>("all");
   const [inboxNoteId, setInboxNoteId] = useState<string | null>(null);
   const notesSaveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -358,6 +367,16 @@ export function CollectionWorkspace({
                 <Send size={13} />
                 {latestSubmission ? "Send to ReelForge again" : "Send to ReelForge"}
               </button>
+
+              {isSydOwner && onSendToSyd && (
+                <button
+                  onClick={() => setSydOpen(true)}
+                  title="Private — Sydney Studio only"
+                  className="mt-1.5 w-full h-8 rounded-md flex items-center justify-center gap-1.5 text-[11.5px] font-medium border border-[#D39448]/30 text-[#D39448] hover:bg-[#D39448]/10 transition-colors duration-150"
+                >
+                  SYD
+                </button>
+              )}
               {belowMinimum && (
                 <p className="mt-2 text-[11px] text-neutral-500 leading-relaxed">
                   Add {remainingToMinimum} more concept{remainingToMinimum === 1 ? "" : "s"} — collections need
@@ -465,6 +484,15 @@ export function CollectionWorkspace({
         onClose={() => setSendOpen(false)}
         onConfirm={(note) => onSendSubmission(note)}
       />
+
+      {onSendToSyd && (
+        <SendToSydPanel
+          open={sydOpen}
+          collectionName={collection.name}
+          onClose={() => setSydOpen(false)}
+          onConfirm={(note) => onSendToSyd(note)}
+        />
+      )}
 
       {/* Shown while re-resolving a Concept's playable video (or if that
           fails) — the real detail modal below only ever renders once a

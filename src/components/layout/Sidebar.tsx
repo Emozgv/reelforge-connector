@@ -12,9 +12,11 @@ import {
   Bell,
   Radar,
   ShieldCheck,
+  ChevronRight,
 } from "lucide-react";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import type { ActivityEventType } from "../../lib/activityMapping";
+import type { Creator, CreatorPackage } from "../../types";
 import { canViewBilling } from "../../lib/permissions";
 import { TestAccountButton } from "./TestAccountButton";
 
@@ -42,33 +44,23 @@ export type Page =
   | "library"
   | "billing"
   | "settings"
-  | "admin";
+  | "admin"
+  | "syd";
 
-const NAV_GROUPS: { label: string; items: { id: Page; label: string; icon: React.ReactNode }[] }[] = [
-  {
-    label: "Workspace",
-    items: [
-      { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} strokeWidth={1.75} /> },
-      { id: "hub", label: "Creativity Hub", icon: <Sparkles size={16} strokeWidth={1.75} /> },
-      { id: "research", label: "Research Accounts", icon: <Radar size={16} strokeWidth={1.75} /> },
-    ],
-  },
-  {
-    label: "Content",
-    items: [
-      { id: "collections", label: "Collections", icon: <FolderHeart size={16} strokeWidth={1.75} /> },
-      { id: "production", label: "Production", icon: <Clapperboard size={16} strokeWidth={1.75} /> },
-      { id: "library", label: "Library", icon: <Library size={16} strokeWidth={1.75} /> },
-    ],
-  },
-  {
-    label: "Management",
-    items: [
-      { id: "creators", label: "Creators", icon: <Users size={16} strokeWidth={1.75} /> },
-      { id: "billing", label: "Billing", icon: <CreditCard size={16} strokeWidth={1.75} /> },
-      { id: "settings", label: "Settings", icon: <Settings size={16} strokeWidth={1.75} /> },
-    ],
-  },
+// Same real routes as before, just one flat list now instead of three
+// labelled groups — a presentation-only change (see the Executive Black
+// pass) to match the reference's simpler, denser nav composition. No new
+// items, no reordering of what each id navigates to.
+const NAV_ITEMS: { id: Page; label: string; icon: React.ReactNode }[] = [
+  { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={13} strokeWidth={1.75} /> },
+  { id: "hub", label: "Creativity Hub", icon: <Sparkles size={13} strokeWidth={1.75} /> },
+  { id: "research", label: "Research Accounts", icon: <Radar size={13} strokeWidth={1.75} /> },
+  { id: "collections", label: "Collections", icon: <FolderHeart size={13} strokeWidth={1.75} /> },
+  { id: "production", label: "Production", icon: <Clapperboard size={13} strokeWidth={1.75} /> },
+  { id: "library", label: "Library", icon: <Library size={13} strokeWidth={1.75} /> },
+  { id: "creators", label: "Creators", icon: <Users size={13} strokeWidth={1.75} /> },
+  { id: "billing", label: "Billing", icon: <CreditCard size={13} strokeWidth={1.75} /> },
+  { id: "settings", label: "Settings", icon: <Settings size={13} strokeWidth={1.75} /> },
 ];
 
 export function Sidebar({
@@ -80,9 +72,12 @@ export function Sidebar({
   workspaceId,
   role,
   isPlatformAdmin,
+  isSydOwner,
   onSignOut,
   activity,
   onOpenCollection,
+  creators,
+  creatorPackages,
 }: {
   page: Page;
   onNavigate: (p: Page) => void;
@@ -95,9 +90,18 @@ export function Sidebar({
   // this just because role === "owner" in their own workspace. Only true
   // for an account in client_os.platform_admins (see useAdminAccess).
   isPlatformAdmin?: boolean;
+  // Also completely separate — backed by client_os.syd_members, unrelated
+  // to platform_admins or workspace role (see useSydAccess).
+  isSydOwner?: boolean;
   onSignOut?: () => void;
   activity: { items: ActivityFeedItem[]; loading: boolean };
   onOpenCollection: (collectionId: string) => void;
+  // Real workspace plan data for the bottom-of-sidebar plan card — no single
+  // per-workspace "plan" concept exists (ReelForge sells per-creator plans),
+  // so the card shows the real "X of Y creators on an active plan" figure
+  // instead of a fabricated plan name/renewal date.
+  creators: Creator[];
+  creatorPackages: Map<string, CreatorPackage>;
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [lastReadAt, setLastReadAt] = useState(() => Number(localStorage.getItem(LAST_READ_KEY) ?? 0));
@@ -105,6 +109,11 @@ export function Sidebar({
   const initials = shownName ? shownName.slice(0, 2).toUpperCase() : "EM";
   const notifications = activity.items.filter((item) => NOTABLE_EVENT_TYPES.includes(item.eventType));
   const unread = notifications.length > 0 && new Date(notifications[0].createdAtRaw).getTime() > lastReadAt;
+  // Real field already passed in (workspace.role) — shown under the name the
+  // same way the reference shows "Owner" under "Noah", instead of always
+  // falling back to email.
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : userEmail;
+  const creatorsWithPlan = creators.filter((c) => creatorPackages.has(c.id)).length;
 
   function markAllRead() {
     const now = Date.now();
@@ -113,11 +122,11 @@ export function Sidebar({
   }
 
   return (
-    <aside className="relative z-20 w-[240px] xl:w-[264px] 2xl:w-[288px] shrink-0 h-full border-r border-white/[0.06] bg-[#020508]/80 backdrop-blur-xl flex flex-col">
-      <div className="h-16 xl:h-[72px] flex items-center justify-between px-5 xl:px-6 border-b border-white/[0.06]">
-        <div className="flex items-center gap-2.5 xl:gap-3">
+    <aside className="relative z-20 w-[216px] shrink-0 h-full border-r border-[#121215] bg-[#08080a] flex flex-col">
+      <div className="flex items-center justify-between gap-1.5 pt-[26px] pb-[24px] pl-[22px] pr-[14px]">
+        <div className="flex items-center gap-2 min-w-0">
           <div
-            className="w-[26px] h-6 xl:w-[30px] xl:h-7 shrink-0"
+            className="w-[20px] h-[18px] shrink-0"
             style={{
               WebkitMaskImage: "url(/rf-mark.png)",
               maskImage: "url(/rf-mark.png)",
@@ -130,132 +139,175 @@ export function Sidebar({
               background: "linear-gradient(135deg, #D39448, #A97942)",
             }}
           />
-          <span className="font-brand text-[16.5px] xl:text-[18px] text-neutral-100">ReelForge</span>
+          <span className="font-mn font-extralight text-[13px] tracking-[1.3px] text-[#ede5d6] uppercase truncate">ReelForge</span>
         </div>
 
-        <div className="flex items-center gap-0.5">
-        <TestAccountButton workspaceId={workspaceId} canManage={Boolean(isPlatformAdmin)} />
-        <div className="relative">
-          <button
-            onClick={() => setNotifOpen((v) => !v)}
-            className="relative w-8 h-8 rounded-md flex items-center justify-center text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05] transition-colors duration-150"
-          >
-            <Bell size={16} strokeWidth={1.75} />
-            {unread && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#D39448]" />}
-          </button>
-          {notifOpen && (
-            <div
-              onMouseLeave={() => setNotifOpen(false)}
-              className="absolute left-0 top-9 z-30 w-72 rounded-xl surface-panel-strong p-1 animate-fade-in"
+        <div className="flex items-center gap-0.5 shrink-0">
+          <div className="relative">
+            <button
+              onClick={() => setNotifOpen((v) => !v)}
+              className="relative w-[28px] h-[28px] rounded-[9px] border border-[#1e1e22] bg-[#0f0f12] flex items-center justify-center text-neutral-500 hover:text-neutral-200 transition-colors duration-150"
             >
-              <div className="flex items-center justify-between px-2.5 pt-2 pb-1.5">
-                <p className="text-[10.5px] tracking-wide uppercase text-neutral-500">Notifications</p>
-                {unread && (
-                  <button
-                    onClick={markAllRead}
-                    className="text-[10.5px] text-neutral-500 hover:text-[#D39448] transition-colors duration-150"
-                  >
-                    Mark all read
-                  </button>
-                )}
+              <Bell size={12} strokeWidth={1.75} />
+              {unread && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#D39448]" />}
+            </button>
+            {notifOpen && (
+              <div
+                onMouseLeave={() => setNotifOpen(false)}
+                className="absolute left-0 top-9 z-30 w-72 rounded-xl surface-panel-strong p-1 animate-fade-in"
+              >
+                <div className="flex items-center justify-between px-2.5 pt-2 pb-1.5">
+                  <p className="text-[10.5px] tracking-wide uppercase text-neutral-500">Notifications</p>
+                  {unread && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-[10.5px] text-neutral-500 hover:text-[#D39448] transition-colors duration-150"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  {notifications.length === 0 && (
+                    <p className="px-2.5 py-3 text-[11.5px] text-neutral-600">Nothing yet.</p>
+                  )}
+                  {notifications.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        if (item.collectionId) onOpenCollection(item.collectionId);
+                        setNotifOpen(false);
+                      }}
+                      disabled={!item.collectionId}
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.06] transition-colors duration-150 disabled:hover:bg-transparent"
+                    >
+                      <p className="text-[12px] text-neutral-200 leading-snug">{item.message}</p>
+                      <p className="text-[10.5px] text-neutral-600 mt-0.5">{item.relativeTime}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="max-h-[300px] overflow-y-auto">
-                {notifications.length === 0 && (
-                  <p className="px-2.5 py-3 text-[11.5px] text-neutral-600">Nothing yet.</p>
-                )}
-                {notifications.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      if (item.collectionId) onOpenCollection(item.collectionId);
-                      setNotifOpen(false);
-                    }}
-                    disabled={!item.collectionId}
-                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.06] transition-colors duration-150 disabled:hover:bg-transparent"
-                  >
-                    <p className="text-[12px] text-neutral-200 leading-snug">{item.message}</p>
-                    <p className="text-[10.5px] text-neutral-600 mt-0.5">{item.relativeTime}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <nav className="flex-1 px-3 xl:px-4 py-4 xl:py-5 overflow-y-auto">
-        {NAV_GROUPS.map((group, gi) => (
-          <div key={group.label} className={gi > 0 ? "mt-5" : ""}>
-            <p className="px-3 mb-1.5 text-[10.5px] tracking-[0.1em] uppercase text-neutral-600 font-medium">
-              {group.label}
-            </p>
-            <div className="space-y-1">
-              {group.items
-                .filter((item) => item.id !== "billing" || canViewBilling(role))
-                .map((item) => {
-                const active = item.id === page;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setNotifOpen(false);
-                      onNavigate(item.id);
-                    }}
-                    className={[
-                      "relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] xl:text-[14.5px] transition-colors duration-150 border",
-                      active
-                        ? "text-neutral-100 bg-[#D39448]/[0.1] border-[#D39448]/30"
-                        : "text-neutral-400 border-transparent hover:text-neutral-100 hover:bg-white/[0.035]",
-                    ].join(" ")}
-                  >
-                    <span className={active ? "text-[#D39448]" : ""}>{item.icon}</span>
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <nav className="flex-1 flex flex-col gap-[4px] px-[14px] overflow-y-auto">
+        {NAV_ITEMS.filter((item) => item.id !== "billing" || canViewBilling(role)).map((item) => {
+          const active = item.id === page;
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                setNotifOpen(false);
+                onNavigate(item.id);
+              }}
+              className={[
+                "relative w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[9px] text-[11.5px] border transition-colors duration-150",
+                active
+                  ? "border-[#3a2a17] text-[#f0c58c]"
+                  : "border-transparent text-[#c3beb2] hover:text-neutral-100 hover:bg-white/[0.03]",
+              ].join(" ")}
+              style={active ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
+            >
+              {active && (
+                <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-full bg-[#D39448]" style={{ boxShadow: "0 0 6px rgba(211,148,72,0.6)" }} />
+              )}
+              <span className="shrink-0 opacity-85">{item.icon}</span>
+              {item.label}
+            </button>
+          );
+        })}
       </nav>
 
-      <div className="p-3.5 xl:p-4 border-t border-white/[0.06]">
+      <div className="p-[14px]">
         {isPlatformAdmin && (
           <button
             onClick={() => onNavigate("admin")}
             className={[
-              "mb-1.5 w-full flex items-center gap-2 px-2.5 xl:px-3 py-2 rounded-lg text-[12.5px] transition-colors duration-150 border",
+              "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
               page === "admin"
-                ? "text-neutral-100 bg-[#D39448]/[0.1] border-[#D39448]/30"
-                : "text-neutral-500 border-transparent hover:text-neutral-200 hover:bg-white/[0.035]",
+                ? "border-[#3a2a17] text-[#f0c58c]"
+                : "border-transparent text-[#c3beb2] hover:text-neutral-200 hover:bg-white/[0.03]",
             ].join(" ")}
+            style={page === "admin" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
           >
-            <ShieldCheck size={14} className={page === "admin" ? "text-[#D39448]" : ""} />
+            {page === "admin" && (
+              <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-full bg-[#D39448]" style={{ boxShadow: "0 0 6px rgba(211,148,72,0.6)" }} />
+            )}
+            <ShieldCheck size={11} className="shrink-0 opacity-85" />
             Admin Dashboard
           </button>
         )}
-        <div className="group flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-lg hover:bg-white/[0.035] transition-colors duration-150">
-          <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-full bg-gradient-to-br from-[#D39448] to-[#A97942] flex items-center justify-center text-[11.5px] xl:text-[12px] font-medium text-[#020508] shrink-0">
+        {isSydOwner && (
+          <button
+            onClick={() => onNavigate("syd")}
+            className={[
+              "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
+              page === "syd"
+                ? "border-[#3a2a17] text-[#f0c58c]"
+                : "border-transparent text-[#c3beb2] hover:text-neutral-200 hover:bg-white/[0.03]",
+            ].join(" ")}
+            style={page === "syd" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
+          >
+            {page === "syd" && (
+              <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-full bg-[#D39448]" style={{ boxShadow: "0 0 6px rgba(211,148,72,0.6)" }} />
+            )}
+            <ShieldCheck size={11} className="shrink-0 opacity-85" />
+            Sydney Studio
+          </button>
+        )}
+        <div className="group flex items-center gap-[10px] border-t border-[#121215] pt-[10px] pb-[11px] px-[6px]">
+          <div className="w-[32px] h-[32px] rounded-[16px] bg-gradient-to-br from-[#D39448] to-[#A97942] flex items-center justify-center text-[10px] font-medium text-[#020508] shrink-0">
             {initials}
           </div>
-          <div className="flex flex-col leading-tight min-w-0">
-            <span className="text-[13px] xl:text-[13.5px] text-neutral-200 truncate">
-              {displayName || workspaceName || "Client workspace"}
-            </span>
-            <span className="text-[11px] xl:text-[11.5px] text-neutral-500 truncate">
-              {userEmail ?? "Emre"}
-            </span>
+          <div className="flex flex-col gap-[4px] leading-tight min-w-0">
+            <span className="text-[11px] text-[#e7e2d8] truncate">{displayName || workspaceName || "Client workspace"}</span>
+            <span className="text-[9.5px] text-[#948d82] truncate">{roleLabel ?? "Emre"}</span>
           </div>
-          {onSignOut && (
-            <button
-              onClick={onSignOut}
-              title="Sign out"
-              className="ml-auto shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-200 hover:bg-white/[0.06] transition-all duration-150"
-            >
-              <LogOut size={14} />
-            </button>
-          )}
+          <div className="ml-auto flex items-center gap-0.5 shrink-0">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <TestAccountButton workspaceId={workspaceId} canManage={Boolean(isPlatformAdmin)} />
+            </div>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                title="Sign out"
+                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-200 hover:bg-white/[0.06] transition-all duration-150"
+              >
+                <LogOut size={11} />
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Plan card — same premium bottom-of-sidebar placement/treatment as
+            the reference's "PRO PLAN" card, but showing the real workspace
+            figure (creators on an active plan) since ReelForge sells plans
+            per creator, not as one workspace-wide subscription with a single
+            renewal date to display. */}
+        {creators.length > 0 && (
+          <div className="mt-[10px] rounded-[10px] border border-[#1e1e23] bg-[#0f0f12] overflow-hidden">
+            <div className="px-[13px] pt-[12px] pb-[10px]">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] tracking-[1px] text-[#c8c2b6]">WORKSPACE PLAN</span>
+                <span className={["text-[9px]", creatorsWithPlan > 0 ? "text-[#63c07f]" : "text-[#878278]"].join(" ")}>
+                  {creatorsWithPlan > 0 ? "Active" : "None"}
+                </span>
+              </div>
+              <p className="mt-[6px] text-[9.5px] text-[#888278]">
+                <span className="text-[#cfc8bc] font-medium tabular-nums">{creatorsWithPlan}</span> / {creators.length} creators on a plan
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate("billing")}
+              className="flex w-full items-center justify-between border-t border-[#1e1e23] bg-[#151519] px-[13px] py-[10px] text-[10.5px] text-[#d6d0c5] hover:bg-[#18181c] transition-colors duration-150"
+            >
+              Manage Plan
+              <ChevronRight size={12} className="opacity-60" />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );
