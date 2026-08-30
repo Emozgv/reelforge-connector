@@ -122,31 +122,21 @@ export function Sidebar({
   }
 
   return (
-    <aside className="relative z-20 w-[216px] shrink-0 h-full border-r border-[#121215] bg-[#08080a] flex flex-col">
+    <aside
+      className="relative z-20 w-[216px] shrink-0 h-full border-r border-[#0e0e10] bg-[#020203] flex flex-col"
+      style={{ boxShadow: "inset -14px 0 22px -20px rgba(0,0,0,0.85), inset 0 1px 0 rgba(0,0,0,0.6)" }}
+    >
       <div className="flex items-center justify-between gap-1.5 pt-[26px] pb-[24px] pl-[22px] pr-[14px]">
-        <div className="flex items-center gap-2 min-w-0">
-          <div
-            className="w-[20px] h-[18px] shrink-0"
-            style={{
-              WebkitMaskImage: "url(/rf-mark.png)",
-              maskImage: "url(/rf-mark.png)",
-              WebkitMaskSize: "contain",
-              maskSize: "contain",
-              WebkitMaskRepeat: "no-repeat",
-              maskRepeat: "no-repeat",
-              WebkitMaskPosition: "center",
-              maskPosition: "center",
-              background: "linear-gradient(135deg, #D39448, #A97942)",
-            }}
-          />
-          <span className="font-mn font-extralight text-[13px] tracking-[1.3px] text-[#ede5d6] uppercase truncate">ReelForge</span>
+        <div className="flex items-center gap-[10px] min-w-0">
+          <img src="/rf-logo-lockup.svg" alt="" className="w-[26px] h-[20px] shrink-0" />
+          <span className="font-mn font-extralight text-[16px] tracking-[1.6px] text-[#ede5d6] uppercase truncate">ReelForge</span>
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
           <div className="relative">
             <button
               onClick={() => setNotifOpen((v) => !v)}
-              className="relative w-[28px] h-[28px] rounded-[9px] border border-[#1e1e22] bg-[#0f0f12] flex items-center justify-center text-neutral-500 hover:text-neutral-200 transition-colors duration-150"
+              className="relative w-[28px] h-[28px] rounded-[9px] border border-[#202024] bg-[#111114] flex items-center justify-center text-neutral-500 hover:text-neutral-200 transition-colors duration-150"
             >
               <Bell size={12} strokeWidth={1.75} />
               {unread && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#D39448]" />}
@@ -205,7 +195,7 @@ export function Sidebar({
               className={[
                 "relative w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[9px] text-[11.5px] border transition-colors duration-150",
                 active
-                  ? "border-[#3a2a17] text-[#f0c58c]"
+                  ? "border-[#141009] text-[#f0c58c]"
                   : "border-transparent text-[#c3beb2] hover:text-neutral-100 hover:bg-white/[0.03]",
               ].join(" ")}
               style={active ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
@@ -227,7 +217,7 @@ export function Sidebar({
             className={[
               "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
               page === "admin"
-                ? "border-[#3a2a17] text-[#f0c58c]"
+                ? "border-[#141009] text-[#f0c58c]"
                 : "border-transparent text-[#c3beb2] hover:text-neutral-200 hover:bg-white/[0.03]",
             ].join(" ")}
             style={page === "admin" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
@@ -245,7 +235,7 @@ export function Sidebar({
             className={[
               "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
               page === "syd"
-                ? "border-[#3a2a17] text-[#f0c58c]"
+                ? "border-[#141009] text-[#f0c58c]"
                 : "border-transparent text-[#c3beb2] hover:text-neutral-200 hover:bg-white/[0.03]",
             ].join(" ")}
             style={page === "syd" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
@@ -257,7 +247,7 @@ export function Sidebar({
             Sydney Studio
           </button>
         )}
-        <div className="group flex items-center gap-[10px] border-t border-[#121215] pt-[10px] pb-[11px] px-[6px]">
+        <div className="group flex items-center gap-[10px] border-t border-[#131316] pt-[10px] pb-[11px] px-[6px]">
           <div className="w-[32px] h-[32px] rounded-[16px] bg-gradient-to-br from-[#D39448] to-[#A97942] flex items-center justify-center text-[10px] font-medium text-[#020508] shrink-0">
             {initials}
           </div>
@@ -287,7 +277,7 @@ export function Sidebar({
             per creator, not as one workspace-wide subscription with a single
             renewal date to display. */}
         {creators.length > 0 && (
-          <div className="mt-[10px] rounded-[10px] border border-[#1e1e23] bg-[#0f0f12] overflow-hidden">
+          <div className="mt-[10px] rounded-[10px] border border-[#202024] bg-[#111114] overflow-hidden">
             <div className="px-[13px] pt-[12px] pb-[10px]">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] tracking-[1px] text-[#c8c2b6]">WORKSPACE PLAN</span>
@@ -301,7 +291,7 @@ export function Sidebar({
             </div>
             <button
               onClick={() => onNavigate("billing")}
-              className="flex w-full items-center justify-between border-t border-[#1e1e23] bg-[#151519] px-[13px] py-[10px] text-[10.5px] text-[#d6d0c5] hover:bg-[#18181c] transition-colors duration-150"
+              className="flex w-full items-center justify-between border-t border-[#202024] bg-[#0c0c0f] px-[13px] py-[10px] text-[10.5px] text-[#d6d0c5] hover:bg-[#101013] transition-colors duration-150"
             >
               Manage Plan
               <ChevronRight size={12} className="opacity-60" />

@@ -129,7 +129,9 @@ export function StarfieldBackground({
     // enough here, there's no need for a video-grid-style seeded RNG. Most
     // stars stay tiny and faint (fine sky texture); a small minority are
     // slightly larger "hero" points with a soft bloom, for a little depth.
-    return Array.from({ length: starCount }).map(() => {
+    // A third, even tinier "micro" tier is layered on top purely to add
+    // extra small-star density, without touching the original mix above.
+    const base = Array.from({ length: starCount }).map(() => {
       const isAccent = Math.random() < 0.12;
       return {
         left: Math.random() * 100,
@@ -141,6 +143,19 @@ export function StarfieldBackground({
         glow: isAccent,
       };
     });
+
+    const microCount = Math.round(starCount * 0.4);
+    const micro = Array.from({ length: microCount }).map(() => ({
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      size: 0.4 + Math.random() * 0.35,
+      duration: 3 + Math.random() * 8,
+      delay: Math.random() * 12,
+      peak: 0.18 + Math.random() * 0.22,
+      glow: false,
+    }));
+
+    return [...base, ...micro];
   }, [starCount]);
 
   const dust = useMemo<Dust[]>(() => {

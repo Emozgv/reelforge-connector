@@ -1,4 +1,5 @@
 import {
+  Activity,
   AlertTriangle,
   Bookmark,
   CheckCircle2,
@@ -15,22 +16,28 @@ import { formatRelativeTime } from "../../lib/relativeTime";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 
-// Panel surface — deep, flat near-black. No lighter top stop, no highlight
-// line — just a hair darker than the inner cards below, so it reads as
-// black, not as a lit/gray gradient.
-const PANEL = "rounded-[12px] border border-[#151519]";
+// Panel surface — deep, warm-black (not neutral/cool-black). Deliberately
+// close to the page background so the panel nearly disappears into the
+// void; the warmth (R slightly > G > B, instead of equal or blue-leaning
+// channels) is what reads as "premium bronze-black" rather than flat
+// gray-black.
+const PANEL = "rounded-[12px] border border-[#1a130b]";
 const PANEL_STYLE: React.CSSProperties = {
-  background: "linear-gradient(180deg, #0d0d10 0%, #08080a 100%)",
+  background: "linear-gradient(180deg, #070707, #020202)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
 };
 
 // Nested "card within a panel" surface — Needs Attention rows, Content
-// Momentum stat rows, Production Pulse's legend box. A flat, distinctly
-// separate dark tone from the panel behind it, not a lighter gradient.
-const CARD = "rounded-[10px] border border-[#1c1c21]";
+// Momentum stat rows, Production Pulse's legend box. A real, deliberate
+// step up in value from the panel behind it (not a gradient, not a white
+// highlight) — genuinely lighter, and warm-toned like the panel, so these
+// read as distinct raised surfaces instead of blending into the panel.
+const CARD = "rounded-[10px] border border-[#202024]";
 const CARD_STYLE: React.CSSProperties = {
-  background: "#0e0e11",
+  background: "#111114",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6)",
 };
-const CARD_HOVER = "hover:border-[#28282e]";
+const CARD_HOVER = "hover:border-[#2c2c32]";
 
 // Fixed, hand-placed positions for the hero's very sparse warm-star
 // accents — deliberately not randomized like the white starfield, and
@@ -115,7 +122,7 @@ function PanelHeading({
     <div className="flex items-start justify-between px-[18px] pt-[16px]">
       <div className="flex flex-col gap-[8px]">
         <div className="flex items-center gap-[9px]">
-          <h2 className="text-[10.5px] tracking-[1.1px] text-[#ddd6c9]">{title}</h2>
+          <h2 className="font-mn text-[10.5px] font-bold tracking-[1.1px] text-[#ddd6c9]">{title}</h2>
           {typeof badge === "number" && badge > 0 && (
             <span className="rounded-[16px] bg-[#3a2a17] px-[6px] py-[1.5px] text-[8.5px] tracking-[1.1px] text-[#e8b273]">
               {badge}
@@ -138,9 +145,9 @@ function FooterLink({ label, onClick }: { label: string; onClick?: () => void })
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center justify-between border-t border-[#1a1a1f] px-[18px] py-[13px] text-[10.5px] text-[#cfc8bc] hover:text-[#e8b273] transition-colors duration-150"
+      className="flex w-full items-center justify-between border-t border-[#1a1a1f] px-[18px] py-[13px] text-[10.5px] text-[#cfc8bc] hover:text-[#e8e1d5] transition-colors duration-150"
     >
-      {label} <span aria-hidden className="text-[10.5px] opacity-60">›</span>
+      {label} <span aria-hidden className="text-[10.5px] text-[#e8b273]">›</span>
     </button>
   );
 }
@@ -176,21 +183,17 @@ function PulseTile({
     <button
       onClick={onClick}
       disabled={!onClick}
-      className="flex flex-1 min-w-[140px] flex-col gap-[6px] border-l border-[#1a1a1f] px-[22px] py-[17px] text-left disabled:cursor-default"
+      className="relative flex flex-1 min-w-[140px] flex-col gap-[6px] px-[22px] py-[17px] text-left disabled:cursor-default"
     >
-      <div className="flex items-center gap-[9px]">
+      <span className="absolute left-0 top-[18px] bottom-[18px] w-px bg-[#1a1a1f]" />
+      <div className="flex items-center gap-[10px]">
+        <span style={{ color: iconColor, filter: `drop-shadow(0 0 4px ${active ? glow : PULSE_TONE.gold.glow})` }}>{icon}</span>
         <span
-          className="relative flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px]"
-          style={{
-            background: `radial-gradient(circle at 50% 40%, ${iconColor}26, ${iconColor}08 70%, transparent 100%)`,
-            boxShadow: `inset 0 0 0 1px ${iconColor}22`,
-          }}
+          className={["text-[23.5px] leading-none font-medium tabular-nums", active ? "" : "text-[#f0eadf]"].join(" ")}
+          style={active ? { color } : undefined}
         >
-          <span style={{ color: iconColor, filter: active ? `drop-shadow(0 0 4px ${glow})` : undefined }}>{icon}</span>
-        </span>
-        <Num className={["text-[21px] leading-none", active ? "" : "text-[#f0eadf]"].join(" ")} style={active ? { color } : undefined}>
           {value}
-        </Num>
+        </span>
       </div>
       <p className="text-[10.5px] text-[#aaa49a]">{label}</p>
       <p className="text-[9px] text-[#646058]">—</p>
@@ -277,6 +280,7 @@ export function DashboardPage({
     .slice(0, 3);
 
   const creatorById = new Map(creators.map((c) => [c.id, c]));
+  const collectionById = new Map(collections.map((c) => [c.id, c]));
 
   const stageCounts = STAGE_ORDER.reduce((acc, stage) => ({ ...acc, [stage]: 0 }), {} as Record<Stage, number>);
   for (const c of collections) stageCounts[collectionStage(c)] += 1;
@@ -300,11 +304,11 @@ export function DashboardPage({
           className="relative flex flex-col gap-[6px] overflow-hidden px-[48px] pt-[48px] pb-[54px]"
           style={{
             background:
-              "radial-gradient(1200px 500px at 58% -20%, rgba(16,13,19,1), rgba(2,2,3,1) 70%), radial-gradient(560px 260px at 88% 4%, rgba(211,148,72,0.05), transparent 70%)",
+              "radial-gradient(560px 260px at 88% 4%, rgba(211,148,72,0.05), transparent 70%), #000000",
           }}
         >
           <div className="dashboard-starfield-boost absolute inset-0">
-            <StarfieldBackground starCount={230} dustCount={5} />
+            <StarfieldBackground starCount={300} dustCount={5} />
           </div>
           {/* A couple of tiny warm/gold points among the white starfield —
               deliberately very sparse, so the sky reads as elegant depth
@@ -328,7 +332,7 @@ export function DashboardPage({
           ))}
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 h-24"
-            style={{ background: "linear-gradient(to bottom, transparent, #020203)" }}
+            style={{ background: "linear-gradient(to bottom, transparent, #000000)" }}
           />
           <p className="relative text-[10.5px] tracking-[1.8px] text-[#c08e4e]">REELFORGE COMMAND CENTER</p>
           <h1 className="relative font-mn font-light text-[42px] tracking-[-0.8px] text-[#f2ece1]">
@@ -376,7 +380,7 @@ export function DashboardPage({
           <div className={["flex items-center px-[4px]", PANEL].join(" ")} style={PANEL_STYLE}>
             <div className="flex w-[212px] shrink-0 flex-col gap-[8px] px-[22px] py-[17px]">
               <div className="flex items-center gap-[7px]">
-                <Radar size={13} className="text-[#eccca2]" />
+                <Activity size={13} className="text-[#eccca2]" />
                 <p className="text-[9px] tracking-[1.4px] text-[#eccca2]">OPERATIONAL PULSE</p>
               </div>
               <p className="text-[9px] leading-snug text-[#79746b]">Live overview of your workspace</p>
@@ -412,16 +416,19 @@ export function DashboardPage({
                           {creator?.profileImage && <img src={creator.profileImage} alt="" className="h-full w-full object-cover" />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[11px] text-[#eae4d9]">{s.collection.name}</p>
+                          <p className="truncate text-[11px] font-medium text-[#eae4d9]">{s.collection.name}</p>
                           <div className="mt-[5px] flex items-center gap-[7px]">
                             <p className="truncate text-[9px] text-[#878278]">Submission #{s.index}</p>
-                            <span className="shrink-0 rounded-[4px] border border-[#452626] bg-[#2b1a1a] px-[6px] py-[2px] text-[7.5px] tracking-[0.5px] text-[#d98a7a]">
+                            <span
+                              className="shrink-0 rounded-[4px] border border-[#5a2c26] px-[6px] py-[2px] text-[7.5px] tracking-[0.5px] text-[#e88a70]"
+                              style={{ background: "linear-gradient(180deg, #3a211d, #2b1a1a)", boxShadow: "0 0 6px rgba(224,102,79,0.15)" }}
+                            >
                               CHECK INBOX
                             </span>
                           </div>
                         </div>
                         <p className="shrink-0 text-[9px] text-[#79746b]">{formatRelativeTime(s.collection.updatedAt)}</p>
-                        <span className="shrink-0 rounded-[7px] border border-[#222227] bg-[#111114] px-[12px] py-[7px] text-[10px] text-[#ded7cb]">
+                        <span className="shrink-0 rounded-[7px] border border-[#242429] bg-[#111114] px-[12px] py-[7px] text-[10px] text-[#ded7cb]">
                           Review
                         </span>
                       </button>
@@ -437,24 +444,38 @@ export function DashboardPage({
                 <PanelHeading title="CONTENT MOMENTUM" subtitle="Your ideas. Saved. Organized." />
                 <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
                   <div className="flex flex-1 min-w-[130px] flex-col gap-[8px]">
-                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
-                      <FolderOpen size={14} className="shrink-0 text-[#aaa49a]" />
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Saved Concepts</span>
+                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                      <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #d9a86322" }}>
+                        <FolderOpen size={13} className="text-[#d9a863]" />
+                      </span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Saved Concepts</span>
                       <span className="text-[10px] text-[#aaa49a]">{savedTotal}</span>
                     </button>
-                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
-                      <Clapperboard size={14} className="shrink-0 text-[#aaa49a]" />
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Active Collections</span>
+                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                      <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4a90d926, #4a90d908 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4a90d922" }}>
+                        <Clapperboard size={13} className="text-[#6ba3d9]" />
+                      </span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Active Collections</span>
                       <span className="text-[10px] text-[#aaa49a]">{activeCollectionsCount}</span>
                     </button>
-                    <button onClick={onOpenProduction} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
-                      <AlertTriangle size={14} className="shrink-0 text-[#aaa49a]" />
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Needs Attention</span>
+                    <button onClick={onOpenProduction} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                      <span
+                        className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]"
+                        style={{
+                          background: needsAttention.length > 0 ? "radial-gradient(circle at 50% 40%, #e0664f26, #e0664f08 70%, transparent 100%)" : "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)",
+                          boxShadow: needsAttention.length > 0 ? "inset 0 0 0 1px #e0664f22" : "inset 0 0 0 1px #d9a86322",
+                        }}
+                      >
+                        <AlertTriangle size={13} className={needsAttention.length > 0 ? "text-[#e0664f]" : "text-[#d9a863]"} />
+                      </span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Needs Attention</span>
                       <span className="text-[10px] text-[#aaa49a]">{needsAttention.length}</span>
                     </button>
-                    <button onClick={onOpenHub} className="flex items-center gap-[10px] rounded-[8px] border border-[#1c1c21] px-[12px] py-[10px] text-left hover:border-[#28282e] transition-colors duration-150" style={CARD_STYLE}>
-                      <Radar size={14} className="shrink-0 text-[#aaa49a]" />
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] text-[#c2a06a]">Creativity Hub</span>
+                    <button onClick={onOpenHub} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                      <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4fb37a26, #4fb37a08 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4fb37a22" }}>
+                        <Radar size={13} className="text-[#6bc797]" />
+                      </span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[10.5px] font-medium text-[#c2a06a]">Creativity Hub</span>
                       <span className="text-[10px] text-[#aaa49a] opacity-70">↗</span>
                     </button>
                   </div>
@@ -492,10 +513,9 @@ export function DashboardPage({
               <FooterLink label="Go to Creativity Hub" onClick={onOpenHub} />
             </div>
 
-            <div className={["flex flex-1 min-w-0 flex-col justify-between", PANEL].join(" ")} style={PANEL_STYLE}>
-              <div>
-                <PanelHeading title="PRODUCTION PULSE" subtitle="Real-time status of your pipeline" />
-                <div className="flex items-center gap-[14px] px-[18px] pt-[8px]">
+            <div className={["flex flex-1 min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
+              <PanelHeading title="PRODUCTION PULSE" subtitle="Real-time status of your pipeline" />
+              <div className="flex flex-1 items-center gap-[14px] px-[18px]">
                   <div className="relative flex h-[132px] w-[132px] shrink-0 items-center justify-center">
                     <div
                       className="pointer-events-none absolute inset-[-14px] rounded-full"
@@ -507,22 +527,18 @@ export function DashboardPage({
                       <p className="text-[9px] text-[#948d82]">In Production</p>
                     </div>
                   </div>
-                  <div className={["flex flex-1 min-w-0 flex-col overflow-hidden", CARD].join(" ")} style={CARD_STYLE}>
-                    {STAGE_ORDER.map((stage, i) => (
-                      <div
-                        key={stage}
-                        className={["flex items-center gap-[9px] px-[12px] py-[8px]", i < STAGE_ORDER.length - 1 ? "border-b border-[#1a1a1f]" : ""].join(" ")}
-                      >
+                  <div className="flex flex-1 min-w-[104px] flex-col gap-[10px]">
+                    {STAGE_ORDER.map((stage) => (
+                      <div key={stage} className="flex items-center gap-[10px]">
                         <span
-                          className="h-[6px] w-[6px] shrink-0 rounded-[3px]"
+                          className="h-[7px] w-[7px] shrink-0 rounded-full"
                           style={{ background: STAGE_COLOR[stage], boxShadow: `0 0 4px ${STAGE_COLOR[stage]}80` }}
                         />
-                        <span className="flex-1 truncate text-[10px] text-[#ded7cb]">{stage}</span>
-                        <span className="text-[10px] text-[#aaa49a]">{stageCounts[stage]}</span>
+                        <span className="flex-1 truncate text-[11px] font-medium text-[#ded7cb]">{stage}</span>
+                        <span className="text-[11px] text-[#aaa49a]">{stageCounts[stage]}</span>
                       </div>
                     ))}
                   </div>
-                </div>
               </div>
               <FooterLink label="Open Production" onClick={onOpenProduction} />
             </div>
@@ -550,14 +566,14 @@ export function DashboardPage({
                           <div className="absolute inset-0" style={{ background: preview?.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }} />
                         )}
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.75))" }} />
-                        <div className="absolute left-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/55">
+                        <div className="absolute left-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/70 border border-white/10">
                           <PlatformIcon platform={preview?.video.platform ?? "instagram"} size={11} />
                         </div>
-                        <div className="absolute right-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/55 text-white/80 group-hover:text-[#e8b273] transition-colors duration-150">
+                        <div className="absolute right-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/70 border border-white/10 text-white/90 group-hover:text-[#e8b273] transition-colors duration-150">
                           <Bookmark size={11} />
                         </div>
                         <div className="absolute bottom-[11px] left-[11px] flex flex-col gap-[5px]">
-                          <p className="text-[10.5px] text-white">{c.name}</p>
+                          <p className="text-[10.5px] font-medium text-white">{c.name}</p>
                           <p className="text-[9px] text-[#c6c0b6]">{formatRelativeTime(c.updatedAt)}</p>
                         </div>
                         <div className="absolute bottom-[12px] right-[11px] text-white/85">
@@ -577,22 +593,42 @@ export function DashboardPage({
                 {!activity.loading && activity.items.length === 0 && (
                   <p className="px-[18px] py-[10px] text-[10px] text-[#79746b]">Nothing yet — activity shows up here as you go.</p>
                 )}
-                {activity.items.slice(0, 5).map((item) => (
+                {activity.items.slice(0, 5).map((item) => {
+                  const relatedCollection = item.collectionId ? collectionById.get(item.collectionId) : undefined;
+                  const relatedCreator = relatedCollection ? creatorById.get(relatedCollection.creatorId) : undefined;
+                  return (
                   <button
                     key={item.id}
                     onClick={() => item.collectionId && onOpenCollection(item.collectionId)}
                     disabled={!item.collectionId}
                     className="group flex items-center gap-[11px] border-t border-[#17171b] px-[18px] py-[9.5px] text-left first:border-t-0 disabled:cursor-default"
                   >
-                    <span className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[12px] bg-[#16161a] text-[#878278]">
-                      <Clock size={11} />
-                    </span>
-                    <p className={["flex-1 truncate text-[10.5px] text-[#d9d2c6]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
+                    {relatedCreator?.profileImage ? (
+                      <span className="h-[26px] w-[26px] shrink-0 overflow-hidden rounded-full border border-[#202024]">
+                        <img src={relatedCreator.profileImage} alt="" className="h-full w-full object-cover" />
+                      </span>
+                    ) : relatedCreator ? (
+                      <span
+                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#202024] text-[9px] font-medium text-[#e8e1d5]"
+                        style={{ background: relatedCreator.avatarColor ?? "#3d362f" }}
+                      >
+                        {relatedCreator.name?.slice(0, 2).toUpperCase()}
+                      </span>
+                    ) : (
+                      <span
+                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#202024] text-[#948d82]"
+                        style={{ background: "radial-gradient(circle at 50% 40%, #d9a86314, #11111400 70%), #111114" }}
+                      >
+                        <Clock size={11} />
+                      </span>
+                    )}
+                    <p className={["flex-1 truncate text-[10.5px] font-medium text-[#d9d2c6]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
                       {item.message}
                     </p>
                     <span className="shrink-0 text-[9px] text-[#79746b]">{item.relativeTime}</span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
