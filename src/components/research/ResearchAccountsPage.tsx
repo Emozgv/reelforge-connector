@@ -41,9 +41,9 @@ import { StarfieldBackground } from "../shared/StarfieldBackground";
 // frozen files stay untouched. Layout/structure here still follows the
 // Figma/mockup exactly; only the surface tokens (bg/border/shadow) are now
 // the same ones used everywhere else in the app.
-const RA_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.45), 0 0 10px rgba(211,148,72,0.12)";
+const RA_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.32), 0 0 10px rgba(211,148,72,0.08)";
 const PANEL_BG = "linear-gradient(180deg, #070707, #020202)";
-const PANEL = "rounded-xl border border-[#1a130b]";
+const PANEL = "rounded-xl border border-[#120d07]";
 const PANEL_STYLE = {
   background: PANEL_BG,
   boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${RA_GOLD_RING}`,
@@ -655,7 +655,7 @@ export function ResearchAccountsPage({
                 rather than inventing that signal. */}
             <div
               title="Not tracked yet"
-              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#1a130b] opacity-60"
+              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#120d07] opacity-60"
               style={PANEL_STYLE}
             >
               <div className="leading-tight">
