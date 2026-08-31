@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 const RAIL_GRADIENTS = [
   "linear-gradient(160deg,#3a3140,#221d29)",
   "linear-gradient(160deg,#2f3a3a,#1b2222)",
@@ -138,16 +140,26 @@ export function HeroReelRails() {
     maskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 85%)",
   };
 
+  // A fresh random starting point each time the Hub mounts — the six
+  // columns' relative offsets from each other stay the same (so they still
+  // don't all show the same image at once), but which images/gradients that
+  // whole group starts on shifts every visit instead of always opening on
+  // the same fixed frame.
+  const spin = useMemo(() => Math.floor(Math.random() * RAIL_IMAGES.length), []);
+  const gradSpin = useMemo(() => Math.floor(Math.random() * RAIL_GRADIENTS.length), []);
+  const img = (n: number) => (n + spin) % RAIL_IMAGES.length;
+  const grad = (n: number) => (n + gradSpin) % RAIL_GRADIENTS.length;
+
   return (
     <div className="pointer-events-none absolute inset-0 hidden lg:block" aria-hidden>
       <div
         className="absolute left-2 xl:left-6 2xl:left-10 top-0 bottom-0 flex items-center gap-3 xl:gap-4 opacity-[0.35]"
         style={maskStyle}
       >
-        <Column offset={0} imageOffset={0} duration={36} />
-        <Column offset={2} imageOffset={21} duration={44} reverse />
+        <Column offset={grad(0)} imageOffset={img(0)} duration={36} />
+        <Column offset={grad(2)} imageOffset={img(21)} duration={44} reverse />
         <div className="hidden 2xl:block">
-          <Column offset={3} imageOffset={41} duration={38} />
+          <Column offset={grad(3)} imageOffset={img(41)} duration={38} />
         </div>
       </div>
       <div
@@ -155,10 +167,10 @@ export function HeroReelRails() {
         style={maskStyle}
       >
         <div className="hidden 2xl:block">
-          <Column offset={5} imageOffset={52} duration={42} reverse />
+          <Column offset={grad(5)} imageOffset={img(52)} duration={42} reverse />
         </div>
-        <Column offset={4} imageOffset={31} duration={40} reverse />
-        <Column offset={1} imageOffset={10} duration={32} />
+        <Column offset={grad(4)} imageOffset={img(31)} duration={40} reverse />
+        <Column offset={grad(1)} imageOffset={img(10)} duration={32} />
       </div>
     </div>
   );
