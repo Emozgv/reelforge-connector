@@ -881,7 +881,7 @@ export function ResearchAccountsPage({
                 not the panel itself. */}
             <div className="w-[382px] shrink-0 self-stretch flex">
               <div className={PANEL + " p-4 flex-1 flex flex-col items-center"} style={PANEL_STYLE}>
-                <div className="w-full max-w-[330px] flex items-center justify-between mb-3">
+                <div className="w-full max-w-[345px] flex items-center justify-between mb-3">
                   <span className="flex items-center gap-1.5 text-[12px] text-neutral-400">
                     <span className="text-neutral-500">Now Viewing</span>
                     {currentSwipeVideo && (
@@ -902,7 +902,7 @@ export function ResearchAccountsPage({
                 {/* The logged-in research account itself — already shown in
                     Session Context on the left, repeated here so this panel
                     is self-explanatory on its own too. */}
-                <div className="w-full max-w-[330px] flex items-center gap-1.5 mb-4 text-[11px] text-neutral-500">
+                <div className="w-full max-w-[345px] flex items-center gap-1.5 mb-4 text-[11px] text-neutral-500">
                   <PlatformIcon platform={currentAccount.platform} size={11} />
                   Logged in as <span className="text-neutral-300 font-medium">@{currentAccount.username || currentAccount.label}</span>
                 </div>
