@@ -808,9 +808,9 @@ export function ResearchAccountsPage({
             <p className="text-[12px] text-neutral-600 mt-1.5">Connect one above to start researching from its trained feed.</p>
           </div>
         ) : mode === "swipe" ? (
-          <div className="mt-5 flex justify-center gap-4 items-start">
+          <div className="mt-5 flex justify-center gap-5 items-start">
             {/* LEFT: Session Context + Quick Actions */}
-            <div className="w-[300px] shrink-0 flex flex-col gap-4">
+            <div className="w-[330px] shrink-0 flex flex-col gap-4">
               <div className={PANEL + " p-4"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Session Context
@@ -931,7 +931,7 @@ export function ResearchAccountsPage({
             {/* RIGHT: Intelligence (Comments/Notes) + Save to Collection —
                 one continuous card, matching the reference, instead of two
                 separate stacked panels the VA had to scroll past. */}
-            <div className="w-[360px] shrink-0">
+            <div className="w-[390px] shrink-0">
               <div className={PANEL} style={PANEL_STYLE}>
                 <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
                   Intelligence
