@@ -17,21 +17,6 @@ import { ProfileHeader } from "./ProfileHeader";
 import { ReelDetailModal } from "./ReelDetailModal";
 import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTypes";
 
-// Local, page-scoped copies of the Dashboard's now-frozen surface language
-// (see DashboardPage.tsx's PANEL/CARD) — duplicated rather than imported so
-// the frozen Dashboard file stays completely untouched. Deliberately NOT
-// applied to any shared sub-component (VideoGrid, SavePanel, CreatorSelector,
-// etc.) since those are also used by the frozen Research Accounts page.
-const HUB_PANEL_STYLE: React.CSSProperties = {
-  background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
-};
-const HUB_CARD_BORDER = "#202024";
-const HUB_CARD_STYLE: React.CSSProperties = {
-  background: "#111114",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6)",
-};
-
 // The Hub is an OFM research workspace, not a general social search box —
 // these are the default entry points, and their specificity matters more
 // than it looks. A bare word like "gym" or "beach" is broad enough to pull
@@ -582,44 +567,42 @@ export function CreativityHubPage({
   }
 
   return (
-    <div className="h-full overflow-y-auto" style={{ background: "#020203" }}>
+    <div className="h-full overflow-y-auto">
       {/* hero */}
-      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12">
+      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12 bg-[#020508]">
         <StarfieldBackground starCount={34} />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(720px 340px at 50% -20%, rgba(211,148,72,0.06), transparent 65%)",
+              "radial-gradient(720px 340px at 50% -20%, rgba(224,164,79,0.15), transparent 65%)",
           }}
         />
         <HeroReelRails />
 
         <div className="relative z-10 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto text-center">
           <div className="flex items-center justify-center gap-2.5 mb-3">
-            <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#c08e4e]/60" />
-            <span className="text-[10.5px] tracking-[1.8px] uppercase text-[#c08e4e]">
+            <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
+            <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448]/85 font-medium">
               Creativity Hub
             </span>
-            <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#c08e4e]/60" />
+            <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#D39448]/60" />
           </div>
-          <h1 className="font-mn font-light text-[42px] leading-[1.08] tracking-[-0.8px] text-[#f2ece1]">
+          <h1 className="text-[42px] leading-[1.08] font-hub-hero font-medium text-neutral-50">
             Discover your next{" "}
             <span className="text-gradient-warm">winning concept</span>
           </h1>
-          <p className="mt-3.5 text-[14px] text-[#b1aba0]">
+          <p className="mt-3.5 text-[15px] text-neutral-400">
             Curated Reels and TikToks, organized for{" "}
             <span className="text-[#D39448] font-medium">{selectedCreator.name}</span>
           </p>
 
           <div className="mt-8 relative max-w-xl mx-auto">
             <div
-              className="relative flex items-center rounded-2xl border transition-colors duration-200"
-              style={{
-                borderColor: focused ? "rgba(211,148,72,0.45)" : HUB_CARD_BORDER,
-                boxShadow: focused ? "0 0 0 3px rgba(211,148,72,0.1)" : HUB_CARD_STYLE.boxShadow,
-                background: HUB_CARD_STYLE.background,
-              }}
+              className={[
+                "relative flex items-center rounded-2xl transition-all duration-300",
+                focused ? "glow-ring bg-white/[0.05]" : "glass-panel",
+              ].join(" ")}
             >
               <Search size={17} className="absolute left-[18px] text-neutral-500" />
               <input
@@ -667,7 +650,7 @@ export function CreativityHubPage({
           <div className="flex items-center gap-3">
             <CreatorSelector creators={creators} selected={selectedCreator} onSelect={setSelectedCreator} />
 
-            <div className="flex items-center h-11 p-1 rounded-full border" style={{ borderColor: HUB_CARD_BORDER, ...HUB_CARD_STYLE }}>
+            <div className="flex items-center h-11 p-1 rounded-full glass-panel">
               {(["instagram", "tiktok", "all"] as const).map((p) => (
                 <button
                   key={p}
@@ -694,7 +677,7 @@ export function CreativityHubPage({
 
           {/* profile-based research — a public creator's own reels, independent
               of (and a fallback for) the keyword search above */}
-          <div className="flex-1 min-w-[240px] max-w-sm flex items-center gap-1.5 h-11 pl-1.5 pr-3.5 rounded-full border" style={{ borderColor: HUB_CARD_BORDER, ...HUB_CARD_STYLE }}>
+          <div className="flex-1 min-w-[240px] max-w-sm flex items-center gap-1.5 h-11 pl-1.5 pr-3.5 rounded-full glass-panel">
             <ProfilePlatformDropdown value={profilePlatform} onChange={setProfilePlatform} />
             <input
               value={profileHandle}
@@ -718,8 +701,7 @@ export function CreativityHubPage({
             <button
               onClick={() => setSavedPopoverOpen(true)}
               title="See everything saved for this creator"
-              className="flex items-center gap-1.5 h-11 px-4 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
-              style={HUB_CARD_STYLE}
+              className="flex items-center gap-1.5 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300"
             >
               <Bookmark size={13} className="text-[#D39448]" />
               <span className="tabular-nums text-neutral-100">{savedCountLabel}</span> saved
@@ -729,8 +711,7 @@ export function CreativityHubPage({
               onClick={handleRefresh}
               disabled={searching}
               title="Refresh — back to the Hub home"
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
-              style={HUB_CARD_STYLE}
+              className="flex items-center justify-center w-11 h-11 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <RefreshCw size={15} className={refreshSpinning ? "animate-spin" : ""} />
             </button>
@@ -739,16 +720,14 @@ export function CreativityHubPage({
               onClick={handleShuffle}
               disabled={searching || !lastAction}
               title={lastAction ? "Shuffle — fresh batch, same topic" : "Search or browse a profile first"}
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
-              style={HUB_CARD_STYLE}
+              className="flex items-center justify-center w-11 h-11 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <Shuffle size={15} className={shuffleSpinning ? "animate-spin" : ""} />
             </button>
 
             <button
               onClick={() => setDrawerOpen(true)}
-              className="relative flex items-center gap-2 h-11 px-4 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
-              style={HUB_CARD_STYLE}
+              className="relative flex items-center gap-2 h-11 px-4 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300"
             >
               <SlidersHorizontal size={14} />
               Filters
@@ -762,14 +741,14 @@ export function CreativityHubPage({
         </div>
 
         {platformNotice && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#1a130b] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_PANEL_STYLE}>
+          <div className="mb-5 flex items-center gap-2 rounded-xl surface-panel px-4 py-3 text-[12.5px] text-neutral-400">
             <Info size={14} className="shrink-0 text-neutral-500" />
             {platformNotice}
           </div>
         )}
 
         {searchError ? (
-          <div className="flex flex-col items-center justify-center text-center rounded-xl border border-[#1a130b] py-24" style={HUB_PANEL_STYLE}>
+          <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
             <CloudOff size={20} className="text-neutral-700 mb-2.5" />
             <p className="text-[14.5px] font-serif text-neutral-300">Research is taking a short timeout.</p>
             <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
@@ -779,8 +758,7 @@ export function CreativityHubPage({
             <button
               onClick={retryLastAction}
               disabled={searching || !lastAction}
-              className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
-              style={HUB_CARD_STYLE}
+              className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full surface-panel hover:bg-white/[0.06] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
             >
               <Shuffle size={13} className={searching ? "animate-spin" : ""} />
               Retry
@@ -791,7 +769,7 @@ export function CreativityHubPage({
             {lastAction?.kind === "profile" && profile && <ProfileHeader profile={profile} />}
 
             {profileResultsPartial && filtered.length > 0 && (
-              <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#1a130b] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_PANEL_STYLE}>
+              <div className="mb-5 flex items-center gap-2 rounded-xl surface-panel px-4 py-3 text-[12.5px] text-neutral-400">
                 <Info size={14} className="shrink-0 text-neutral-500" />
                 Only showing what loaded — our provider had a brief hiccup pulling the rest. Try Load more or
                 Refresh for the full set.
@@ -836,8 +814,7 @@ export function CreativityHubPage({
                 <button
                   onClick={() => void loadMoreProfileVideos()}
                   disabled={loadingMore}
-                  className="flex items-center gap-2 h-10 px-5 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300 disabled:opacity-60"
-                  style={HUB_CARD_STYLE}
+                  className="flex items-center gap-2 h-10 px-5 rounded-full glass-panel hover:bg-white/[0.06] transition-colors text-[13px] text-neutral-300 disabled:opacity-60"
                 >
                   {loadingMore ? (
                     <Loader2 size={14} className="animate-spin" />
