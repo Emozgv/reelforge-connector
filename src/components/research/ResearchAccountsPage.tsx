@@ -48,7 +48,7 @@ const RA_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.34), 0 0 10px rgba(211,148,7
 // very top edge. This keeps real depth/contrast without losing the deep,
 // premium Dashboard-DNA black.
 const PANEL_BG = "linear-gradient(180deg, #0d0d0e, #060606)";
-const PANEL = "rounded-xl border border-[#1c140b]";
+const PANEL = "rounded-xl border border-[#1a130b]";
 const PANEL_STYLE = {
   background: PANEL_BG,
   boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,0,0,0.45), 0 20px 40px -18px rgba(0,0,0,0.85), ${RA_GOLD_RING}`,
@@ -672,7 +672,7 @@ export function ResearchAccountsPage({
                 rather than inventing that signal. */}
             <div
               title="Not tracked yet"
-              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#1c140b] opacity-60"
+              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#1a130b] opacity-60"
               style={PANEL_STYLE}
             >
               <div className="leading-tight">
