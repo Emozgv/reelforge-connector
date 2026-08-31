@@ -27,7 +27,7 @@ import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTy
 // here; that was just their OS accent color on a keyboard-focused element,
 // not anything from our CSS, so this recreates the same feeling as an
 // intentional, always-on accent rather than relying on browser focus state.
-const HUB_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.45), 0 0 10px rgba(211,148,72,0.12)";
+const HUB_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.32), 0 0 10px rgba(211,148,72,0.08)";
 // Softer variant for the toolbar tier (search bar, chips, pills, buttons) —
 // those sit much closer together and read as "outlined" at the panel-tier
 // ring's strength; this keeps just a whisper of the same warmth.
