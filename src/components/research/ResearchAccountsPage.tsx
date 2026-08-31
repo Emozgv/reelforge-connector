@@ -23,7 +23,7 @@ import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types"
 import type { CollectionsStore } from "../../state/useCollectionsStore";
 import type { ConnectStart, ResearchAccountsStore } from "../../state/useResearchAccounts";
 import { MAX_RESEARCH_ACCOUNTS_PER_PLATFORM } from "../../state/useResearchAccounts";
-import { useLiveResearchSession } from "../../state/useLiveResearchSession";
+import { useLiveResearchSession, type LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { CreatorSelector } from "../hub/CreatorSelector";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { VideoGrid } from "../hub/VideoGrid";
@@ -184,6 +184,20 @@ const STATUS_DOT: Record<ResearchAccount["status"], string> = {
 const STATUS_DOT_PULSE_COLOR: Partial<Record<ResearchAccount["status"], string>> = {
   active: "rgba(52,211,153,0.55)",
 };
+
+// Connector Status chip's reachability, derived straight from the same
+// LiveSessionStatus the player already uses for its own "Connector needs to
+// start" state (see useLiveResearchSession's checkHealth/checkInitialReachability) —
+// not a separate signal. "needs_connector" is the only state that means
+// Connector genuinely isn't reachable; every other state (idle/connecting/
+// updating/active/in_use/error) implies a health check already succeeded at
+// some point. Version is intentionally still not shown here — Connector
+// doesn't report its own version over /health today.
+function connectorReachability(status: LiveSessionStatus): { label: string; dotClass: string; pulseColor?: string } {
+  if (status === "needs_connector") return { label: "Not running", dotClass: "bg-neutral-600" };
+  if (status === "checking") return { label: "Checking…", dotClass: "bg-amber-400 animate-pulse" };
+  return { label: "Connected", dotClass: "bg-emerald-400 pulse-live", pulseColor: "rgba(52,211,153,0.55)" };
+}
 
 // reelforge-connect:// is registered by the ReelForge Connector desktop app
 // (connector-app/) — a small, self-contained helper (bundles its own Node +
@@ -668,26 +682,35 @@ export function ResearchAccountsPage({
           </div>
           <div className="flex flex-col items-end gap-11 shrink-0">
             <DownloadConnectorButton />
-            {/* Visual only, matching the reference layout — not wired to a
-                real reachability/version signal. DownloadConnectorButton
-                deliberately avoids a status indicator of its own (see its
-                comment), and nothing elsewhere in the app currently tracks
-                Connector's live version, so this stays an inert placeholder
-                rather than inventing that signal. */}
-            <div
-              title="Not tracked yet"
-              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#1a130b] opacity-60"
-              style={PANEL_STYLE}
-            >
-              <div className="leading-tight">
-                <p className="text-[12px] text-neutral-400">Connector Status</p>
-                <p className="flex items-center gap-1.5 text-[12.5px] text-neutral-300 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
-                  Not tracked yet
-                </p>
-              </div>
-              <Diamond size={14} className="text-neutral-500 shrink-0" />
-            </div>
+            {/* Reachability is real, driven straight off liveSession.status
+                (the same signal the player uses for "Connector needs to
+                start") — see connectorReachability() above. Version is
+                still not shown: Connector doesn't report it over /health
+                today, and DownloadConnectorButton deliberately avoids its
+                own status indicator (see its comment), so this stays the
+                one real reachability readout on the page. */}
+            {(() => {
+              const reachability = connectorReachability(liveSession.status);
+              return (
+                <div
+                  title={reachability.label}
+                  className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#1a130b]"
+                  style={PANEL_STYLE}
+                >
+                  <div className="leading-tight">
+                    <p className="text-[12px] text-neutral-400">Connector Status</p>
+                    <p className="flex items-center gap-1.5 text-[12.5px] text-neutral-300 mt-0.5">
+                      <span
+                        className={["w-1.5 h-1.5 rounded-full", reachability.dotClass].join(" ")}
+                        style={{ ["--pulse-live-color" as string]: reachability.pulseColor }}
+                      />
+                      {reachability.label}
+                    </p>
+                  </div>
+                  <Diamond size={14} className="text-neutral-500 shrink-0" />
+                </div>
+              );
+            })()}
           </div>
         </div>
 
