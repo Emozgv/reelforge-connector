@@ -194,7 +194,7 @@ const STATUS_DOT_PULSE_COLOR: Partial<Record<ResearchAccount["status"], string>>
 // some point. Version is intentionally still not shown here — Connector
 // doesn't report its own version over /health today.
 function connectorReachability(status: LiveSessionStatus): { label: string; dotClass: string; pulseColor?: string } {
-  if (status === "needs_connector") return { label: "Not running", dotClass: "bg-neutral-600" };
+  if (status === "needs_connector") return { label: "Not running", dotClass: "bg-rose-500" };
   if (status === "checking") return { label: "Checking…", dotClass: "bg-amber-400 animate-pulse" };
   return { label: "Connected", dotClass: "bg-emerald-400 pulse-live", pulseColor: "rgba(52,211,153,0.55)" };
 }
