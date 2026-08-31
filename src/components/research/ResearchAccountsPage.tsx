@@ -78,7 +78,7 @@ function QuickActionButton({
       disabled={inactive}
       title={!onClick ? "Not available yet" : undefined}
       className={[
-        "flex items-center gap-2.5 h-11 px-3 rounded-lg border text-[12.5px] transition-colors duration-150",
+        "flex items-center gap-2.5 h-12 px-3.5 rounded-lg border text-[12.5px] transition-colors duration-150",
         inactive
           ? "border-white/[0.06] bg-[#0c0c0e] text-neutral-600 cursor-not-allowed"
           : "border-white/[0.07] bg-[#111114] text-neutral-200 hover:border-[#D39448]/25 hover:bg-[#161613]",
@@ -820,11 +820,11 @@ export function ResearchAccountsPage({
           <div className="mt-5 flex justify-center gap-7 items-start">
             {/* LEFT: Session Context + Quick Actions */}
             <div className="w-[290px] shrink-0 flex flex-col gap-4">
-              <div className={PANEL + " p-4"} style={PANEL_STYLE}>
+              <div className={PANEL + " p-5"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Session Context
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <SessionRow
                     label="Account"
                     value={
@@ -857,11 +857,11 @@ export function ResearchAccountsPage({
                 </div>
               </div>
 
-              <div className={PANEL + " p-4"} style={PANEL_STYLE}>
+              <div className={PANEL + " p-5"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Quick Actions
                 </p>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2.5">
                   <QuickActionButton
                     icon={RefreshCw}
                     label="Refresh Feed"
