@@ -50,7 +50,7 @@ function SessionRow({ label, value, muted }: { label: string; value: React.React
   return (
     <div className="flex items-center justify-between gap-3">
       <span className="text-[11px] text-neutral-500">{label}</span>
-      <span className={["text-[12px] font-medium text-right", muted ? "text-neutral-600" : "text-neutral-200"].join(" ")}>
+      <span className={["text-[12px] font-medium text-right", muted ? "text-neutral-600" : "text-neutral-50"].join(" ")}>
         {value}
       </span>
     </div>
@@ -81,7 +81,7 @@ function QuickActionButton({
         "flex items-center gap-2.5 h-12 px-3.5 rounded-lg border text-[12.5px] transition-colors duration-150",
         inactive
           ? "border-white/[0.06] bg-[#0c0c0e] text-neutral-600 cursor-not-allowed"
-          : "border-white/[0.07] bg-[#111114] text-neutral-200 hover:border-[#D39448]/25 hover:bg-[#161613]",
+          : "border-white/[0.07] bg-[#111114] text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#161613]",
       ].join(" ")}
     >
       <Icon
@@ -141,7 +141,7 @@ function ResearchInfoPopover() {
           <p className="text-[12.5px] text-neutral-400 leading-relaxed mb-3">
             Watch-time signals are not fully supported inside ReelForge yet.
           </p>
-          <p className="text-[11px] tracking-[0.08em] uppercase text-[#D39448]/85 font-medium mb-1">
+          <p className="text-[11px] tracking-[0.08em] uppercase text-[#D39448] font-medium mb-1">
             Recommendation <span className="normal-case tracking-normal text-neutral-600">(optional)</span>
           </p>
           <p className="text-[12.5px] text-neutral-400 leading-relaxed">
@@ -641,12 +641,11 @@ export function ResearchAccountsPage({
         <div className="relative flex items-start justify-between gap-6">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
-              <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
-              <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448]/85 font-medium">
+              <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">
                 Research Accounts
               </span>
             </div>
-            <h1 className="text-[26px] font-serif font-medium text-neutral-50 flex items-center gap-2">
+            <h1 className="text-[34px] font-serif font-medium text-neutral-50 flex items-center gap-2">
               Live research. Real insights.
               <ResearchInfoPopover />
             </h1>
@@ -654,7 +653,7 @@ export function ResearchAccountsPage({
               Monitor creator content, capture winning concepts, and save directly into your Collections.
             </p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-col items-end gap-11 shrink-0">
             <DownloadConnectorButton />
             {/* Visual only, matching the reference layout — not wired to a
                 real reachability/version signal. DownloadConnectorButton
@@ -668,8 +667,8 @@ export function ResearchAccountsPage({
               style={PANEL_STYLE}
             >
               <div className="leading-tight">
-                <p className="text-[9.5px] tracking-wide uppercase text-neutral-500">Connector Status</p>
-                <p className="flex items-center gap-1.5 text-[11.5px] text-neutral-400 mt-0.5">
+                <p className="text-[12px] text-neutral-400">Connector Status</p>
+                <p className="flex items-center gap-1.5 text-[12.5px] text-neutral-300 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
                   Not tracked yet
                 </p>
@@ -682,7 +681,7 @@ export function ResearchAccountsPage({
         {/* consolidated toolbar — Creator, platform, and connected-account
             chips in one row, matching the reference. Same account rail as
             before, just no longer a separate row underneath. */}
-        <div className="mt-6 flex items-center gap-3 flex-wrap">
+        <div className={PANEL + " mt-4 flex items-center gap-3 flex-wrap px-4 py-3"} style={PANEL_STYLE}>
           <CreatorSelector creators={creators} selected={selectedCreator} onSelect={setSelectedCreator} />
 
           <span className="w-px h-8 bg-white/[0.08] shrink-0" />
@@ -735,8 +734,8 @@ export function ResearchAccountsPage({
               className={[
                 "group flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border transition-all duration-150",
                 a.id === currentAccount?.id
-                  ? "border-[#D39448]/45 bg-[#D39448]/[0.1] text-[#D39448]"
-                  : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-[#D39448]/25",
+                  ? "border-[#D39448]/60 bg-[#D39448]/[0.16] text-[#D39448]"
+                  : "border-white/[0.08] text-neutral-200 hover:text-neutral-50 hover:border-[#D39448]/35",
               ].join(" ")}
             >
               <PlatformIcon platform={a.platform} size={12} />
@@ -787,6 +786,7 @@ export function ResearchAccountsPage({
         </div>
         {reconnectError && <p className="mt-2 text-[11.5px] text-rose-300/85">{reconnectError}</p>}
 
+
         {connectFlow && (
           <ConnectAccountModal
             platform={platform}
@@ -805,8 +805,6 @@ export function ResearchAccountsPage({
             }}
           />
         )}
-
-        <div className="shimmer-divider mt-6" />
 
         {!currentAccount ? (
           <div className="mt-6 flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
@@ -896,7 +894,7 @@ export function ResearchAccountsPage({
                     {currentSwipeVideo && (
                       <>
                         <PlatformIcon platform={currentSwipeVideo.platform} size={12} />
-                        <span className="text-neutral-300 font-medium">@{currentSwipeVideo.username}</span>
+                        <span className="text-neutral-50 font-medium">@{currentSwipeVideo.username}</span>
                       </>
                     )}
                   </span>
@@ -913,7 +911,7 @@ export function ResearchAccountsPage({
                     is self-explanatory on its own too. */}
                 <div className="w-full max-w-[345px] flex items-center gap-1.5 mb-4 text-[11px] text-neutral-500">
                   <PlatformIcon platform={currentAccount.platform} size={11} />
-                  Logged in as <span className="text-neutral-300 font-medium">@{currentAccount.username || currentAccount.label}</span>
+                  Logged in as <span className="text-neutral-50 font-medium">@{currentAccount.username || currentAccount.label}</span>
                 </div>
                 <SwipeResearchPlayer
                 account={currentAccount}
@@ -971,7 +969,7 @@ export function ResearchAccountsPage({
                   <button
                     type="button"
                     onClick={() => setSavedPopoverOpen(true)}
-                    className="flex items-center justify-center gap-2 h-[52px] rounded-xl border border-white/[0.08] text-[13px] text-neutral-200 hover:border-[#D39448]/25 hover:bg-[#D39448]/[0.05] transition-colors duration-150"
+                    className="flex items-center justify-center gap-2 h-[52px] rounded-xl border border-white/[0.08] text-[13px] text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#D39448]/[0.05] transition-colors duration-150"
                   >
                     <FolderOpen size={15} className="text-[#D39448]" />
                     Save in a Collection
@@ -996,7 +994,7 @@ export function ResearchAccountsPage({
             <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-[12px] text-neutral-500">
                 <PlatformIcon platform={currentAccount.platform} size={12} />
-                <span className="text-neutral-300 font-medium">{currentAccount.label}</span>
+                <span className="text-neutral-50 font-medium">{currentAccount.label}</span>
                 {currentAccount.username && <span className="text-neutral-600">@{currentAccount.username}</span>}
               </div>
 

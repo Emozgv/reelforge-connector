@@ -136,7 +136,7 @@ export function Sidebar({
           <div className="relative">
             <button
               onClick={() => setNotifOpen((v) => !v)}
-              className="relative w-[28px] h-[28px] rounded-[9px] border border-[#202024] bg-[#111114] flex items-center justify-center text-neutral-500 hover:text-neutral-200 transition-colors duration-150"
+              className="relative w-[28px] h-[28px] rounded-[9px] border border-[#202024] bg-[#111114] flex items-center justify-center text-neutral-500 hover:text-neutral-50 transition-colors duration-150"
             >
               <Bell size={12} strokeWidth={1.75} />
               {unread && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#D39448]" />}
@@ -171,7 +171,7 @@ export function Sidebar({
                       disabled={!item.collectionId}
                       className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.06] transition-colors duration-150 disabled:hover:bg-transparent"
                     >
-                      <p className="text-[12px] text-neutral-200 leading-snug">{item.message}</p>
+                      <p className="text-[12px] text-neutral-50 leading-snug">{item.message}</p>
                       <p className="text-[10.5px] text-neutral-600 mt-0.5">{item.relativeTime}</p>
                     </button>
                   ))}
@@ -196,7 +196,7 @@ export function Sidebar({
                 "relative w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[9px] text-[11.5px] border transition-colors duration-150",
                 active
                   ? "border-[#141009] text-[#f0c58c]"
-                  : "border-transparent text-[#c3beb2] hover:text-neutral-100 hover:bg-white/[0.03]",
+                  : "border-transparent text-[#e2dbcd] hover:text-neutral-50 hover:bg-white/[0.03]",
               ].join(" ")}
               style={active ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
             >
@@ -218,7 +218,7 @@ export function Sidebar({
               "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
               page === "admin"
                 ? "border-[#141009] text-[#f0c58c]"
-                : "border-transparent text-[#c3beb2] hover:text-neutral-200 hover:bg-white/[0.03]",
+                : "border-transparent text-[#e2dbcd] hover:text-neutral-50 hover:bg-white/[0.03]",
             ].join(" ")}
             style={page === "admin" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
           >
@@ -236,7 +236,7 @@ export function Sidebar({
               "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
               page === "syd"
                 ? "border-[#141009] text-[#f0c58c]"
-                : "border-transparent text-[#c3beb2] hover:text-neutral-200 hover:bg-white/[0.03]",
+                : "border-transparent text-[#e2dbcd] hover:text-neutral-50 hover:bg-white/[0.03]",
             ].join(" ")}
             style={page === "syd" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
           >
@@ -263,7 +263,7 @@ export function Sidebar({
               <button
                 onClick={onSignOut}
                 title="Sign out"
-                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-200 hover:bg-white/[0.06] transition-all duration-150"
+                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-50 hover:bg-white/[0.06] transition-all duration-150"
               >
                 <LogOut size={11} />
               </button>

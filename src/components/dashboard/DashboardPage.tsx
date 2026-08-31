@@ -122,7 +122,7 @@ function PanelHeading({
     <div className="flex items-start justify-between px-[18px] pt-[16px]">
       <div className="flex flex-col gap-[8px]">
         <div className="flex items-center gap-[9px]">
-          <h2 className="font-mn text-[10.5px] font-bold tracking-[1.1px] text-[#ddd6c9]">{title}</h2>
+          <h2 className="font-mn text-[10.5px] font-bold tracking-[1.1px] text-[#eee7da]">{title}</h2>
           {typeof badge === "number" && badge > 0 && (
             <span className="rounded-[16px] bg-[#3a2a17] px-[6px] py-[1.5px] text-[8.5px] tracking-[1.1px] text-[#e8b273]">
               {badge}
@@ -428,7 +428,7 @@ export function DashboardPage({
                           </div>
                         </div>
                         <p className="shrink-0 text-[9.5px] text-[#79746b]">{formatRelativeTime(s.collection.updatedAt)}</p>
-                        <span className="shrink-0 rounded-[7px] border border-[#242429] bg-[#111114] px-[12px] py-[7px] text-[10.5px] text-[#ded7cb]">
+                        <span className="shrink-0 rounded-[7px] border border-[#242429] bg-[#111114] px-[12px] py-[7px] text-[10.5px] text-[#f0eadf]">
                           Review
                         </span>
                       </button>
@@ -448,14 +448,14 @@ export function DashboardPage({
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #d9a86322" }}>
                         <FolderOpen size={13} className="text-[#d9a863]" />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Saved Concepts</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Saved Concepts</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{savedTotal}</span>
                     </button>
                     <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4a90d926, #4a90d908 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4a90d922" }}>
                         <Clapperboard size={13} className="text-[#6ba3d9]" />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Active Collections</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Active Collections</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{activeCollectionsCount}</span>
                     </button>
                     <button onClick={onOpenProduction} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
@@ -468,14 +468,14 @@ export function DashboardPage({
                       >
                         <AlertTriangle size={13} className={needsAttention.length > 0 ? "text-[#e0664f]" : "text-[#d9a863]"} />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Needs Attention</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Needs Attention</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{needsAttention.length}</span>
                     </button>
                     <button onClick={onOpenHub} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4fb37a26, #4fb37a08 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4fb37a22" }}>
                         <Radar size={13} className="text-[#6bc797]" />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#c2a06a]">Creativity Hub</span>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Creativity Hub</span>
                       <span className="text-[10.5px] text-[#aaa49a] opacity-70">↗</span>
                     </button>
                   </div>
@@ -500,7 +500,7 @@ export function DashboardPage({
                               }
                             />
                             <div className="min-w-0">
-                              <p className="line-clamp-2 text-[9.5px] leading-snug text-[#ded7cb]">{collection.name}</p>
+                              <p className="line-clamp-2 text-[9.5px] leading-snug text-[#f0eadf]">{collection.name}</p>
                               <p className="mt-[6px] text-[9px] text-[#79746b]">{formatRelativeTime(collection.updatedAt)}</p>
                             </div>
                           </button>
@@ -534,7 +534,7 @@ export function DashboardPage({
                           className="h-[7px] w-[7px] shrink-0 rounded-full"
                           style={{ background: STAGE_COLOR[stage], boxShadow: `0 0 4px ${STAGE_COLOR[stage]}80` }}
                         />
-                        <span className="flex-1 truncate text-[11.5px] font-medium text-[#ded7cb]">{stage}</span>
+                        <span className="flex-1 truncate text-[11.5px] font-medium text-[#f0eadf]">{stage}</span>
                         <span className="text-[11.5px] text-[#aaa49a]">{stageCounts[stage]}</span>
                       </div>
                     ))}
@@ -622,7 +622,7 @@ export function DashboardPage({
                         <Clock size={11} />
                       </span>
                     )}
-                    <p className={["flex-1 truncate text-[11px] font-medium text-[#d9d2c6]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
+                    <p className={["flex-1 truncate text-[11px] font-medium text-[#eae4d9]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
                       {item.message}
                     </p>
                     <span className="shrink-0 text-[9.5px] text-[#79746b]">{item.relativeTime}</span>

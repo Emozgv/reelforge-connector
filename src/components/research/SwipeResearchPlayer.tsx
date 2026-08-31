@@ -198,7 +198,7 @@ function SwipeSlide({
           <button
             type="button"
             onClick={() => setCaptionExpanded((v) => !v)}
-            className={["mt-1 text-left text-[12.5px] text-white/85 leading-snug", captionExpanded ? "" : "line-clamp-2"].join(" ")}
+            className={["mt-1 text-left text-[12.5px] text-white/95 leading-snug", captionExpanded ? "" : "line-clamp-2"].join(" ")}
           >
             {video.caption}
           </button>
@@ -548,7 +548,7 @@ export function SwipeResearchPlayer({
             {connecting ? (
               <>
                 <Loader2 size={18} className="text-amber-400/80 animate-pulse mb-1" />
-                <p className="text-[13px] text-neutral-300">This account is still connecting.</p>
+                <p className="text-[13px] text-neutral-100">This account is still connecting.</p>
                 <p className="mt-1.5 text-[11.5px] text-neutral-600">
                   Once ReelForge finishes setting up its real session, this account's feed will start appearing here
                   automatically.
@@ -562,7 +562,7 @@ export function SwipeResearchPlayer({
               // someone else started one first.
               <>
                 <Square size={16} className="text-neutral-600 mb-1" />
-                <p className="text-[13px] text-neutral-300">This account is already being researched.</p>
+                <p className="text-[13px] text-neutral-100">This account is already being researched.</p>
                 <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">
                   {lockedByLabel ?? "Another team member"} is using it right now. Try again once they're done.
                 </p>
@@ -590,7 +590,7 @@ export function SwipeResearchPlayer({
               </>
             ) : sessionStatus === "needs_connector" ? (
               <>
-                <p className="text-[13px] text-neutral-300">ReelForge Connector needs to start.</p>
+                <p className="text-[13px] text-neutral-100">ReelForge Connector needs to start.</p>
                 <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">
                   It isn't running right now — press below to start it and begin researching.
                 </p>
@@ -607,7 +607,7 @@ export function SwipeResearchPlayer({
               </>
             ) : sessionStatus === "error" ? (
               <>
-                <p className="text-[13px] text-neutral-300">Couldn't start this research session.</p>
+                <p className="text-[13px] text-neutral-100">Couldn't start this research session.</p>
                 {sessionError && <p className="mt-1.5 text-[11.5px] text-neutral-600">{sessionError}</p>}
                 <button
                   type="button"
@@ -624,7 +624,7 @@ export function SwipeResearchPlayer({
                 ) : (
                   <Square size={16} className="text-neutral-600 mb-1" />
                 )}
-                <p className="text-[13px] text-neutral-300">
+                <p className="text-[13px] text-neutral-100">
                   {sessionStatus === "checking" ? "Checking Research status…" : "Research session ended."}
                 </p>
                 <p className="mt-1.5 text-[11.5px] text-neutral-600 max-w-[220px]">

@@ -198,7 +198,7 @@ export function CommentsPanel({
             {result.comments.map((c) => (
               <li key={c.id} className="flex items-start justify-between gap-2 text-[12.5px] leading-snug">
                 <div>
-                  <span className="text-neutral-200 font-medium">{c.username ?? "unknown"}</span>{" "}
+                  <span className="text-neutral-50 font-medium">{c.username ?? "unknown"}</span>{" "}
                   <span className="text-neutral-400">{c.text}</span>
                   {typeof c.likeCount === "number" && (
                     <div className="text-[11px] text-neutral-600 mt-0.5">{c.likeCount.toLocaleString()} likes</div>

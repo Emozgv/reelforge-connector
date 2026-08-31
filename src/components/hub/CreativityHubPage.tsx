@@ -577,12 +577,12 @@ export function CreativityHubPage({
         <div className="text-center max-w-sm">
           {creatorsError ? (
             <>
-              <p className="text-[14px] text-neutral-300">Couldn't load Creators.</p>
+              <p className="text-[14px] text-neutral-100">Couldn't load Creators.</p>
               <p className="mt-1.5 text-[12px] text-neutral-500">{creatorsError}</p>
             </>
           ) : (
             <>
-              <p className="text-[14px] text-neutral-300">Add a Creator to start discovering concepts.</p>
+              <p className="text-[14px] text-neutral-100">Add a Creator to start discovering concepts.</p>
               <p className="mt-1.5 text-[12px] text-neutral-500">Go to Creators → New Creator.</p>
             </>
           )}
@@ -721,7 +721,7 @@ export function CreativityHubPage({
                     "h-9 px-4 rounded-full border text-[13px] capitalize transition-colors duration-150",
                     filters.platform === p
                       ? "border-[#141009] text-[#f0c58c]"
-                      : "border-transparent text-neutral-500 hover:text-neutral-300",
+                      : "border-transparent text-neutral-500 hover:text-neutral-100",
                   ].join(" ")}
                   style={filters.platform === p ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
                 >
@@ -742,7 +742,7 @@ export function CreativityHubPage({
                 if (e.key === "Enter") void runProfileLookup(profileHandle);
               }}
               placeholder="Browse a public profile — @username"
-              className="flex-1 min-w-0 bg-transparent text-[12.5px] text-neutral-200 placeholder:text-neutral-500 outline-none"
+              className="flex-1 min-w-0 bg-transparent text-[12.5px] text-neutral-50 placeholder:text-neutral-500 outline-none"
             />
             <button
               onClick={() => void runProfileLookup(profileHandle)}
@@ -757,7 +757,7 @@ export function CreativityHubPage({
             <button
               onClick={() => setSavedPopoverOpen(true)}
               title="See everything saved for this creator"
-              className="flex items-center gap-1.5 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
+              className="flex items-center gap-1.5 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100"
               style={HUB_CARD_STYLE}
             >
               <Bookmark size={13} className="text-[#D39448]" />
@@ -768,7 +768,7 @@ export function CreativityHubPage({
               onClick={handleRefresh}
               disabled={searching}
               title="Refresh — back to the Hub home"
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent"
               style={HUB_CARD_STYLE}
             >
               <RefreshCw size={15} className={refreshSpinning ? "animate-spin" : ""} />
@@ -778,7 +778,7 @@ export function CreativityHubPage({
               onClick={handleShuffle}
               disabled={searching || !lastAction}
               title={lastAction ? "Shuffle — fresh batch, same topic" : "Search or browse a profile first"}
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent"
               style={HUB_CARD_STYLE}
             >
               <Shuffle size={15} className={shuffleSpinning ? "animate-spin" : ""} />
@@ -786,7 +786,7 @@ export function CreativityHubPage({
 
             <button
               onClick={() => setDrawerOpen(true)}
-              className="relative flex items-center gap-2 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
+              className="relative flex items-center gap-2 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100"
               style={HUB_CARD_STYLE}
             >
               <SlidersHorizontal size={14} />
@@ -810,7 +810,7 @@ export function CreativityHubPage({
         {searchError ? (
           <div className="flex flex-col items-center justify-center text-center rounded-[12px] border border-[#1a130b] py-24" style={HUB_PANEL_STYLE}>
             <CloudOff size={20} className="text-neutral-700 mb-2.5" />
-            <p className="text-[14.5px] font-serif text-neutral-300">Research is taking a short timeout.</p>
+            <p className="text-[14.5px] font-serif text-neutral-100">Research is taking a short timeout.</p>
             <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
               One of our external data providers is currently unavailable. Everything inside ReelForge is running
               normally.
@@ -818,7 +818,7 @@ export function CreativityHubPage({
             <button
               onClick={retryLastAction}
               disabled={searching || !lastAction}
-              className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
+              className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[12.5px] text-neutral-100 disabled:opacity-50"
               style={HUB_CARD_STYLE}
             >
               <Shuffle size={13} className={searching ? "animate-spin" : ""} />
@@ -893,7 +893,7 @@ export function CreativityHubPage({
                 <button
                   onClick={() => void loadMoreProfileVideos()}
                   disabled={loadingMore}
-                  className="flex items-center gap-2 h-10 px-5 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300 disabled:opacity-60"
+                  className="flex items-center gap-2 h-10 px-5 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100 disabled:opacity-60"
                   style={HUB_CARD_STYLE}
                 >
                   {loadingMore ? (
