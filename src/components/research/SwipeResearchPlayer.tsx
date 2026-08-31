@@ -527,7 +527,7 @@ export function SwipeResearchPlayer({
           else if (delta < -SWIPE_THRESHOLD) goPrev();
           touchStartY.current = null;
         }}
-        className="relative w-[360px] h-[min(80vh,700px)] rounded-2xl overflow-hidden border border-[#1a130b] shadow-[0_24px_64px_-20px_rgba(0,0,0,0.8),0_0_0_0.5px_rgba(211,148,72,0.45),0_0_10px_rgba(211,148,72,0.12)]"
+        className="relative w-[330px] h-[min(74vh,650px)] rounded-2xl overflow-hidden border border-white/[0.08]"
       >
         {currentReel ? (
           <SwipeSlide

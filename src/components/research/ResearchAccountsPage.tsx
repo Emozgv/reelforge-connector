@@ -874,30 +874,39 @@ export function ResearchAccountsPage({
               </div>
             </div>
 
-            {/* CENTER: Now Viewing + the live reel player itself — fixed to
-                the video's own width, not a stretchy 1fr column, so it sits
-                snug between the side panels instead of floating in dead
-                space. */}
-            <div className="w-[380px] shrink-0 flex flex-col items-center">
-              <div className="w-full max-w-[360px] flex items-center justify-between mb-3">
-                <span className="flex items-center gap-1.5 text-[12px] text-neutral-400">
-                  <span className="text-neutral-500">Now Viewing</span>
-                  {currentSwipeVideo && (
-                    <>
-                      <PlatformIcon platform={currentSwipeVideo.platform} size={12} />
-                      <span className="text-neutral-300 font-medium">@{currentSwipeVideo.username}</span>
-                    </>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setMode("archive")}
-                  className="text-[11.5px] text-[#D39448] hover:brightness-110 transition-[filter]"
-                >
-                  View archive
-                </button>
-              </div>
-              <SwipeResearchPlayer
+            {/* CENTER: the live reel player, now sitting inside its own
+                Design-DNA panel (matching Session Context/Intelligence)
+                instead of floating as a bare card — the video itself was
+                pulled in slightly so it reads as content inside a panel,
+                not the panel itself. */}
+            <div className="w-[382px] shrink-0 self-stretch flex">
+              <div className={PANEL + " p-4 flex-1 flex flex-col items-center"} style={PANEL_STYLE}>
+                <div className="w-full max-w-[330px] flex items-center justify-between mb-3">
+                  <span className="flex items-center gap-1.5 text-[12px] text-neutral-400">
+                    <span className="text-neutral-500">Now Viewing</span>
+                    {currentSwipeVideo && (
+                      <>
+                        <PlatformIcon platform={currentSwipeVideo.platform} size={12} />
+                        <span className="text-neutral-300 font-medium">@{currentSwipeVideo.username}</span>
+                      </>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMode("archive")}
+                    className="text-[11.5px] text-[#D39448] hover:brightness-110 transition-[filter]"
+                  >
+                    View archive
+                  </button>
+                </div>
+                {/* The logged-in research account itself — already shown in
+                    Session Context on the left, repeated here so this panel
+                    is self-explanatory on its own too. */}
+                <div className="w-full max-w-[330px] flex items-center gap-1.5 mb-4 text-[11px] text-neutral-500">
+                  <PlatformIcon platform={currentAccount.platform} size={11} />
+                  Logged in as <span className="text-neutral-300 font-medium">@{currentAccount.username || currentAccount.label}</span>
+                </div>
+                <SwipeResearchPlayer
                 account={currentAccount}
                 currentReel={currentSwipeVideo}
                 hasPrev={liveSession.hasPrev}
@@ -925,18 +934,25 @@ export function ResearchAccountsPage({
                   else void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform);
                 }}
                 active={active}
-              />
+                />
+              </div>
             </div>
 
             {/* RIGHT: Intelligence (Comments/Notes) + Save to Collection —
                 one continuous card, matching the reference, instead of two
                 separate stacked panels the VA had to scroll past. */}
-            <div className="w-[390px] shrink-0">
-              <div className={PANEL} style={PANEL_STYLE}>
+            <div className="w-[390px] shrink-0 self-stretch flex">
+              <div className={PANEL + " flex-1 flex flex-col"} style={PANEL_STYLE}>
                 <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
                   Intelligence
                 </p>
-                <CommentsPanel video={currentSwipeVideo} isOpen fetchComments={liveSession.fetchComments} />
+                {/* Fills whatever extra height this panel picks up from
+                    self-stretch matching the center column's height, so the
+                    comment list grows/shrinks with it instead of leaving
+                    Save to Collection floating at a fixed offset. */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <CommentsPanel video={currentSwipeVideo} isOpen fetchComments={liveSession.fetchComments} />
+                </div>
 
                 <div className="p-4 border-t border-white/[0.08]">
                   <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
@@ -964,8 +980,8 @@ export function ResearchAccountsPage({
                   </div>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
         ) : (
           <>
             <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">

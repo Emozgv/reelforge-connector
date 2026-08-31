@@ -122,7 +122,7 @@ export function CommentsPanel({
   const result = displayReelId ? resultsRef.current.get(displayReelId) : undefined;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Comments/Notes tabs — Notes has no backing feature yet (no note
           storage exists anywhere in the app), so it's shown per the Figma
           reference but disabled rather than invented. */}
@@ -167,7 +167,7 @@ export function CommentsPanel({
           the way it used to) — this now shares one card with Save to
           Collection below it, so the list stays short enough that both
           fit without scrolling the whole page, matching the reference. */}
-      <div className="h-[260px] overflow-y-auto px-4 py-3">
+      <div className="flex-1 min-h-[160px] overflow-y-auto px-4 py-3">
         {!video ? (
           <div className="h-full flex items-center justify-center text-center">
             <p className="text-[11.5px] text-neutral-600">No reel is being viewed right now.</p>
