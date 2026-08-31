@@ -624,7 +624,7 @@ export function ResearchAccountsPage({
   }
 
   return (
-    <div className="relative h-full overflow-y-auto">
+    <div className="relative h-full overflow-y-auto" style={{ background: "#020203" }}>
       <div className="pointer-events-none fixed inset-0 z-0">
         <StarfieldBackground starCount={110} />
       </div>
@@ -808,7 +808,7 @@ export function ResearchAccountsPage({
             <p className="text-[12px] text-neutral-600 mt-1.5">Connect one above to start researching from its trained feed.</p>
           </div>
         ) : mode === "swipe" ? (
-          <div className="mt-5 flex justify-center gap-5 items-start">
+          <div className="mt-5 flex justify-center gap-7 items-start">
             {/* LEFT: Session Context + Quick Actions */}
             <div className="w-[330px] shrink-0 flex flex-col gap-4">
               <div className={PANEL + " p-4"} style={PANEL_STYLE}>
