@@ -84,7 +84,7 @@ function App() {
     updateDisplayName,
   } = useWorkspace(user?.id);
   const { isAdmin: isPlatformAdmin } = useAdminAccess(user?.id);
-  const { isSydOwner } = useSydAccess(user?.id);
+  const { isSydOwner, hasSydAccess } = useSydAccess(user?.id);
   const displayName = workspace?.displayName || user?.email;
   const creatorsStore = useCreatorsStore(workspace?.id);
   const collectionsStore = useCollectionsStore(workspace?.id);
@@ -177,7 +177,7 @@ function App() {
         workspaceId={workspace.id}
         role={workspace.role}
         isPlatformAdmin={isPlatformAdmin}
-        isSydOwner={isSydOwner}
+        hasSydAccess={hasSydAccess}
         onSignOut={signOut}
         activity={activity}
         onOpenCollection={navigateToCollection}
@@ -227,7 +227,7 @@ function App() {
         {page !== "hub" && page !== "research" && (
           <div key={page} className="h-full animate-fade-in">
             {page === "admin" && isPlatformAdmin && <AdminDashboardPage />}
-            {page === "syd" && isSydOwner && <SydOwnerPage />}
+            {page === "syd" && hasSydAccess && <SydOwnerPage isOwner={isSydOwner} />}
             {page === "dashboard" && (
               <DashboardPage
                 userName={displayName}

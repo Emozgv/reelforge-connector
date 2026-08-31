@@ -28,10 +28,14 @@ const STATUS_STYLES: Record<string, string> = {
   Cancelled: "bg-red-500/10 text-red-300",
 };
 
-// Owner-only surface, gated by App.tsx (isSydOwner). Shows the private SYD
-// queue/history and lets the Owner invite VAs — no production work happens
-// here, that's Sydney Studio Internal's job; this is read + invite only.
-export function SydOwnerPage() {
+// Gated by App.tsx to any Sydney member (hasSydAccess). Queue + history are
+// read-only and visible to every Sydney member, Owner or not (the backing
+// RPCs -- list_syd_queue/list_syd_events -- already only require
+// is_syd_member()). Inviting a SYD VA stays Owner-only here too: pure
+// Sydney production VAs must still be invited exclusively from Sydney
+// Studio Internal, never from Client OS. No production work happens on
+// this page either way, that's Sydney Studio Internal's job.
+export function SydOwnerPage({ isOwner }: { isOwner: boolean }) {
   const [rows, setRows] = useState<QueueRow[] | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [invites, setInvites] = useState<InviteRow[]>([]);
@@ -44,7 +48,9 @@ export function SydOwnerPage() {
     const [q, e, i] = await Promise.all([
       supabase.schema("client_os").rpc("list_syd_queue"),
       supabase.schema("client_os").rpc("list_syd_events"),
-      supabase.schema("client_os").rpc("list_syd_invites"),
+      isOwner
+        ? supabase.schema("client_os").rpc("list_syd_invites")
+        : Promise.resolve({ data: [] as InviteRow[], error: null }),
     ]);
     if (q.error) setError(q.error.message);
     setRows((q.data as QueueRow[]) ?? []);
@@ -54,7 +60,7 @@ export function SydOwnerPage() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [isOwner]);
 
   async function sendInvite() {
     if (!inviteEmail.trim()) return;
@@ -80,12 +86,14 @@ export function SydOwnerPage() {
     <div className="p-6 xl:p-8 max-w-3xl mx-auto">
       <h1 className="text-[18px] font-serif font-medium text-neutral-50 mb-1">Sydney Studio</h1>
       <p className="text-[12.5px] text-neutral-500 mb-6">
-        Private production requests — visible only to you. Not part of normal ReelForge activity.
+        {isOwner
+          ? "Private production requests — visible only to you. Not part of normal ReelForge activity."
+          : "Private production requests — status and history. Not part of normal ReelForge activity."}
       </p>
 
       {error && <p className="text-[12px] text-red-300 mb-4">{error}</p>}
 
-      <div className="rounded-lg surface-panel p-4 mb-6">
+      {isOwner && <div className="rounded-lg surface-panel p-4 mb-6">
         <span className="text-[10.5px] tracking-wide uppercase text-neutral-500 flex items-center gap-1.5 mb-3">
           <UserPlus size={11} />
           Invite SYD VA
@@ -116,7 +124,7 @@ export function SydOwnerPage() {
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="rounded-lg surface-panel p-4 mb-6">
         <span className="text-[10.5px] tracking-wide uppercase text-neutral-500 flex items-center gap-1.5 mb-3">

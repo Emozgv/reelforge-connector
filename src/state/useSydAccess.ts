@@ -8,7 +8,14 @@ import { supabase } from "../lib/supabase";
 // server-side independently, so this hook only ever controls whether the UI
 // offers the SYD entry points (send button, Owner area, invite control).
 export function useSydAccess(userId: string | undefined) {
-  const [sydRole, setSydRole] = useState<"owner" | "va" | null>(null);
+  // current_syd_role() returns one of Sydney's real role strings
+  // ("Owner"/"Manager"/"AI Manager"/"Content Assistant") for any active
+  // Sydney member, or null otherwise -- any non-null value is a valid,
+  // active Sydney membership. (Previously checked stale lowercase
+  // 'owner'/'va' sentinels that no longer exist under Sydney's real
+  // role/permissions model, which silently hid every SYD entry point for
+  // every Sydney member, Owner included.)
+  const [sydRole, setSydRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,7 +31,7 @@ export function useSydAccess(userId: string | undefined) {
       .rpc("current_syd_role")
       .then(({ data, error }) => {
         if (!active) return;
-        setSydRole(!error && (data === "owner" || data === "va") ? data : null);
+        setSydRole(!error && data ? data : null);
         setLoading(false);
       });
     return () => {
@@ -32,5 +39,5 @@ export function useSydAccess(userId: string | undefined) {
     };
   }, [userId]);
 
-  return { sydRole, isSydOwner: sydRole === "owner", loading };
+  return { sydRole, isSydOwner: sydRole === "Owner", hasSydAccess: sydRole !== null, loading };
 }

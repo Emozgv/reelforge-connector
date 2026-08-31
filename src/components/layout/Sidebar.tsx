@@ -72,7 +72,7 @@ export function Sidebar({
   workspaceId,
   role,
   isPlatformAdmin,
-  isSydOwner,
+  hasSydAccess,
   onSignOut,
   activity,
   onOpenCollection,
@@ -91,8 +91,10 @@ export function Sidebar({
   // for an account in client_os.platform_admins (see useAdminAccess).
   isPlatformAdmin?: boolean;
   // Also completely separate — backed by client_os.syd_members, unrelated
-  // to platform_admins or workspace role (see useSydAccess).
-  isSydOwner?: boolean;
+  // to platform_admins or workspace role (see useSydAccess). True for the
+  // Owner and for any normal team member granted Sydney access at invite
+  // time; only gates whether the nav entry shows, not what's inside it.
+  hasSydAccess?: boolean;
   onSignOut?: () => void;
   activity: { items: ActivityFeedItem[]; loading: boolean };
   onOpenCollection: (collectionId: string) => void;
@@ -234,7 +236,7 @@ export function Sidebar({
             Admin Dashboard
           </button>
         )}
-        {isSydOwner && (
+        {hasSydAccess && (
           <button
             onClick={() => onNavigate("syd")}
             className={[

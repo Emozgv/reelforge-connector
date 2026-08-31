@@ -20,6 +20,7 @@ export interface PendingInvite {
   email: string;
   role: Extract<WorkspaceRole, "manager" | "va">;
   createdAt: string;
+  sydAccess: boolean;
 }
 
 interface MemberRow {
@@ -36,6 +37,7 @@ interface InviteRow {
   email: string;
   role: string;
   created_at: string;
+  grant_syd_access: boolean;
 }
 
 function parseInvokeError(invokeError: unknown, data: { error?: string } | null): Promise<string> {
@@ -83,7 +85,7 @@ export function useTeamMembers(workspaceId: string | undefined) {
       supabase
         .schema("client_os")
         .from("workspace_invites")
-        .select("id, email, role, created_at")
+        .select("id, email, role, created_at, grant_syd_access")
         .eq("workspace_id", workspaceId)
         .eq("status", "pending")
         .order("created_at", { ascending: true }),
@@ -114,6 +116,7 @@ export function useTeamMembers(workspaceId: string | undefined) {
         email: r.email,
         role: r.role as PendingInvite["role"],
         createdAt: r.created_at,
+        sydAccess: !!r.grant_syd_access,
       }))
     );
     setLoading(false);
@@ -123,11 +126,15 @@ export function useTeamMembers(workspaceId: string | undefined) {
     void load();
   }, [load]);
 
-  async function inviteMember(email: string, role: "manager" | "va"): Promise<{ error: string | null }> {
+  async function inviteMember(
+    email: string,
+    role: "manager" | "va",
+    sydAccess = false
+  ): Promise<{ error: string | null }> {
     if (!workspaceId) return { error: "No active workspace." };
     const { data, error: invokeError } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
       "invite-workspace-member",
-      { body: { workspaceId, email, role } }
+      { body: { workspaceId, email, role, sydAccess } }
     );
     if (invokeError || !data?.ok) {
       return { error: await parseInvokeError(invokeError, data ?? null) };

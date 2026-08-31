@@ -50,6 +50,7 @@ export function TeamSection({
   const [inviting, setInviting] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Extract<WorkspaceRole, "manager" | "va">>("va");
+  const [inviteSydAccess, setInviteSydAccess] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export function TeamSection({
     if (!email) return;
     setInviteSubmitting(true);
     setInviteError(null);
-    const { error: err } = await inviteMember(email, inviteRole);
+    const { error: err } = await inviteMember(email, inviteRole, inviteSydAccess);
     setInviteSubmitting(false);
     if (err) {
       setInviteError(err);
@@ -68,6 +69,7 @@ export function TeamSection({
     }
     setInviteEmail("");
     setInviteRole("va");
+    setInviteSydAccess(false);
     setInviting(false);
   }
 
@@ -210,6 +212,11 @@ export function TeamSection({
                     <span className={["shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]", ROLE_BADGE_STYLE[inv.role]].join(" ")}>
                       {ROLE_LABEL[inv.role]}
                     </span>
+                    {inv.sydAccess && (
+                      <span className="shrink-0 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] text-[#D39448] bg-[#D39448]/10">
+                        + Sydney
+                      </span>
+                    )}
                     {canManage && (
                       <button
                         onClick={() => void handleCancelInvite(inv.id)}
@@ -262,6 +269,21 @@ export function TeamSection({
                   ))}
                 </select>
               </div>
+              {/* Optional bridge -- grants a client_os.syd_members row on
+                  acceptance alongside the normal Client OS membership. Sydney
+                  permissions themselves stay managed inside Sydney Studio
+                  Internal; this only decides whether the person has Sydney
+                  access at all. Pure Sydney production VAs still get invited
+                  exclusively from Sydney Studio Internal, never from here. */}
+              <label className="flex items-center gap-2 text-[11.5px] text-neutral-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={inviteSydAccess}
+                  onChange={(e) => setInviteSydAccess(e.target.checked)}
+                  className="accent-[#D39448]"
+                />
+                Sydney access
+              </label>
               {inviteError && <p className="text-[11px] text-rose-400">{inviteError}</p>}
               <div className="flex items-center gap-2">
                 <button
