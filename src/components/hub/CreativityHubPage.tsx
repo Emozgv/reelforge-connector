@@ -603,7 +603,7 @@ export function CreativityHubPage({
             </span>
             <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#c08e4e]/60" />
           </div>
-          <h1 className="font-mn font-light text-[42px] leading-[1.08] tracking-[-0.8px] text-[#f2ece1]">
+          <h1 className="text-[42px] leading-[1.08] font-hub-hero font-medium text-neutral-50">
             Discover your next{" "}
             <span className="text-gradient-warm">winning concept</span>
           </h1>
@@ -644,8 +644,9 @@ export function CreativityHubPage({
                   setQuery(chip);
                   void runSearch(chip);
                 }}
-                className="animate-chip-drift text-[12px] px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:text-[#D39448] hover:border-[#D39448]/30 hover:bg-[#D39448]/[0.06] transition-colors"
+                className="animate-chip-drift text-[12px] px-3 py-1.5 rounded-full border border-[#202024] text-neutral-400 hover:text-[#D39448] hover:border-[#3a2a17] transition-colors"
                 style={{
+                  ...HUB_CARD_STYLE,
                   animationDelay: `${i * 420}ms`,
                   animationDuration: `${4.6 + i * 0.35}s`,
                 }}
@@ -680,11 +681,12 @@ export function CreativityHubPage({
                     if (lastAction?.kind === "search") void runSearch(lastAction.value, undefined, p);
                   }}
                   className={[
-                    "h-9 px-4 rounded-full text-[13px] capitalize transition-all duration-200",
+                    "h-9 px-4 rounded-full border text-[13px] capitalize transition-colors duration-150",
                     filters.platform === p
-                      ? "bg-[#D39448]/15 text-[#D39448] shadow-[inset_0_0_0_1px_rgba(211,148,72,0.35)]"
-                      : "text-neutral-500 hover:text-neutral-300",
+                      ? "border-[#141009] text-[#f0c58c]"
+                      : "border-transparent text-neutral-500 hover:text-neutral-300",
                   ].join(" ")}
+                  style={filters.platform === p ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
                 >
                   {p === "all" ? "All" : p}
                 </button>
@@ -753,7 +755,7 @@ export function CreativityHubPage({
               <SlidersHorizontal size={14} />
               Filters
               {activeFilterCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-[#D39448] text-[#020508] text-[10px] font-semibold flex items-center justify-center">
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#3a2a17] px-[5px] text-[9px] tracking-[0.5px] text-[#e8b273]">
                   {activeFilterCount}
                 </span>
               )}
