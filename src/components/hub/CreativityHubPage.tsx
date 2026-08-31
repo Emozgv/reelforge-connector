@@ -584,8 +584,13 @@ export function CreativityHubPage({
   return (
     <div className="h-full overflow-y-auto" style={{ background: "#020203" }}>
       {/* hero */}
-      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-16 pb-12">
+      <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-14 pb-10">
         <StarfieldBackground starCount={34} />
+        <HeroReelRails />
+        {/* Dims the decorative reel rails into calm ambient texture instead of
+            a competing photo collage — keeps the atmosphere without it
+            reading as a separate landing page from the rest of ReelForge. */}
+        <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(180deg, #020203 0%, rgba(2,2,3,0.55) 30%, rgba(2,2,3,0.55) 70%, #020203 100%)" }} />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -593,7 +598,6 @@ export function CreativityHubPage({
               "radial-gradient(720px 340px at 50% -20%, rgba(211,148,72,0.06), transparent 65%)",
           }}
         />
-        <HeroReelRails />
 
         <div className="relative z-10 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto text-center">
           <div className="flex items-center justify-center gap-2.5 mb-3">
@@ -763,15 +767,16 @@ export function CreativityHubPage({
           </div>
         </div>
 
+        <div className="rounded-[12px] border border-[#1a130b] p-5" style={HUB_PANEL_STYLE}>
         {platformNotice && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#1a130b] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_PANEL_STYLE}>
+          <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#202024] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_CARD_STYLE}>
             <Info size={14} className="shrink-0 text-neutral-500" />
             {platformNotice}
           </div>
         )}
 
         {searchError ? (
-          <div className="flex flex-col items-center justify-center text-center rounded-xl border border-[#1a130b] py-24" style={HUB_PANEL_STYLE}>
+          <div className="flex flex-col items-center justify-center text-center rounded-xl border border-[#202024] py-24" style={HUB_CARD_STYLE}>
             <CloudOff size={20} className="text-neutral-700 mb-2.5" />
             <p className="text-[14.5px] font-serif text-neutral-300">Research is taking a short timeout.</p>
             <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
@@ -793,7 +798,7 @@ export function CreativityHubPage({
             {lastAction?.kind === "profile" && profile && <ProfileHeader profile={profile} />}
 
             {profileResultsPartial && filtered.length > 0 && (
-              <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#1a130b] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_PANEL_STYLE}>
+              <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#202024] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_CARD_STYLE}>
                 <Info size={14} className="shrink-0 text-neutral-500" />
                 Only showing what loaded — our provider had a brief hiccup pulling the rest. Try Load more or
                 Refresh for the full set.
@@ -852,6 +857,7 @@ export function CreativityHubPage({
             )}
           </>
         )}
+        </div>
 
         <div className="h-10" />
       </div>
