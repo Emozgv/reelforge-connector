@@ -155,10 +155,18 @@ function ResearchInfoPopover() {
   );
 }
 
+// Stable display order (whatever the store already returns, i.e. creation
+// order) — selecting an account must never reshuffle this chip row.
 function accountsFor(accounts: ResearchAccount[], creatorId: string, platform: Platform): ResearchAccount[] {
-  return accounts
-    .filter((a) => a.creatorId === creatorId && a.platform === platform)
-    .sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? ""));
+  return accounts.filter((a) => a.creatorId === creatorId && a.platform === platform);
+}
+
+// Separate from display order on purpose: only used to pick a resume point
+// when switching Creator/platform, never for the chip row's own ordering.
+function mostRecentlyOpened(accounts: ResearchAccount[]): ResearchAccount | null {
+  return (
+    [...accounts].sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? ""))[0] ?? null
+  );
 }
 
 const STATUS_LABEL: Record<ResearchAccount["status"], string> = {
@@ -469,7 +477,7 @@ export function ResearchAccountsPage({
   // Switching Creator or platform re-picks whichever account was worked on
   // most recently — a real, DB-backed resume point, not device-local memory.
   useEffect(() => {
-    setAccountId(currentAccounts[0]?.id ?? null);
+    setAccountId(mostRecentlyOpened(currentAccounts)?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCreator?.id, platform]);
 
