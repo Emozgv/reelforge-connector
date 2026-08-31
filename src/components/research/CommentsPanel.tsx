@@ -145,9 +145,12 @@ export function CommentsPanel({
           type="button"
           disabled
           title="Notes aren't available yet"
-          className="flex items-center gap-1.5 px-4 h-11 text-[12.5px] text-neutral-600 cursor-not-allowed"
+          className="flex items-center gap-2 px-4 h-11 text-[12.5px] text-neutral-300 cursor-not-allowed"
         >
           Notes
+          <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-white/10 text-[10.5px] text-neutral-300">
+            2
+          </span>
         </button>
       </div>
 
@@ -203,7 +206,7 @@ export function CommentsPanel({
                 </div>
                 {/* Read-only, like the rest of this panel — there's no
                     comment-level like action on the real account. */}
-                <Heart size={12} className="shrink-0 mt-0.5 text-neutral-700" />
+                <Heart size={18} className="shrink-0 text-neutral-400" />
               </li>
             ))}
           </ul>
@@ -219,7 +222,7 @@ export function CommentsPanel({
             type="button"
             disabled
             title="Loading more comments isn't available yet"
-            className="w-full h-9 rounded-lg border border-white/[0.06] text-[12px] text-neutral-600 cursor-not-allowed"
+            className="w-full h-11 rounded-lg border border-white/[0.07] bg-[#111114] text-[12.5px] font-medium text-[#D39448] cursor-not-allowed"
           >
             View all {result.comments.length} comments
           </button>

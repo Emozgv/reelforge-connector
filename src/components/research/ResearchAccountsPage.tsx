@@ -937,18 +937,19 @@ export function ResearchAccountsPage({
                   <button
                     type="button"
                     onClick={() => setSavedPopoverOpen(true)}
-                    className="flex items-center justify-center gap-2 h-10 rounded-lg border border-white/[0.08] text-[12.5px] text-neutral-300 hover:border-[#D39448]/25 hover:bg-[#D39448]/[0.05] transition-colors duration-150"
+                    className="flex items-center justify-center gap-2 h-[52px] rounded-xl border border-white/[0.08] text-[13px] text-neutral-200 hover:border-[#D39448]/25 hover:bg-[#D39448]/[0.05] transition-colors duration-150"
                   >
-                    <FolderOpen size={13} className="text-[#D39448]" />
+                    <FolderOpen size={15} className="text-[#D39448]" />
                     Save in a Collection
                   </button>
                   <button
                     type="button"
                     disabled={!currentSwipeVideo || currentSwipeVideo.saved}
                     onClick={() => currentSwipeVideo && !currentSwipeVideo.saved && setSavePanelVideo(currentSwipeVideo)}
-                    className="flex items-center justify-center gap-2 h-10 rounded-lg bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 disabled:cursor-default"
+                    className="flex items-center justify-center gap-2 h-[52px] rounded-xl text-[#2a1c0e] text-[13px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 disabled:cursor-default press-feedback"
+                    style={{ background: "linear-gradient(90deg, #D39448, #EAC088)", boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)" }}
                   >
-                    <Bookmark size={13} fill={currentSwipeVideo?.saved ? "currentColor" : "none"} />
+                    <Bookmark size={15} fill={currentSwipeVideo?.saved ? "currentColor" : "none"} />
                     {currentSwipeVideo?.saved ? "Saved" : "Quicksave"}
                   </button>
                 </div>
