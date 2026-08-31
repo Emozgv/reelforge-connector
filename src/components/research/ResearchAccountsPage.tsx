@@ -33,6 +33,7 @@ import { ReelDetailModal } from "../hub/ReelDetailModal";
 import { SwipeResearchPlayer, type LikeStatus, type FollowStatus } from "./SwipeResearchPlayer";
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
 import { CommentsPanel } from "./CommentsPanel";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 // Local, page-scoped panel chrome for the new Research Accounts layout —
 // deliberately a plain, low-key surface (not the Dashboard/Creativity Hub
@@ -41,7 +42,7 @@ import { CommentsPanel } from "./CommentsPanel";
 // A real, visible card (not a near-transparent wash) with actual depth —
 // matches the mockup's denser, more premium surface instead of reading
 // flat/dev-like.
-const PANEL = "rounded-xl border border-white/[0.10] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)]";
+const PANEL = "rounded-xl border border-[#D39448]/[0.14] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)]";
 
 function SessionRow({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) {
   return (
@@ -624,8 +625,11 @@ export function ResearchAccountsPage({
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+    <div className="relative h-full overflow-y-auto">
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <StarfieldBackground starCount={110} />
+      </div>
+      <div className="relative z-10 max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
         <div className="flex items-start justify-between gap-6">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
@@ -652,7 +656,7 @@ export function ResearchAccountsPage({
                 rather than inventing that signal. */}
             <div
               title="Not tracked yet"
-              className="flex items-center gap-3 h-[52px] px-4 rounded-xl border border-white/[0.10] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)] opacity-60"
+              className="flex items-center gap-3 h-[52px] px-4 rounded-xl border border-[#D39448]/[0.14] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)] opacity-60"
             >
               <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05]">
                 <Diamond size={14} className="text-neutral-500" />
