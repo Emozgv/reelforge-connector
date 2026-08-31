@@ -676,6 +676,8 @@ export function ResearchAccountsPage({
         <div className="mt-6 flex items-center gap-3 flex-wrap">
           <CreatorSelector creators={creators} selected={selectedCreator} onSelect={setSelectedCreator} />
 
+          <span className="w-px h-8 bg-white/[0.08] shrink-0" />
+
           <div className="flex items-center h-11 p-1 rounded-full glass-panel">
             {(["instagram", "tiktok"] as const).map((p) => {
               // Temporarily disabled while TikTok's real-session reliability
@@ -728,8 +730,9 @@ export function ResearchAccountsPage({
                   : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-[#D39448]/25",
               ].join(" ")}
             >
-              <span className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")} title={STATUS_LABEL[a.status]} />
+              <PlatformIcon platform={a.platform} size={12} />
               <span className="text-[12.5px]">{a.label}</span>
+              <span className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")} title={STATUS_LABEL[a.status]} />
               {(a.status === "needs_attention" || a.status === "disconnected") && (
                 <button
                   onClick={async (e) => {
@@ -925,15 +928,21 @@ export function ResearchAccountsPage({
               />
             </div>
 
-            {/* RIGHT: Intelligence (Comments/Notes) + Save to Collection */}
-            <div className="w-[360px] shrink-0 flex flex-col gap-4">
-              <CommentsPanel video={currentSwipeVideo} isOpen fetchComments={liveSession.fetchComments} />
-
-              <div className={PANEL + " p-4"} style={PANEL_STYLE}>
-                <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
-                  Save to Collection
+            {/* RIGHT: Intelligence (Comments/Notes) + Save to Collection —
+                one continuous card, matching the reference, instead of two
+                separate stacked panels the VA had to scroll past. */}
+            <div className="w-[360px] shrink-0">
+              <div className={PANEL} style={PANEL_STYLE}>
+                <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
+                  Intelligence
                 </p>
-                <div className="flex flex-col gap-2">
+                <CommentsPanel video={currentSwipeVideo} isOpen fetchComments={liveSession.fetchComments} />
+
+                <div className="p-4 border-t border-white/[0.08]">
+                  <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
+                    Save to Collection
+                  </p>
+                  <div className="flex flex-col gap-2">
                   <button
                     type="button"
                     onClick={() => setSavedPopoverOpen(true)}
@@ -952,6 +961,7 @@ export function ResearchAccountsPage({
                     <Bookmark size={15} fill={currentSwipeVideo?.saved ? "currentColor" : "none"} />
                     {currentSwipeVideo?.saved ? "Saved" : "Quicksave"}
                   </button>
+                  </div>
                 </div>
               </div>
             </div>
