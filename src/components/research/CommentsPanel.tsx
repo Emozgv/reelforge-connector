@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Loader2, Heart } from "lucide-react";
+import { MessageCircle, Loader2, Heart, ChevronDown } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import type { LiveComment } from "../../state/useLiveResearchSession";
 
@@ -160,9 +160,10 @@ export function CommentsPanel({
           type="button"
           disabled
           title="Sorting isn't available yet"
-          className="text-[11px] text-neutral-600 cursor-not-allowed"
+          className="flex items-center gap-1 text-[11px] text-neutral-600 cursor-not-allowed"
         >
           Most Relevant
+          <ChevronDown size={11} />
         </button>
       </div>
 
@@ -208,6 +209,22 @@ export function CommentsPanel({
           </ul>
         )}
       </div>
+
+      {result?.status === "loaded" && (
+        // No pagination/API support for loading more than this batch, so
+        // this stays disabled rather than promising a "load more" that
+        // isn't real — shown per the reference with the real fetched count.
+        <div className="p-3 border-t border-white/[0.08]">
+          <button
+            type="button"
+            disabled
+            title="Loading more comments isn't available yet"
+            className="w-full h-9 rounded-lg border border-white/[0.06] text-[12px] text-neutral-600 cursor-not-allowed"
+          >
+            View all {result.comments.length} comments
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -83,20 +83,19 @@ function QuickActionButton({
       disabled={inactive}
       title={!onClick ? "Not available yet" : undefined}
       className={[
-        "flex items-center gap-2.5 h-10 px-2.5 rounded-lg border text-[12.5px] transition-colors duration-150",
+        "flex items-center gap-2.5 h-11 px-3 rounded-lg border text-[12.5px] transition-colors duration-150",
         inactive
           ? "border-white/[0.06] text-neutral-600 cursor-not-allowed"
-          : "border-white/[0.08] text-neutral-200 hover:bg-white/[0.05]",
+          : "border-white/[0.07] text-neutral-200 hover:border-[#D39448]/25 hover:bg-[#D39448]/[0.05]",
       ].join(" ")}
     >
-      <span
+      <Icon
+        size={14}
         className={[
-          "flex items-center justify-center w-6 h-6 rounded-md shrink-0",
-          inactive ? "bg-white/[0.04] text-neutral-600" : tone === "danger" ? "bg-rose-500/10 text-rose-400" : "bg-[#D39448]/10 text-[#D39448]",
+          spinning ? "animate-spin" : "",
+          inactive ? "text-neutral-600" : tone === "danger" ? "text-[#e0664f]" : "text-[#D39448]",
         ].join(" ")}
-      >
-        <Icon size={12} className={spinning ? "animate-spin" : ""} />
-      </span>
+      />
       {label}
     </button>
   );
@@ -703,13 +702,14 @@ export function ResearchAccountsPage({
                   disabled={disabled}
                   title={disabled ? "TikTok Research is temporarily unavailable" : undefined}
                   className={[
-                    "flex items-center gap-1.5 h-9 px-4 rounded-full text-[13px] capitalize transition-all duration-200",
+                    "flex items-center gap-1.5 h-9 px-4 rounded-full border text-[13px] capitalize transition-colors duration-150",
                     disabled
-                      ? "text-neutral-700 opacity-50 cursor-not-allowed"
+                      ? "border-transparent text-neutral-700 opacity-50 cursor-not-allowed"
                       : platform === p
-                        ? "bg-[#D39448]/15 text-[#D39448] shadow-[inset_0_0_0_1px_rgba(211,148,72,0.35)]"
-                        : "text-neutral-500 hover:text-neutral-300",
+                        ? "border-[#141009] text-[#f0c58c]"
+                        : "border-transparent text-neutral-500 hover:text-neutral-300",
                   ].join(" ")}
+                  style={!disabled && platform === p ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
                 >
                   <PlatformIcon platform={p} size={12} />
                   {p === "instagram" ? "Instagram" : "TikTok"}
@@ -732,7 +732,7 @@ export function ResearchAccountsPage({
                 "group flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border transition-all duration-150",
                 a.id === currentAccount?.id
                   ? "border-[#D39448]/45 bg-[#D39448]/[0.1] text-[#D39448]"
-                  : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-white/[0.16]",
+                  : "border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:border-[#D39448]/25",
               ].join(" ")}
             >
               <span className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")} title={STATUS_LABEL[a.status]} />
@@ -838,7 +838,7 @@ export function ResearchAccountsPage({
                     value={
                       <span>
                         {currentAccount.label}
-                        {liveSession.status === "active" && <span className="text-emerald-400"> · Active</span>}
+                        {liveSession.status === "active" && <span className="text-emerald-400"> - Active</span>}
                       </span>
                     }
                   />
@@ -945,9 +945,9 @@ export function ResearchAccountsPage({
                   <button
                     type="button"
                     onClick={() => setSavedPopoverOpen(true)}
-                    className="flex items-center justify-center gap-2 h-10 rounded-lg border border-white/[0.08] text-[12.5px] text-neutral-300 hover:bg-white/[0.05] transition-colors duration-150"
+                    className="flex items-center justify-center gap-2 h-10 rounded-lg border border-white/[0.08] text-[12.5px] text-neutral-300 hover:border-[#D39448]/25 hover:bg-[#D39448]/[0.05] transition-colors duration-150"
                   >
-                    <FolderOpen size={13} />
+                    <FolderOpen size={13} className="text-[#D39448]" />
                     Save in a Collection
                   </button>
                   <button
@@ -982,7 +982,8 @@ export function ResearchAccountsPage({
                 </button>
                 <button
                   onClick={() => setMode("archive")}
-                  className="flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200 bg-[#D39448]/15 text-[#D39448]"
+                  className="flex items-center gap-1.5 h-7 px-3 rounded-full border border-[#141009] text-[12px] text-[#f0c58c]"
+                  style={{ background: "linear-gradient(90deg, #2a1e11, #1a1510)" }}
                 >
                   <LayoutGrid size={11} />
                   Archive
