@@ -66,14 +66,12 @@ function QuickActionButton({
   onClick,
   disabled,
   spinning,
-  tone,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
   spinning?: boolean;
-  tone?: "danger";
 }) {
   const inactive = disabled || !onClick;
   return (
@@ -85,16 +83,13 @@ function QuickActionButton({
       className={[
         "flex items-center gap-2.5 h-11 px-3 rounded-lg border text-[12.5px] transition-colors duration-150",
         inactive
-          ? "border-white/[0.06] text-neutral-600 cursor-not-allowed"
-          : "border-white/[0.07] text-neutral-200 hover:border-[#D39448]/25 hover:bg-[#D39448]/[0.05]",
+          ? "border-white/[0.06] bg-[#0c0c0e] text-neutral-600 cursor-not-allowed"
+          : "border-white/[0.07] bg-[#111114] text-neutral-200 hover:border-[#D39448]/25 hover:bg-[#161613]",
       ].join(" ")}
     >
       <Icon
         size={14}
-        className={[
-          spinning ? "animate-spin" : "",
-          inactive ? "text-neutral-600" : tone === "danger" ? "text-[#e0664f]" : "text-[#D39448]",
-        ].join(" ")}
+        className={[spinning ? "animate-spin" : "", inactive ? "text-neutral-600" : "text-[#D39448]"].join(" ")}
       />
       {label}
     </button>
@@ -660,12 +655,9 @@ export function ResearchAccountsPage({
                 rather than inventing that signal. */}
             <div
               title="Not tracked yet"
-              className="flex items-center gap-3 h-[52px] px-4 rounded-xl border border-[#1a130b] opacity-60"
+              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#1a130b] opacity-60"
               style={PANEL_STYLE}
             >
-              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05]">
-                <Diamond size={14} className="text-neutral-500" />
-              </span>
               <div className="leading-tight">
                 <p className="text-[9.5px] tracking-wide uppercase text-neutral-500">Connector Status</p>
                 <p className="flex items-center gap-1.5 text-[11.5px] text-neutral-400 mt-0.5">
@@ -673,6 +665,7 @@ export function ResearchAccountsPage({
                   Not tracked yet
                 </p>
               </div>
+              <Diamond size={14} className="text-neutral-500 shrink-0" />
             </div>
           </div>
         </div>
@@ -867,7 +860,6 @@ export function ResearchAccountsPage({
                   <QuickActionButton
                     icon={Square}
                     label="End Research"
-                    tone="danger"
                     disabled={liveSession.status !== "active"}
                     onClick={() => void liveSession.endSession()}
                   />
