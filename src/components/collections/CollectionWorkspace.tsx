@@ -268,7 +268,7 @@ export function CollectionWorkspace({
                 {effectiveCollectionStatus(collection)}
               </span>
 
-              {!archived && collection.status === "Completed" && (
+              {!archived && (collection.status === "Completed" || effectiveCollectionStatus(collection) === "Cancelled") && (
                 <button
                   onClick={onReopen}
                   title="Reopens this version for a new round of work — its finished production history stays intact."
