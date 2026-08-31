@@ -396,8 +396,19 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // run at all, so it never starts a session on its own.
   const checkInitialReachability = useCallback(async (accountId: string, platform: Platform) => {
     if (platform !== "instagram" && platform !== "tiktok") return;
+    // Shares beginSession's own attemptRef/isStale generation guard --
+    // checkHealth() can take up to 1.5s (its own fetch timeout), which is
+    // long enough for a rapid account switch (each one re-running this) or
+    // a genuine "Start research" click (beginSession) to land while this is
+    // still in flight. Without this, a stale check landing late could
+    // stomp a newer, already-correct status (e.g. flashing "Checking..."
+    // over an active wake countdown) with what's now outdated information.
+    const attemptId = ++attemptRef.current;
+    const isStale = () => attemptRef.current !== attemptId;
     setStatus("checking");
-    if (await checkHealth()) {
+    const reachable = await checkHealth();
+    if (isStale()) return;
+    if (reachable) {
       lastIdleAccountRef.current = { accountId, platform };
       setStatus("idle");
       return;
