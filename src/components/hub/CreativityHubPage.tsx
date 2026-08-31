@@ -767,16 +767,15 @@ export function CreativityHubPage({
           </div>
         </div>
 
-        <div className="rounded-[12px] border border-[#1a130b] p-5" style={HUB_PANEL_STYLE}>
         {platformNotice && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#202024] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_CARD_STYLE}>
+          <div className="mb-5 flex items-center gap-2 rounded-[12px] border border-[#1a130b] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_PANEL_STYLE}>
             <Info size={14} className="shrink-0 text-neutral-500" />
             {platformNotice}
           </div>
         )}
 
         {searchError ? (
-          <div className="flex flex-col items-center justify-center text-center rounded-xl border border-[#202024] py-24" style={HUB_CARD_STYLE}>
+          <div className="flex flex-col items-center justify-center text-center rounded-[12px] border border-[#1a130b] py-24" style={HUB_PANEL_STYLE}>
             <CloudOff size={20} className="text-neutral-700 mb-2.5" />
             <p className="text-[14.5px] font-serif text-neutral-300">Research is taking a short timeout.</p>
             <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
@@ -798,7 +797,7 @@ export function CreativityHubPage({
             {lastAction?.kind === "profile" && profile && <ProfileHeader profile={profile} />}
 
             {profileResultsPartial && filtered.length > 0 && (
-              <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#202024] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_CARD_STYLE}>
+              <div className="mb-5 flex items-center gap-2 rounded-[12px] border border-[#1a130b] px-4 py-3 text-[12.5px] text-neutral-400" style={HUB_PANEL_STYLE}>
                 <Info size={14} className="shrink-0 text-neutral-500" />
                 Only showing what loaded — our provider had a brief hiccup pulling the rest. Try Load more or
                 Refresh for the full set.
@@ -809,14 +808,16 @@ export function CreativityHubPage({
                 state uses the app-wide `.surface-panel` (translucent glass) —
                 shared with the frozen Research Accounts page, so it can't be
                 restyled globally. This wrapper repaints it to the Dashboard's
-                opaque card surface only here. */}
+                exact panel surface only here — it's the one visible "box" on
+                screen in the empty state, so it should read as a Dashboard
+                panel, not a lighter nested card. */}
             <style>{`
               .rf-hub-video-grid .surface-panel {
-                background: ${HUB_CARD_STYLE.background} !important;
-                border: 1px solid ${HUB_CARD_BORDER} !important;
+                background: ${HUB_PANEL_STYLE.background} !important;
+                border: 1px solid #1a130b !important;
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
-                box-shadow: ${HUB_CARD_STYLE.boxShadow} !important;
+                box-shadow: ${HUB_PANEL_STYLE.boxShadow} !important;
               }
             `}</style>
             <div className="rf-hub-video-grid">
@@ -873,7 +874,6 @@ export function CreativityHubPage({
             )}
           </>
         )}
-        </div>
 
         <div className="h-10" />
       </div>
