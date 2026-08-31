@@ -41,12 +41,17 @@ import { StarfieldBackground } from "../shared/StarfieldBackground";
 // frozen files stay untouched. Layout/structure here still follows the
 // Figma/mockup exactly; only the surface tokens (bg/border/shadow) are now
 // the same ones used everywhere else in the app.
-const RA_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.32), 0 0 10px rgba(211,148,72,0.08)";
-const PANEL_BG = "linear-gradient(180deg, #070707, #020202)";
-const PANEL = "rounded-xl border border-[#120d07]";
+const RA_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.34), 0 0 10px rgba(211,148,72,0.09)";
+// Deliberately a shade richer than the page's own #020203 background —
+// the previous #070707->#020202 gradient bottomed out almost identical to
+// the page bg, so panels barely read as distinct surfaces except at their
+// very top edge. This keeps real depth/contrast without losing the deep,
+// premium Dashboard-DNA black.
+const PANEL_BG = "linear-gradient(180deg, #0d0d0e, #060606)";
+const PANEL = "rounded-xl border border-[#1c140b]";
 const PANEL_STYLE = {
   background: PANEL_BG,
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${RA_GOLD_RING}`,
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,0,0,0.45), 0 20px 40px -18px rgba(0,0,0,0.85), ${RA_GOLD_RING}`,
 } as const;
 
 function SessionRow({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) {
@@ -625,11 +630,23 @@ export function ResearchAccountsPage({
 
   return (
     <div className="relative h-full overflow-y-auto" style={{ background: "#020203" }}>
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <StarfieldBackground starCount={110} />
-      </div>
-      <div className="relative z-10 max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
-        <div className="flex items-start justify-between gap-6">
+      {/* Scoped, stronger than the shared .dashboard-starfield-boost (which
+          stays untouched for the frozen Dashboard) — this page gets its
+          own bump on top of it, same pattern as Creativity Hub. */}
+      <style>{`
+        .rf-research-starfield .star-twinkle { opacity: 0.6 !important; box-shadow: 0 0 4px rgba(255,250,240,0.45) !important; transform: scale(0.85); }
+        @media (prefers-reduced-motion: no-preference) {
+          .rf-research-starfield .star-twinkle { animation-name: star-twinkle-boosted !important; }
+        }
+      `}</style>
+      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+        {/* Confined to the header/hero band only — not the whole scrollable
+            page — same as how Dashboard/Creativity Hub scope their
+            starfield to just the hero, not every panel below it. */}
+        <div className="dashboard-starfield-boost rf-research-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
+          <StarfieldBackground starCount={110} />
+        </div>
+        <div className="relative flex items-start justify-between gap-6">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
@@ -655,7 +672,7 @@ export function ResearchAccountsPage({
                 rather than inventing that signal. */}
             <div
               title="Not tracked yet"
-              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#120d07] opacity-60"
+              className="flex items-center gap-4 h-[52px] px-4 rounded-xl border border-[#1c140b] opacity-60"
               style={PANEL_STYLE}
             >
               <div className="leading-tight">
@@ -810,7 +827,7 @@ export function ResearchAccountsPage({
         ) : mode === "swipe" ? (
           <div className="mt-5 flex justify-center gap-7 items-start">
             {/* LEFT: Session Context + Quick Actions */}
-            <div className="w-[330px] shrink-0 flex flex-col gap-4">
+            <div className="w-[290px] shrink-0 flex flex-col gap-4">
               <div className={PANEL + " p-4"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Session Context
