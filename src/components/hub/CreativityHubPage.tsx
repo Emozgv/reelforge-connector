@@ -22,14 +22,24 @@ import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTy
 // the frozen Dashboard file stays completely untouched. Deliberately NOT
 // applied to any shared sub-component (VideoGrid, SavePanel, CreatorSelector,
 // etc.) since those are also used by the frozen Research Accounts page.
+// A permanent, deliberate warm-gold ring — requested by the user after
+// seeing (and liking) their browser's native orange focus ring on a button
+// here; that was just their OS accent color on a keyboard-focused element,
+// not anything from our CSS, so this recreates the same feeling as an
+// intentional, always-on accent rather than relying on browser focus state.
+const HUB_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.45), 0 0 10px rgba(211,148,72,0.12)";
+// Softer variant for the toolbar tier (search bar, chips, pills, buttons) —
+// those sit much closer together and read as "outlined" at the panel-tier
+// ring's strength; this keeps just a whisper of the same warmth.
+const HUB_GOLD_RING_SOFT = "0 0 0 0.5px rgba(211,148,72,0.22), 0 0 8px rgba(211,148,72,0.06)";
 const HUB_PANEL_STYLE: React.CSSProperties = {
   background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${HUB_GOLD_RING}`,
 };
-const HUB_CARD_BORDER = "#202024";
+const HUB_CARD_BORDER = "rgba(255,255,255,0.06)";
 const HUB_CARD_STYLE: React.CSSProperties = {
   background: "#111114",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6)",
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6), ${HUB_GOLD_RING_SOFT}`,
 };
 
 // The Hub is an OFM research workspace, not a general social search box —
@@ -585,7 +595,18 @@ export function CreativityHubPage({
     <div className="h-full overflow-y-auto" style={{ background: "#020203" }}>
       {/* hero */}
       <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-14 pb-10">
-        <StarfieldBackground starCount={34} />
+        {/* Scoped, stronger than the shared .dashboard-starfield-boost (which
+            stays untouched for the frozen Dashboard) — this page gets its
+            own bump on top of it. */}
+        <style>{`
+          .rf-hub-starfield .star-twinkle { opacity: 0.68 !important; box-shadow: 0 0 4px rgba(255,250,240,0.5) !important; }
+          @media (prefers-reduced-motion: no-preference) {
+            .rf-hub-starfield .star-twinkle { animation-name: star-twinkle-boosted !important; }
+          }
+        `}</style>
+        <div className="dashboard-starfield-boost rf-hub-starfield absolute inset-0">
+          <StarfieldBackground starCount={260} />
+        </div>
         <HeroReelRails />
         {/* Dims the decorative reel rails into calm ambient texture instead of
             a competing photo collage — keeps the atmosphere without it
@@ -620,8 +641,10 @@ export function CreativityHubPage({
             <div
               className="relative flex items-center rounded-2xl border transition-colors duration-200"
               style={{
-                borderColor: focused ? "rgba(211,148,72,0.45)" : HUB_CARD_BORDER,
-                boxShadow: focused ? "0 0 0 3px rgba(211,148,72,0.1)" : HUB_CARD_STYLE.boxShadow,
+                borderColor: focused ? "rgba(211,148,72,0.55)" : HUB_CARD_BORDER,
+                boxShadow: focused
+                  ? "inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6), 0 0 0 0.5px rgba(211,148,72,0.4), 0 0 10px rgba(211,148,72,0.1)"
+                  : HUB_CARD_STYLE.boxShadow,
                 background: HUB_CARD_STYLE.background,
               }}
             >
@@ -648,7 +671,7 @@ export function CreativityHubPage({
                   setQuery(chip);
                   void runSearch(chip);
                 }}
-                className="animate-chip-drift text-[12px] px-3 py-1.5 rounded-full border border-[#202024] text-neutral-400 hover:text-[#D39448] hover:border-[#3a2a17] transition-colors"
+                className="animate-chip-drift text-[12px] px-3 py-1.5 rounded-full border border-white/[0.06] text-neutral-400 hover:text-[#D39448] hover:border-[#3a2a17] transition-colors"
                 style={{
                   ...HUB_CARD_STYLE,
                   animationDelay: `${i * 420}ms`,
@@ -724,7 +747,7 @@ export function CreativityHubPage({
             <button
               onClick={() => setSavedPopoverOpen(true)}
               title="See everything saved for this creator"
-              className="flex items-center gap-1.5 h-11 px-4 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
+              className="flex items-center gap-1.5 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
               style={HUB_CARD_STYLE}
             >
               <Bookmark size={13} className="text-[#D39448]" />
@@ -735,7 +758,7 @@ export function CreativityHubPage({
               onClick={handleRefresh}
               disabled={searching}
               title="Refresh — back to the Hub home"
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
               style={HUB_CARD_STYLE}
             >
               <RefreshCw size={15} className={refreshSpinning ? "animate-spin" : ""} />
@@ -745,7 +768,7 @@ export function CreativityHubPage({
               onClick={handleShuffle}
               disabled={searching || !lastAction}
               title={lastAction ? "Shuffle — fresh batch, same topic" : "Search or browse a profile first"}
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-300 disabled:opacity-40 disabled:hover:bg-transparent"
               style={HUB_CARD_STYLE}
             >
               <Shuffle size={15} className={shuffleSpinning ? "animate-spin" : ""} />
@@ -753,7 +776,7 @@ export function CreativityHubPage({
 
             <button
               onClick={() => setDrawerOpen(true)}
-              className="relative flex items-center gap-2 h-11 px-4 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
+              className="relative flex items-center gap-2 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300"
               style={HUB_CARD_STYLE}
             >
               <SlidersHorizontal size={14} />
@@ -785,7 +808,7 @@ export function CreativityHubPage({
             <button
               onClick={retryLastAction}
               disabled={searching || !lastAction}
-              className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
+              className="mt-5 flex items-center gap-2 h-9 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[12.5px] text-neutral-300 disabled:opacity-50"
               style={HUB_CARD_STYLE}
             >
               <Shuffle size={13} className={searching ? "animate-spin" : ""} />
@@ -860,7 +883,7 @@ export function CreativityHubPage({
                 <button
                   onClick={() => void loadMoreProfileVideos()}
                   disabled={loadingMore}
-                  className="flex items-center gap-2 h-10 px-5 rounded-full border border-[#202024] hover:border-[#2c2c32] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300 disabled:opacity-60"
+                  className="flex items-center gap-2 h-10 px-5 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-300 disabled:opacity-60"
                   style={HUB_CARD_STYLE}
                 >
                   {loadingMore ? (
