@@ -35,23 +35,15 @@ import { DownloadConnectorButton } from "./DownloadConnectorButton";
 import { CommentsPanel } from "./CommentsPanel";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 
-// Local, page-scoped copies of the established Dashboard/Creativity Hub
-// "Design DNA" (see DashboardPage.tsx's PANEL/CARD and CreativityHubPage's
-// HUB_PANEL_STYLE/HUB_GOLD_RING) — duplicated rather than imported so those
-// frozen files stay untouched. Layout/structure here still follows the
-// Figma/mockup exactly; only the surface tokens (bg/border/shadow) are now
-// the same ones used everywhere else in the app.
-const RA_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.34), 0 0 10px rgba(211,148,72,0.09)";
-// Deliberately a shade richer than the page's own #020203 background —
-// the previous #070707->#020202 gradient bottomed out almost identical to
-// the page bg, so panels barely read as distinct surfaces except at their
-// very top edge. This keeps real depth/contrast without losing the deep,
-// premium Dashboard-DNA black.
-const PANEL_BG = "linear-gradient(180deg, #0d0d0e, #060606)";
+// Local, page-scoped copy of DashboardPage.tsx's PANEL/PANEL_STYLE —
+// byte-identical values, duplicated rather than imported so that frozen
+// file stays untouched. The user was explicit: Dashboard's panel IS the
+// brand DNA, not a close approximation of it — no gold ring, no extra
+// depth tuning, just the same panel.
 const PANEL = "rounded-xl border border-[#1a130b]";
 const PANEL_STYLE = {
-  background: PANEL_BG,
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,0,0,0.45), 0 20px 40px -18px rgba(0,0,0,0.85), ${RA_GOLD_RING}`,
+  background: "linear-gradient(180deg, #070707, #020202)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
 } as const;
 
 function SessionRow({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) {
