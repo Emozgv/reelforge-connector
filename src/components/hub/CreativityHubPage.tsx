@@ -805,6 +805,21 @@ export function CreativityHubPage({
               </div>
             )}
 
+            {/* Scoped override, not a global one: VideoGrid's empty/loading
+                state uses the app-wide `.surface-panel` (translucent glass) —
+                shared with the frozen Research Accounts page, so it can't be
+                restyled globally. This wrapper repaints it to the Dashboard's
+                opaque card surface only here. */}
+            <style>{`
+              .rf-hub-video-grid .surface-panel {
+                background: ${HUB_CARD_STYLE.background} !important;
+                border: 1px solid ${HUB_CARD_BORDER} !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                box-shadow: ${HUB_CARD_STYLE.boxShadow} !important;
+              }
+            `}</style>
+            <div className="rf-hub-video-grid">
             <VideoGrid
               videos={filtered}
               onSaveClick={handleSaveClick}
@@ -837,6 +852,7 @@ export function CreativityHubPage({
                       : 'Try one of the suggestions, or type your own — e.g. "cute blonde girl".'
               }
             />
+            </div>
 
             {lastAction?.kind === "profile" && filtered.length > 0 && profileHasMore && (
               <div className="flex justify-center mt-6">
