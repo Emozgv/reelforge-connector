@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Loader2 } from "lucide-react";
+import { MessageCircle, Loader2, Heart } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import type { LiveComment } from "../../state/useLiveResearchSession";
 
@@ -122,13 +122,49 @@ export function CommentsPanel({
   const result = displayReelId ? resultsRef.current.get(displayReelId) : undefined;
 
   return (
-    <div className="w-[300px] h-[min(76vh,660px)] rounded-2xl border border-white/[0.08] bg-[#141416] flex flex-col overflow-hidden">
-      <div className="px-4 py-3 border-b border-white/[0.08] flex items-center gap-2 text-white/90">
-        <MessageCircle size={14} />
-        <span className="text-[13px] font-medium">Comments</span>
+    <div className="w-full h-[min(76vh,660px)] rounded-xl border border-white/[0.10] bg-[#111114] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)] flex flex-col overflow-hidden">
+      {/* Comments/Notes tabs — Notes has no backing feature yet (no note
+          storage exists anywhere in the app), so it's shown per the Figma
+          reference but disabled rather than invented. */}
+      <div className="flex items-center border-b border-white/[0.08]">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-4 h-11 text-[12.5px] font-medium text-[#D39448] border-b-2 border-[#D39448]"
+        >
+          <MessageCircle size={13} />
+          Comments
+        </button>
+        <button
+          type="button"
+          disabled
+          title="Notes aren't available yet"
+          className="flex items-center gap-1.5 px-4 h-11 text-[12.5px] text-neutral-600 cursor-not-allowed"
+        >
+          Notes
+        </button>
       </div>
+
+      <div className="px-4 pt-3 flex items-center justify-between">
+        <span className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">Top Comments</span>
+        {/* Sorting isn't implemented (comments render in whatever order the
+            provider returns) — shown to match the reference, disabled
+            rather than pretending to sort. */}
+        <button
+          type="button"
+          disabled
+          title="Sorting isn't available yet"
+          className="text-[11px] text-neutral-600 cursor-not-allowed"
+        >
+          Most Relevant
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {dwelling ? (
+        {!video ? (
+          <div className="h-full flex items-center justify-center text-center">
+            <p className="text-[11.5px] text-neutral-600">No reel is being viewed right now.</p>
+          </div>
+        ) : dwelling ? (
           <div className="h-full flex items-center justify-center text-center">
             <p className="text-[11.5px] text-neutral-600">·</p>
           </div>
@@ -149,12 +185,17 @@ export function CommentsPanel({
         ) : (
           <ul className="space-y-3">
             {result.comments.map((c) => (
-              <li key={c.id} className="text-[12.5px] leading-snug">
-                <span className="text-neutral-200 font-medium">{c.username ?? "unknown"}</span>{" "}
-                <span className="text-neutral-400">{c.text}</span>
-                {typeof c.likeCount === "number" && (
-                  <div className="text-[11px] text-neutral-600 mt-0.5">{c.likeCount.toLocaleString()} likes</div>
-                )}
+              <li key={c.id} className="flex items-start justify-between gap-2 text-[12.5px] leading-snug">
+                <div>
+                  <span className="text-neutral-200 font-medium">{c.username ?? "unknown"}</span>{" "}
+                  <span className="text-neutral-400">{c.text}</span>
+                  {typeof c.likeCount === "number" && (
+                    <div className="text-[11px] text-neutral-600 mt-0.5">{c.likeCount.toLocaleString()} likes</div>
+                  )}
+                </div>
+                {/* Read-only, like the rest of this panel — there's no
+                    comment-level like action on the real account. */}
+                <Heart size={12} className="shrink-0 mt-0.5 text-neutral-700" />
               </li>
             ))}
           </ul>

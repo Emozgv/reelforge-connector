@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, FolderPlus, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, RotateCw, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle } from "lucide-react";
+import { ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle, Send } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
-import type { LiveComment, LiveSessionStatus } from "../../state/useLiveResearchSession";
+import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { formatDuration } from "../../lib/researchFeedMapping";
+import { formatCompactNumber } from "../../lib/formatCount";
 import { DownloadConnectorLink } from "./DownloadConnectorButton";
-import { CommentsPanel } from "./CommentsPanel";
 
 export type LikeStatus = "pending" | "liked" | "failed";
 export type FollowStatus = "pending" | "following" | "failed";
@@ -26,8 +26,6 @@ function SwipeSlide({
   video,
   active,
   pageActive,
-  onSaveClick,
-  onAddToCollection,
   onLikeClick,
   likeStatus,
   onFollowClick,
@@ -35,14 +33,10 @@ function SwipeSlide({
   onBlockCreator,
   blockStatus,
   canLike,
-  commentsOpen,
-  onCommentsClick,
 }: {
   video: ReelVideo;
   active: boolean;
   pageActive: boolean;
-  onSaveClick: () => void;
-  onAddToCollection: () => void;
   onLikeClick: () => void;
   likeStatus?: LikeStatus;
   onFollowClick: () => void;
@@ -50,8 +44,6 @@ function SwipeSlide({
   onBlockCreator: () => void;
   blockStatus?: BlockStatus;
   canLike: boolean;
-  commentsOpen: boolean;
-  onCommentsClick: () => void;
 }) {
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -220,80 +212,70 @@ function SwipeSlide({
         </div>
       </div>
 
-      {/* right action rail. Like is a real action on the actual Instagram
-          account (it acts on this exact live session, no separate context
-          spin-up) — kept visually separate, above a divider, from Save /
-          Add-to-Collection below, which are ReelForge-only actions and
-          never touch the real account. */}
+      {/* right stat rail — matches the Research Accounts Figma reference
+          exactly: Like is the one real action here (acts on the actual
+          Instagram account, same live session); comment/share counts are
+          real data from the reel itself (video.comments/video.shares) but
+          purely informational, same as Figma shows them — no comment-level
+          or share action exists to back an interactive button there. Save/
+          Add-to-Collection moved to the dedicated Save-to-Collection panel
+          (ResearchAccountsPage) to match the reference, which doesn't show
+          them on the video itself. */}
       <div className="absolute bottom-6 right-3 flex flex-col items-center gap-4">
         {canLike && (
-          <>
-            <button
-              type="button"
-              onClick={onLikeClick}
-              disabled={likeStatus === "pending" || likeStatus === "liked"}
-              className="flex flex-col items-center gap-1 text-white group disabled:cursor-default"
-              title={
-                likeStatus === "liked"
-                  ? "Liked on the real Instagram account"
-                  : likeStatus === "pending"
-                    ? "Liking on Instagram…"
-                    : likeStatus === "failed"
-                      ? "Couldn't confirm the like — try again"
-                      : "Like on the real Instagram account"
-              }
-            >
-              <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/65 transition-colors">
-                {likeStatus === "pending" ? (
-                  <Loader2 size={19} className="animate-spin text-white/80" />
-                ) : (
-                  <Heart
-                    size={19}
-                    fill={likeStatus === "liked" ? "currentColor" : "none"}
-                    className={likeStatus === "liked" ? "text-rose-400" : likeStatus === "failed" ? "text-rose-400/70" : ""}
-                  />
-                )}
-              </span>
-              <span className="text-[9.5px] text-white/80">
-                {likeStatus === "liked" ? "Liked" : likeStatus === "pending" ? "Liking…" : likeStatus === "failed" ? "Retry" : "Like"}
-              </span>
-            </button>
-            <span className="w-6 h-px bg-white/15" />
-          </>
-        )}
-        <button
-          type="button"
-          onClick={onSaveClick}
-          className="flex flex-col items-center gap-1 text-white group"
-          title={video.saved ? "Saved" : "Quick Save"}
-        >
-          <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/65 transition-colors">
-            <Bookmark size={19} fill={video.saved ? "currentColor" : "none"} className={video.saved ? "text-[#D39448]" : ""} />
-          </span>
-          <span className="text-[9.5px] text-white/80">{video.saved ? "Saved" : "Save"}</span>
-        </button>
-        <button type="button" onClick={onAddToCollection} className="flex flex-col items-center gap-1 text-white group" title="Add to collection">
-          <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/65 transition-colors">
-            <FolderPlus size={19} />
-          </span>
-          <span className="text-[9.5px] text-white/80">Collection</span>
-        </button>
-        <button
-          type="button"
-          onClick={onCommentsClick}
-          className="flex flex-col items-center gap-1 text-white group"
-          title={commentsOpen ? "Hide comments" : "View comments (read-only)"}
-        >
-          <span
-            className={[
-              "w-11 h-11 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors",
-              commentsOpen ? "bg-white/25" : "bg-black/45 group-hover:bg-black/65",
-            ].join(" ")}
+          <button
+            type="button"
+            onClick={onLikeClick}
+            disabled={likeStatus === "pending" || likeStatus === "liked"}
+            className="flex flex-col items-center gap-1 text-white group disabled:cursor-default"
+            title={
+              likeStatus === "liked"
+                ? "Liked on the real Instagram account"
+                : likeStatus === "pending"
+                  ? "Liking on Instagram…"
+                  : likeStatus === "failed"
+                    ? "Couldn't confirm the like — try again"
+                    : "Like on the real Instagram account"
+            }
           >
+            <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/65 transition-colors">
+              {likeStatus === "pending" ? (
+                <Loader2 size={19} className="animate-spin text-white/80" />
+              ) : (
+                <Heart
+                  size={19}
+                  fill={likeStatus === "liked" ? "currentColor" : "none"}
+                  className={likeStatus === "liked" ? "text-rose-400" : likeStatus === "failed" ? "text-rose-400/70" : ""}
+                />
+              )}
+            </span>
+            <span className="text-[9.5px] text-white/80 tabular-nums">
+              {likeStatus === "pending"
+                ? "…"
+                : likeStatus === "failed"
+                  ? "Retry"
+                  : video.likes !== undefined
+                    ? formatCompactNumber(video.likes)
+                    : "Like"}
+            </span>
+          </button>
+        )}
+        <div className="flex flex-col items-center gap-1 text-white">
+          <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
             <MessageCircle size={19} />
           </span>
-          <span className="text-[9.5px] text-white/80">Comments</span>
-        </button>
+          {video.comments !== undefined && (
+            <span className="text-[9.5px] text-white/80 tabular-nums">{formatCompactNumber(video.comments)}</span>
+          )}
+        </div>
+        {video.shares !== undefined && (
+          <div className="flex flex-col items-center gap-1 text-white">
+            <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
+              <Send size={18} />
+            </span>
+            <span className="text-[9.5px] text-white/80 tabular-nums">{formatCompactNumber(video.shares)}</span>
+          </div>
+        )}
       </div>
 
       <div className="absolute top-3 left-3 flex items-center gap-1.5">
@@ -416,9 +398,6 @@ export function SwipeResearchPlayer({
   lockedByLabel,
   onNext,
   onPrev,
-  onSaveClick,
-  onAddToCollection,
-  onExitToArchive,
   onLikeClick,
   likeStatus,
   onFollowClick,
@@ -427,8 +406,6 @@ export function SwipeResearchPlayer({
   blockStatus,
   onRetryWake,
   onRefreshSession,
-  onEndResearch,
-  fetchComments,
   active,
 }: {
   account: ResearchAccount;
@@ -447,9 +424,6 @@ export function SwipeResearchPlayer({
   lockedByLabel: string | null;
   onNext: () => void;
   onPrev: () => void;
-  onSaveClick: (video: ReelVideo) => void;
-  onAddToCollection: (video: ReelVideo) => void;
-  onExitToArchive: () => void;
   onLikeClick: (video: ReelVideo) => void;
   likeStatus: Record<string, LikeStatus>;
   onFollowClick: (video: ReelVideo) => void;
@@ -458,11 +432,6 @@ export function SwipeResearchPlayer({
   blockStatus: Record<string, BlockStatus>;
   onRetryWake: () => void;
   onRefreshSession: () => void;
-  // Intentionally ends the current live session and returns to a neutral
-  // start state — never touches Archive, Saves, Collections, or the
-  // account's connection. Just the active viewing session.
-  onEndResearch: () => void;
-  fetchComments: (reelId: string, sourceUrl: string) => Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string }>;
   // Whether Research Accounts is the section actually on screen — the page
   // itself stays mounted across navigation now (see App.tsx), so this is
   // what gates video playback and the arrow-key shortcuts instead.
@@ -472,11 +441,6 @@ export function SwipeResearchPlayer({
   const wheelAccum = useRef(0);
   const touchStartY = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Lives here, not inside SwipeSlide -- SwipeSlide remounts fresh on every
-  // reel (see its `key={currentReel.id}` below), so "is the panel open"
-  // would otherwise reset on every Next/Prev instead of staying open across
-  // them the way the product spec requires.
-  const [commentsOpen, setCommentsOpen] = useState(false);
   // One deliberate navigation action must move exactly one reel — a fast
   // trackpad flick fires many wheel events in quick succession (each with
   // its own large deltaY), and without a cooldown each one could cross the
@@ -550,41 +514,6 @@ export function SwipeResearchPlayer({
 
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-2 mb-3 text-[12px] text-neutral-500">
-        <PlatformIcon platform={account.platform} size={12} />
-        <span className="text-neutral-300 font-medium">{account.label}</span>
-        <span>·</span>
-        <button type="button" onClick={onExitToArchive} className="text-[#D39448] hover:brightness-110 transition-[filter]">
-          View archive
-        </button>
-        <span>·</span>
-        <button
-          type="button"
-          onClick={onRefreshSession}
-          disabled={sessionStatus === "connecting" || sessionStatus === "checking"}
-          title="End this live session and start a brand-new one — a fresh FYP, not a replay of this session's history"
-          className="flex items-center gap-1 text-neutral-400 hover:text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-default"
-        >
-          <RotateCw size={11} className={sessionStatus === "connecting" || sessionStatus === "checking" ? "animate-spin" : ""} />
-          Refresh feed
-        </button>
-        {sessionStatus === "active" && (
-          <>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={onEndResearch}
-              title="End the current live session — Archive, Saves, Collections, and this account's connection are untouched"
-              className="flex items-center gap-1 text-neutral-400 hover:text-neutral-200 transition-colors"
-            >
-              <Square size={10} />
-              End research
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="flex items-start gap-3">
       <div
         ref={containerRef}
         onWheel={handleWheel}
@@ -606,8 +535,6 @@ export function SwipeResearchPlayer({
             video={currentReel}
             active
             pageActive={active}
-            onSaveClick={() => onSaveClick(currentReel)}
-            onAddToCollection={() => onAddToCollection(currentReel)}
             onLikeClick={() => onLikeClick(currentReel)}
             likeStatus={likeStatus[currentReel.id]}
             onFollowClick={() => onFollowClick(currentReel)}
@@ -615,8 +542,6 @@ export function SwipeResearchPlayer({
             onBlockCreator={() => onBlockCreator(currentReel)}
             blockStatus={blockStatus[currentReel.id]}
             canLike={currentReel.platform === "instagram" || currentReel.platform === "tiktok"}
-            commentsOpen={commentsOpen}
-            onCommentsClick={() => setCommentsOpen((v) => !v)}
           />
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center bg-[#0d0d0f] text-center px-6">
@@ -808,9 +733,6 @@ export function SwipeResearchPlayer({
             {loading || navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
           </button>
         )}
-      </div>
-
-      <CommentsPanel video={currentReel} isOpen={commentsOpen} fetchComments={fetchComments} />
       </div>
 
       <p className="mt-3 text-[11px] text-neutral-600">Scroll, swipe, or use ↑ / ↓ to move between reels.</p>

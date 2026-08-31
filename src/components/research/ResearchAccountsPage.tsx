@@ -1,5 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X, Users, LayoutGrid, Play, Check, Loader2, RotateCw, Info } from "lucide-react";
+import {
+  Plus,
+  X,
+  Users,
+  LayoutGrid,
+  Play,
+  Check,
+  Loader2,
+  RotateCw,
+  Info,
+  RefreshCw,
+  Square,
+  CheckCircle2,
+  StickyNote,
+  FolderOpen,
+  Bookmark,
+  Diamond,
+} from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
@@ -15,6 +32,69 @@ import { SavedCollectionsPopover } from "../hub/SavedCollectionsPopover";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
 import { SwipeResearchPlayer, type LikeStatus, type FollowStatus } from "./SwipeResearchPlayer";
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
+import { CommentsPanel } from "./CommentsPanel";
+
+// Local, page-scoped panel chrome for the new Research Accounts layout —
+// deliberately a plain, low-key surface (not the Dashboard/Creativity Hub
+// PANEL/CARD tokens) since this page's redesign follows the supplied
+// Figma/mockup as the literal source of truth, not the Dashboard DNA.
+// A real, visible card (not a near-transparent wash) with actual depth —
+// matches the mockup's denser, more premium surface instead of reading
+// flat/dev-like.
+const PANEL = "rounded-xl border border-white/[0.10] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)]";
+
+function SessionRow({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[11px] text-neutral-500">{label}</span>
+      <span className={["text-[12px] font-medium text-right", muted ? "text-neutral-600" : "text-neutral-200"].join(" ")}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function QuickActionButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  spinning,
+  tone,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  spinning?: boolean;
+  tone?: "danger";
+}) {
+  const inactive = disabled || !onClick;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={inactive}
+      title={!onClick ? "Not available yet" : undefined}
+      className={[
+        "flex items-center gap-2.5 h-10 px-2.5 rounded-lg border text-[12.5px] transition-colors duration-150",
+        inactive
+          ? "border-white/[0.06] text-neutral-600 cursor-not-allowed"
+          : "border-white/[0.08] text-neutral-200 hover:bg-white/[0.05]",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "flex items-center justify-center w-6 h-6 rounded-md shrink-0",
+          inactive ? "bg-white/[0.04] text-neutral-600" : tone === "danger" ? "bg-rose-500/10 text-rose-400" : "bg-[#D39448]/10 text-[#D39448]",
+        ].join(" ")}
+      >
+        <Icon size={12} className={spinning ? "animate-spin" : ""} />
+      </span>
+      {label}
+    </button>
+  );
+}
 
 const PLATFORM_LABEL: Record<Platform, string> = { instagram: "IG Research", tiktok: "TikTok Research" };
 
@@ -555,18 +635,42 @@ export function ResearchAccountsPage({
               </span>
             </div>
             <h1 className="text-[26px] font-serif font-medium text-neutral-50 flex items-center gap-2">
-              Research from your own trained feeds
+              Live research. Real insights.
               <ResearchInfoPopover />
             </h1>
             <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
-              Swipe through a Creator's own Instagram/TikTok research account, then save straight into the same
-              Collections you already use.
+              Monitor creator content, capture winning concepts, and save directly into your Collections.
             </p>
           </div>
-          <DownloadConnectorButton />
+          <div className="flex items-center gap-3 shrink-0">
+            <DownloadConnectorButton />
+            {/* Visual only, matching the reference layout — not wired to a
+                real reachability/version signal. DownloadConnectorButton
+                deliberately avoids a status indicator of its own (see its
+                comment), and nothing elsewhere in the app currently tracks
+                Connector's live version, so this stays an inert placeholder
+                rather than inventing that signal. */}
+            <div
+              title="Not tracked yet"
+              className="flex items-center gap-3 h-[52px] px-4 rounded-xl border border-white/[0.10] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)] opacity-60"
+            >
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05]">
+                <Diamond size={14} className="text-neutral-500" />
+              </span>
+              <div className="leading-tight">
+                <p className="text-[9.5px] tracking-wide uppercase text-neutral-500">Connector Status</p>
+                <p className="flex items-center gap-1.5 text-[11.5px] text-neutral-400 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+                  Not tracked yet
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* context toolbar */}
+        {/* consolidated toolbar — Creator, platform, and connected-account
+            chips in one row, matching the reference. Same account rail as
+            before, just no longer a separate row underneath. */}
         <div className="mt-6 flex items-center gap-3 flex-wrap">
           <CreatorSelector creators={creators} selected={selectedCreator} onSelect={setSelectedCreator} />
 
@@ -608,10 +712,8 @@ export function ResearchAccountsPage({
               );
             })}
           </div>
-        </div>
 
-        {/* research account rail */}
-        <div className="mt-4 flex items-center gap-2 flex-wrap">
+          <span className="text-[11.5px] text-neutral-600 ml-1 shrink-0">Connected Accounts</span>
           {currentAccounts.map((a) => (
             <button
               key={a.id}
@@ -699,6 +801,158 @@ export function ResearchAccountsPage({
             </p>
             <p className="text-[12px] text-neutral-600 mt-1.5">Connect one above to start researching from its trained feed.</p>
           </div>
+        ) : mode === "swipe" ? (
+          <div className="mt-5 flex justify-center gap-4 items-start">
+            {/* LEFT: Session Context + Quick Actions */}
+            <div className="w-[300px] shrink-0 flex flex-col gap-4">
+              <div className={PANEL + " p-4"}>
+                <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
+                  Session Context
+                </p>
+                <div className="space-y-2">
+                  <SessionRow
+                    label="Account"
+                    value={
+                      <span className="inline-flex items-center gap-1.5">
+                        @{currentAccount.username || currentAccount.label}
+                        <PlatformIcon platform={currentAccount.platform} size={11} />
+                      </span>
+                    }
+                  />
+                  <SessionRow
+                    label="Platform"
+                    value={currentAccount.platform === "instagram" ? "Instagram Reels" : "TikTok Videos"}
+                  />
+                  <SessionRow
+                    label="Session"
+                    value={
+                      <span>
+                        {currentAccount.label}
+                        {liveSession.status === "active" && <span className="text-emerald-400"> · Active</span>}
+                      </span>
+                    }
+                  />
+                  {/* No session-start timestamp, elapsed-duration, or scan
+                      counter exists anywhere in the live session state today
+                      — shown per the reference for layout, left as an honest
+                      "—" rather than invented values. */}
+                  <SessionRow label="Started" value="—" muted />
+                  <SessionRow label="Duration" value="—" muted />
+                  <SessionRow label="Items Scanned" value="—" muted />
+                </div>
+              </div>
+
+              <div className={PANEL + " p-4"}>
+                <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
+                  Quick Actions
+                </p>
+                <div className="flex flex-col gap-2">
+                  <QuickActionButton
+                    icon={RefreshCw}
+                    label="Refresh Feed"
+                    spinning={liveSession.status === "connecting" || liveSession.status === "checking"}
+                    disabled={liveSession.status === "connecting" || liveSession.status === "checking"}
+                    onClick={() => void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform)}
+                  />
+                  <QuickActionButton
+                    icon={Square}
+                    label="End Research"
+                    tone="danger"
+                    disabled={liveSession.status !== "active"}
+                    onClick={() => void liveSession.endSession()}
+                  />
+                  {/* No "reviewed" state exists on any feed item yet. */}
+                  <QuickActionButton icon={CheckCircle2} label="Mark All As Reviewed" />
+                  {/* No creator-note storage exists anywhere in the app yet. */}
+                  <QuickActionButton icon={StickyNote} label="Add Creator Note" />
+                </div>
+              </div>
+            </div>
+
+            {/* CENTER: Now Viewing + the live reel player itself — fixed to
+                the video's own width, not a stretchy 1fr column, so it sits
+                snug between the side panels instead of floating in dead
+                space. */}
+            <div className="w-[380px] shrink-0 flex flex-col items-center">
+              <div className="w-full max-w-[360px] flex items-center justify-between mb-3">
+                <span className="flex items-center gap-1.5 text-[12px] text-neutral-400">
+                  <span className="text-neutral-500">Now Viewing</span>
+                  {currentSwipeVideo && (
+                    <>
+                      <PlatformIcon platform={currentSwipeVideo.platform} size={12} />
+                      <span className="text-neutral-300 font-medium">@{currentSwipeVideo.username}</span>
+                    </>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMode("archive")}
+                  className="text-[11.5px] text-[#D39448] hover:brightness-110 transition-[filter]"
+                >
+                  View archive
+                </button>
+              </div>
+              <SwipeResearchPlayer
+                account={currentAccount}
+                currentReel={currentSwipeVideo}
+                hasPrev={liveSession.hasPrev}
+                loading={liveSession.status === "connecting" || liveSession.status === "checking"}
+                navBusy={liveSession.navBusy}
+                sessionStatus={liveSession.status}
+                sessionError={liveSession.error}
+                wakeCountdown={liveSession.wakeCountdown}
+                lockedByLabel={liveSession.lockedByLabel}
+                onNext={() => void liveSession.next()}
+                onPrev={() => void liveSession.prev()}
+                onLikeClick={handleLikeClick}
+                likeStatus={likeStatus}
+                onFollowClick={handleFollowClick}
+                followStatus={followStatus}
+                onBlockCreator={handleBlockCreator}
+                blockStatus={blockStatus}
+                onRefreshSession={() => void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform)}
+                onRetryWake={() => {
+                  // needs_connector -> the wake path (must run from this
+                  // real click); a plain error -> just start over. Both
+                  // startResearchFromClick and retryWithWake check for a
+                  // pending Connector update before actually starting.
+                  if (liveSession.status === "needs_connector") void liveSession.retryWithWake();
+                  else void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform);
+                }}
+                active={active}
+              />
+            </div>
+
+            {/* RIGHT: Intelligence (Comments/Notes) + Save to Collection */}
+            <div className="w-[360px] shrink-0 flex flex-col gap-4">
+              <CommentsPanel video={currentSwipeVideo} isOpen fetchComments={liveSession.fetchComments} />
+
+              <div className={PANEL + " p-4"}>
+                <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
+                  Save to Collection
+                </p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSavedPopoverOpen(true)}
+                    className="flex items-center justify-center gap-2 h-10 rounded-lg border border-white/[0.08] text-[12.5px] text-neutral-300 hover:bg-white/[0.05] transition-colors duration-150"
+                  >
+                    <FolderOpen size={13} />
+                    Save in a Collection
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!currentSwipeVideo || currentSwipeVideo.saved}
+                    onClick={() => currentSwipeVideo && !currentSwipeVideo.saved && setSavePanelVideo(currentSwipeVideo)}
+                    className="flex items-center justify-center gap-2 h-10 rounded-lg bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 disabled:cursor-default"
+                  >
+                    <Bookmark size={13} fill={currentSwipeVideo?.saved ? "currentColor" : "none"} />
+                    {currentSwipeVideo?.saved ? "Saved" : "Quicksave"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
           <>
             <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
@@ -706,31 +960,19 @@ export function ResearchAccountsPage({
                 <PlatformIcon platform={currentAccount.platform} size={12} />
                 <span className="text-neutral-300 font-medium">{currentAccount.label}</span>
                 {currentAccount.username && <span className="text-neutral-600">@{currentAccount.username}</span>}
-                {currentAccount.status === "connecting" && (
-                  <>
-                    <span>·</span>
-                    <span className="text-amber-400/90">Connecting…</span>
-                  </>
-                )}
               </div>
 
               <div className="flex items-center h-9 p-1 rounded-full glass-panel">
                 <button
                   onClick={() => setMode("swipe")}
-                  className={[
-                    "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
-                    mode === "swipe" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
-                  ].join(" ")}
+                  className="flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200 text-neutral-500 hover:text-neutral-300"
                 >
                   <Play size={11} />
                   Swipe
                 </button>
                 <button
                   onClick={() => setMode("archive")}
-                  className={[
-                    "flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200",
-                    mode === "archive" ? "bg-[#D39448]/15 text-[#D39448]" : "text-neutral-500 hover:text-neutral-300",
-                  ].join(" ")}
+                  className="flex items-center gap-1.5 h-7 px-3 rounded-full text-[12px] transition-all duration-200 bg-[#D39448]/15 text-[#D39448]"
                 >
                   <LayoutGrid size={11} />
                   Archive
@@ -739,44 +981,7 @@ export function ResearchAccountsPage({
             </div>
 
             <div className="mt-5">
-              {mode === "swipe" ? (
-                <SwipeResearchPlayer
-                  account={currentAccount}
-                  currentReel={currentSwipeVideo}
-                  hasPrev={liveSession.hasPrev}
-                  loading={liveSession.status === "connecting" || liveSession.status === "checking"}
-                  navBusy={liveSession.navBusy}
-                  sessionStatus={liveSession.status}
-                  sessionError={liveSession.error}
-                  wakeCountdown={liveSession.wakeCountdown}
-                  lockedByLabel={liveSession.lockedByLabel}
-                  onNext={() => void liveSession.next()}
-                  onPrev={() => void liveSession.prev()}
-                  onSaveClick={(video) => {
-                    if (!video.saved) setSavePanelVideo(video);
-                  }}
-                  onAddToCollection={() => setSavedPopoverOpen(true)}
-                  onExitToArchive={() => setMode("archive")}
-                  onLikeClick={handleLikeClick}
-                  likeStatus={likeStatus}
-                  fetchComments={liveSession.fetchComments}
-                  onFollowClick={handleFollowClick}
-                  followStatus={followStatus}
-                  onBlockCreator={handleBlockCreator}
-                  blockStatus={blockStatus}
-                  onRefreshSession={() => void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform)}
-                  onEndResearch={() => void liveSession.endSession()}
-                  onRetryWake={() => {
-                    // needs_connector -> the wake path (must run from this
-                    // real click); a plain error -> just start over. Both
-                    // startResearchFromClick and retryWithWake check for a
-                    // pending Connector update before actually starting.
-                    if (liveSession.status === "needs_connector") void liveSession.retryWithWake();
-                    else void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform);
-                  }}
-                  active={active}
-                />
-              ) : feedError ? (
+              {feedError ? (
                 <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-24">
                   <p className="text-[13px] text-neutral-400">Couldn't load this account's archive.</p>
                 </div>
