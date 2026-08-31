@@ -169,6 +169,35 @@ body {
   transform: scale(0.98);
 }
 
+/* a slow, quiet breathing glow for genuinely-live status indicators (an
+   active session, a connected account, an unread badge) — never applied to
+   inert/placeholder states, only real live signals. Scoped to box-shadow
+   only (not opacity/scale) so it reads as "alive" without any flicker. */
+@keyframes pulse-live {
+  0%, 100% { box-shadow: 0 0 0 0 var(--pulse-live-color, rgba(79, 179, 122, 0.55)); }
+  50% { box-shadow: 0 0 0 4px var(--pulse-live-color, rgba(79, 179, 122, 0)); }
+}
+.pulse-live {
+  animation: pulse-live 2.2s ease-in-out infinite;
+}
+html[data-tab-hidden="true"] .pulse-live {
+  animation-play-state: paused !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-live { animation: none; }
+}
+
+/* gentle hover lift for card-like clickable surfaces — pairs with a
+   box-shadow transition so it reads as the surface rising slightly, not
+   just a color swap. */
+.hover-lift {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease-out, border-color 150ms ease-out;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.55);
+}
+
 /* base is light/white — the bronze/gold is a narrow band that slowly sweeps
    through it, not a permanent gold tint on the whole word */
 .text-gradient-warm {

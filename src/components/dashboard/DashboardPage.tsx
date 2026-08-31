@@ -187,7 +187,16 @@ function PulseTile({
     >
       <span className="absolute left-0 top-[18px] bottom-[18px] w-px bg-[#1a1a1f]" />
       <div className="flex items-center gap-[10px]">
-        <span style={{ color: iconColor, filter: `drop-shadow(0 0 4px ${active ? glow : PULSE_TONE.gold.glow})` }}>{icon}</span>
+        <span
+          className={active ? "pulse-live rounded-full" : ""}
+          style={{
+            color: iconColor,
+            filter: `drop-shadow(0 0 4px ${active ? glow : PULSE_TONE.gold.glow})`,
+            ["--pulse-live-color" as string]: active ? glow.replace("0.3", "0.5") : undefined,
+          }}
+        >
+          {icon}
+        </span>
         <span
           className={["text-[23.5px] leading-none font-medium tabular-nums", active ? "" : "text-[#f0eadf]"].join(" ")}
           style={active ? { color } : undefined}
@@ -342,10 +351,11 @@ export function DashboardPage({
           <p className="relative text-[14px] text-[#b1aba0]">{statusLine}</p>
           <div className="relative flex items-center gap-[8px] pt-[6px]">
             <span
-              className="h-[6px] w-[6px] shrink-0 rounded-[3px]"
+              className="pulse-live h-[6px] w-[6px] shrink-0 rounded-[3px]"
               style={{
                 background: needsAttention.length > 0 ? "#e0664f" : "#4ec27a",
                 boxShadow: needsAttention.length > 0 ? "0 0 6px #e0664f" : "0 0 6px #4ec27a",
+                ["--pulse-live-color" as string]: needsAttention.length > 0 ? "rgba(224,102,79,0.5)" : "rgba(78,194,122,0.5)",
               }}
             />
             <span className="text-[11px] text-[#c3bdb2]">
@@ -406,7 +416,7 @@ export function DashboardPage({
                       <button
                         key={s.id}
                         onClick={() => onOpenCollection(s.collection.id)}
-                        className={["flex items-center gap-[11px] p-[8px] text-left transition-colors duration-150", CARD, CARD_HOVER].join(" ")}
+                        className={["hover-lift flex items-center gap-[11px] p-[8px] text-left", CARD, CARD_HOVER].join(" ")}
                         style={CARD_STYLE}
                       >
                         <div
@@ -444,21 +454,21 @@ export function DashboardPage({
                 <PanelHeading title="CONTENT MOMENTUM" subtitle="Your ideas. Saved. Organized." />
                 <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
                   <div className="flex flex-1 min-w-[130px] flex-col gap-[8px]">
-                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #d9a86322" }}>
                         <FolderOpen size={13} className="text-[#d9a863]" />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Saved Concepts</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{savedTotal}</span>
                     </button>
-                    <button onClick={onOpenCollections} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4a90d926, #4a90d908 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4a90d922" }}>
                         <Clapperboard size={13} className="text-[#6ba3d9]" />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Active Collections</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{activeCollectionsCount}</span>
                     </button>
-                    <button onClick={onOpenProduction} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                    <button onClick={onOpenProduction} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span
                         className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]"
                         style={{
@@ -471,7 +481,7 @@ export function DashboardPage({
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Needs Attention</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{needsAttention.length}</span>
                     </button>
-                    <button onClick={onOpenHub} className="flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32] transition-colors duration-150" style={CARD_STYLE}>
+                    <button onClick={onOpenHub} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4fb37a26, #4fb37a08 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4fb37a22" }}>
                         <Radar size={13} className="text-[#6bc797]" />
                       </span>
@@ -558,7 +568,7 @@ export function DashboardPage({
                       <button
                         key={c.id}
                         onClick={() => onOpenCollection(c.id)}
-                        className="group relative h-[172px] flex-1 overflow-hidden rounded-[10px] text-left ring-1 ring-white/[0.07] hover:ring-white/[0.14] transition-[box-shadow] duration-150"
+                        className="hover-lift group relative h-[172px] flex-1 overflow-hidden rounded-[10px] text-left ring-1 ring-white/[0.07] hover:ring-white/[0.14]"
                       >
                         {preview?.video.thumbnailUrl ? (
                           <img src={preview.video.thumbnailUrl} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />

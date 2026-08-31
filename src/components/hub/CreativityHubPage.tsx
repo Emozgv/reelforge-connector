@@ -757,7 +757,7 @@ export function CreativityHubPage({
             <button
               onClick={() => setSavedPopoverOpen(true)}
               title="See everything saved for this creator"
-              className="flex items-center gap-1.5 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100"
+              className="press-feedback flex items-center gap-1.5 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100"
               style={HUB_CARD_STYLE}
             >
               <Bookmark size={13} className="text-[#D39448]" />
@@ -768,7 +768,7 @@ export function CreativityHubPage({
               onClick={handleRefresh}
               disabled={searching}
               title="Refresh — back to the Hub home"
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="press-feedback flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent"
               style={HUB_CARD_STYLE}
             >
               <RefreshCw size={15} className={refreshSpinning ? "animate-spin" : ""} />
@@ -778,7 +778,7 @@ export function CreativityHubPage({
               onClick={handleShuffle}
               disabled={searching || !lastAction}
               title={lastAction ? "Shuffle — fresh batch, same topic" : "Search or browse a profile first"}
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="press-feedback flex items-center justify-center w-11 h-11 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent"
               style={HUB_CARD_STYLE}
             >
               <Shuffle size={15} className={shuffleSpinning ? "animate-spin" : ""} />
@@ -786,7 +786,7 @@ export function CreativityHubPage({
 
             <button
               onClick={() => setDrawerOpen(true)}
-              className="relative flex items-center gap-2 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100"
+              className="press-feedback relative flex items-center gap-2 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100"
               style={HUB_CARD_STYLE}
             >
               <SlidersHorizontal size={14} />

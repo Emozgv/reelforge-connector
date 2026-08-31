@@ -136,10 +136,15 @@ export function Sidebar({
           <div className="relative">
             <button
               onClick={() => setNotifOpen((v) => !v)}
-              className="relative w-[28px] h-[28px] rounded-[9px] border border-[#202024] bg-[#111114] flex items-center justify-center text-neutral-500 hover:text-neutral-50 transition-colors duration-150"
+              className="press-feedback relative w-[28px] h-[28px] rounded-[9px] border border-[#202024] bg-[#111114] flex items-center justify-center text-neutral-500 hover:text-neutral-50 transition-colors duration-150"
             >
               <Bell size={12} strokeWidth={1.75} />
-              {unread && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#D39448]" />}
+              {unread && (
+                <span
+                  className="pulse-live absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#D39448]"
+                  style={{ ["--pulse-live-color" as string]: "rgba(211,148,72,0.55)" }}
+                />
+              )}
             </button>
             {notifOpen && (
               <div
@@ -193,7 +198,7 @@ export function Sidebar({
                 onNavigate(item.id);
               }}
               className={[
-                "relative w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[9px] text-[11.5px] border transition-colors duration-150",
+                "press-feedback relative w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[9px] text-[11.5px] border transition-colors duration-150",
                 active
                   ? "border-[#141009] text-[#f0c58c]"
                   : "border-transparent text-[#e2dbcd] hover:text-neutral-50 hover:bg-white/[0.03]",

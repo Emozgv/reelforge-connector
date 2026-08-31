@@ -78,7 +78,7 @@ function QuickActionButton({
       disabled={inactive}
       title={!onClick ? "Not available yet" : undefined}
       className={[
-        "flex items-center gap-2.5 h-12 px-3.5 rounded-lg border text-[12.5px] transition-colors duration-150",
+        "press-feedback flex items-center gap-2.5 h-12 px-3.5 rounded-lg border text-[12.5px] transition-colors duration-150",
         inactive
           ? "border-white/[0.06] bg-[#0c0c0e] text-neutral-600 cursor-not-allowed"
           : "border-white/[0.07] bg-[#111114] text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#161613]",
@@ -177,9 +177,12 @@ const STATUS_LABEL: Record<ResearchAccount["status"], string> = {
 };
 const STATUS_DOT: Record<ResearchAccount["status"], string> = {
   connecting: "bg-amber-400 animate-pulse",
-  active: "bg-emerald-400",
+  active: "bg-emerald-400 pulse-live",
   needs_attention: "bg-amber-400",
   disconnected: "bg-neutral-600",
+};
+const STATUS_DOT_PULSE_COLOR: Partial<Record<ResearchAccount["status"], string>> = {
+  active: "rgba(52,211,153,0.55)",
 };
 
 // reelforge-connect:// is registered by the ReelForge Connector desktop app
@@ -538,19 +541,21 @@ export function ResearchAccountsPage({
   // section and back does NOT hit this at all (currentAccount doesn't
   // change), which is what keeps a session already running across that
   // kind of navigation.
-  const didInitialReachabilityCheckRef = useRef(false);
   useEffect(() => {
-    // The very first time an account is available (app load, or the first
-    // account ever picked), reflect Connector's real reachability instead
-    // of jumping straight to endSession()'s "session ended" idle state —
-    // that reads as wrong when no session ever existed. Every later switch
-    // still just ends whatever was running, exactly as before.
-    if (!didInitialReachabilityCheckRef.current && currentAccount) {
-      didInitialReachabilityCheckRef.current = true;
-      void liveSession.checkInitialReachability(currentAccount.id, currentAccount.platform);
-      return;
-    }
-    void liveSession.endSession();
+    // Every account/platform switch (not just the very first one) needs to
+    // both end whatever session was running on the previous account AND
+    // re-verify Connector's real reachability for the newly selected one —
+    // endSession() alone always lands on "idle" ("Start research"), which
+    // looks identical whether Connector is actually reachable or was quit
+    // entirely. Previously this reachability check only ran once ever (see
+    // git history), so switching accounts while Connector was down kept
+    // showing "Start research" until the separate 5s idle-poll eventually
+    // caught up.
+    if (!currentAccount) return;
+    void (async () => {
+      await liveSession.endSession();
+      await liveSession.checkInitialReachability(currentAccount.id, currentAccount.platform);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAccount?.id, currentAccount?.status]);
 
@@ -713,7 +718,7 @@ export function ResearchAccountsPage({
                   disabled={disabled}
                   title={disabled ? "TikTok Research is temporarily unavailable" : undefined}
                   className={[
-                    "flex items-center gap-1.5 h-9 px-4 rounded-full border text-[13px] capitalize transition-colors duration-150",
+                    "press-feedback flex items-center gap-1.5 h-9 px-4 rounded-full border text-[13px] capitalize transition-colors duration-150",
                     disabled
                       ? "border-transparent text-neutral-700 opacity-50 cursor-not-allowed"
                       : platform === p
@@ -740,7 +745,7 @@ export function ResearchAccountsPage({
               key={a.id}
               onClick={() => setAccountId(a.id)}
               className={[
-                "group flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border transition-all duration-150",
+                "press-feedback group flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border transition-all duration-150",
                 a.id === currentAccount?.id
                   ? "border-[#D39448]/60 bg-[#D39448]/[0.16] text-[#D39448]"
                   : "border-white/[0.08] text-neutral-200 hover:text-neutral-50 hover:border-[#D39448]/35",
@@ -748,7 +753,11 @@ export function ResearchAccountsPage({
             >
               <PlatformIcon platform={a.platform} size={12} />
               <span className="text-[12.5px]">{a.label}</span>
-              <span className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")} title={STATUS_LABEL[a.status]} />
+              <span
+                className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")}
+                title={STATUS_LABEL[a.status]}
+                style={{ ["--pulse-live-color" as string]: STATUS_DOT_PULSE_COLOR[a.status] }}
+              />
               {(a.status === "needs_attention" || a.status === "disconnected") && (
                 <button
                   onClick={async (e) => {
@@ -786,7 +795,7 @@ export function ResearchAccountsPage({
                 ? `Up to ${MAX_RESEARCH_ACCOUNTS_PER_PLATFORM} accounts`
                 : "Connect a research account"
             }
-            className="flex items-center gap-1 h-9 px-3 rounded-full border border-dashed border-white/[0.14] text-[12.5px] text-neutral-500 hover:text-neutral-200 hover:border-white/25 transition-colors duration-150 disabled:opacity-30 disabled:cursor-default"
+            className="press-feedback flex items-center gap-1 h-9 px-3 rounded-full border border-dashed border-white/[0.14] text-[12.5px] text-neutral-500 hover:text-neutral-200 hover:border-white/25 transition-colors duration-150 disabled:opacity-30 disabled:cursor-default"
           >
             <Plus size={13} />
             Connect account
