@@ -123,22 +123,25 @@ export function CommentsPanel({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Comments/Notes tabs — Notes has no backing feature yet (no note
-          storage exists anywhere in the app), so it's shown per the Figma
-          reference but disabled rather than invented. */}
-      <div className="flex items-center border-b border-white/[0.08]">
+      {/* Comments/Notes tabs — one bordered segmented box (matching the
+          reference exactly), not two loose buttons with a divider under
+          them. Notes has no backing feature yet (no note storage exists
+          anywhere in the app), so it's shown per the reference but
+          disabled rather than invented. */}
+      <div className="mx-4 mt-4 flex items-stretch rounded-xl border border-white/[0.08] overflow-hidden">
         <button
           type="button"
-          className="flex items-center gap-1.5 px-4 h-11 text-[12.5px] font-medium text-[#D39448] border-b-2 border-[#D39448]"
+          className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[12.5px] font-medium text-[#D39448] border-b-2 border-[#D39448]"
         >
           <MessageCircle size={13} />
           Comments
         </button>
+        <span className="w-px bg-white/[0.08]" />
         <button
           type="button"
           disabled
           title="Notes aren't available yet"
-          className="flex items-center gap-2 px-4 h-11 text-[12.5px] text-neutral-300 cursor-not-allowed"
+          className="flex-1 flex items-center justify-center gap-2 h-11 text-[12.5px] text-neutral-300 cursor-not-allowed"
         >
           Notes
           <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-white/10 text-[10.5px] text-neutral-300">
