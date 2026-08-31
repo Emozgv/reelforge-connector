@@ -604,14 +604,24 @@ export function CreativityHubPage({
             .rf-hub-starfield .star-twinkle { animation-name: star-twinkle-boosted !important; }
           }
         `}</style>
-        <div className="dashboard-starfield-boost rf-hub-starfield absolute inset-0">
+        {/* Masked out toward the far left/right — that's exactly where the
+            reel rails sit, and their own fade-to-transparent edges were
+            letting bright stars show through/over them, which read as stars
+            layered on top of the reels rather than safely behind them. */}
+        <div
+          className="dashboard-starfield-boost rf-hub-starfield absolute inset-0"
+          style={{
+            WebkitMaskImage: "linear-gradient(90deg, transparent, black 18%, black 82%, transparent)",
+            maskImage: "linear-gradient(90deg, transparent, black 18%, black 82%, transparent)",
+          }}
+        >
           <StarfieldBackground starCount={260} />
         </div>
         <HeroReelRails />
         {/* Dims the decorative reel rails into calm ambient texture instead of
             a competing photo collage — keeps the atmosphere without it
             reading as a separate landing page from the rest of ReelForge. */}
-        <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(180deg, #020203 0%, rgba(2,2,3,0.55) 30%, rgba(2,2,3,0.55) 70%, #020203 100%)" }} />
+        <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(180deg, #020203 0%, rgba(2,2,3,0.22) 30%, rgba(2,2,3,0.22) 70%, #020203 100%)" }} />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
