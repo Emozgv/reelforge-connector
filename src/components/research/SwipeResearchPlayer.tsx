@@ -527,7 +527,7 @@ export function SwipeResearchPlayer({
           else if (delta < -SWIPE_THRESHOLD) goPrev();
           touchStartY.current = null;
         }}
-        className="relative w-[360px] h-[min(80vh,700px)] rounded-2xl overflow-hidden border border-[#D39448]/20 shadow-[0_24px_64px_-20px_rgba(0,0,0,0.8),0_0_0_1px_rgba(211,148,72,0.06),0_0_32px_-8px_rgba(211,148,72,0.12)]"
+        className="relative w-[360px] h-[min(80vh,700px)] rounded-2xl overflow-hidden border border-[#1a130b] shadow-[0_24px_64px_-20px_rgba(0,0,0,0.8),0_0_0_0.5px_rgba(211,148,72,0.45),0_0_10px_rgba(211,148,72,0.12)]"
       >
         {currentReel ? (
           <SwipeSlide

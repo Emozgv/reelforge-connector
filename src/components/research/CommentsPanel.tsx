@@ -122,7 +122,14 @@ export function CommentsPanel({
   const result = displayReelId ? resultsRef.current.get(displayReelId) : undefined;
 
   return (
-    <div className="w-full h-[min(80vh,700px)] rounded-xl border border-[#D39448]/[0.14] bg-[#111114] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)] flex flex-col overflow-hidden">
+    <div
+      className="w-full h-[min(80vh,700px)] rounded-xl border border-[#1a130b] flex flex-col overflow-hidden"
+      style={{
+        background: "linear-gradient(180deg, #070707, #020202)",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), 0 0 0 0.5px rgba(211,148,72,0.45), 0 0 10px rgba(211,148,72,0.12)",
+      }}
+    >
       {/* Comments/Notes tabs — Notes has no backing feature yet (no note
           storage exists anywhere in the app), so it's shown per the Figma
           reference but disabled rather than invented. */}

@@ -35,14 +35,19 @@ import { DownloadConnectorButton } from "./DownloadConnectorButton";
 import { CommentsPanel } from "./CommentsPanel";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 
-// Local, page-scoped panel chrome for the new Research Accounts layout —
-// deliberately a plain, low-key surface (not the Dashboard/Creativity Hub
-// PANEL/CARD tokens) since this page's redesign follows the supplied
-// Figma/mockup as the literal source of truth, not the Dashboard DNA.
-// A real, visible card (not a near-transparent wash) with actual depth —
-// matches the mockup's denser, more premium surface instead of reading
-// flat/dev-like.
-const PANEL = "rounded-xl border border-[#D39448]/[0.14] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)]";
+// Local, page-scoped copies of the established Dashboard/Creativity Hub
+// "Design DNA" (see DashboardPage.tsx's PANEL/CARD and CreativityHubPage's
+// HUB_PANEL_STYLE/HUB_GOLD_RING) — duplicated rather than imported so those
+// frozen files stay untouched. Layout/structure here still follows the
+// Figma/mockup exactly; only the surface tokens (bg/border/shadow) are now
+// the same ones used everywhere else in the app.
+const RA_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.45), 0 0 10px rgba(211,148,72,0.12)";
+const PANEL_BG = "linear-gradient(180deg, #070707, #020202)";
+const PANEL = "rounded-xl border border-[#1a130b]";
+const PANEL_STYLE = {
+  background: PANEL_BG,
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${RA_GOLD_RING}`,
+} as const;
 
 function SessionRow({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) {
   return (
@@ -656,7 +661,8 @@ export function ResearchAccountsPage({
                 rather than inventing that signal. */}
             <div
               title="Not tracked yet"
-              className="flex items-center gap-3 h-[52px] px-4 rounded-xl border border-[#D39448]/[0.14] bg-[#0e0e10] shadow-[0_10px_28px_-16px_rgba(0,0,0,0.7)] opacity-60"
+              className="flex items-center gap-3 h-[52px] px-4 rounded-xl border border-[#1a130b] opacity-60"
+              style={PANEL_STYLE}
             >
               <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05]">
                 <Diamond size={14} className="text-neutral-500" />
@@ -809,7 +815,7 @@ export function ResearchAccountsPage({
           <div className="mt-5 flex justify-center gap-4 items-start">
             {/* LEFT: Session Context + Quick Actions */}
             <div className="w-[300px] shrink-0 flex flex-col gap-4">
-              <div className={PANEL + " p-4"}>
+              <div className={PANEL + " p-4"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Session Context
                 </p>
@@ -846,7 +852,7 @@ export function ResearchAccountsPage({
                 </div>
               </div>
 
-              <div className={PANEL + " p-4"}>
+              <div className={PANEL + " p-4"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Quick Actions
                 </p>
@@ -931,7 +937,7 @@ export function ResearchAccountsPage({
             <div className="w-[360px] shrink-0 flex flex-col gap-4">
               <CommentsPanel video={currentSwipeVideo} isOpen fetchComments={liveSession.fetchComments} />
 
-              <div className={PANEL + " p-4"}>
+              <div className={PANEL + " p-4"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Save to Collection
                 </p>
