@@ -1012,7 +1012,7 @@ export function ResearchAccountsPage({
                     className="flex items-center justify-center gap-2 h-[52px] rounded-xl border border-white/[0.08] text-[13px] text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#D39448]/[0.05] transition-colors duration-150"
                   >
                     <FolderOpen size={15} className="text-[#D39448]" />
-                    Current Creator's Collections
+                    Creator's Collections
                   </button>
                   <button
                     type="button"
