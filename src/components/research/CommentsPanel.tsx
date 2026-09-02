@@ -175,7 +175,12 @@ export function CommentsPanel({
           the way it used to) — this now shares one card with Save to
           Collection below it, so the list stays short enough that both
           fit without scrolling the whole page, matching the reference. */}
-      <div className="flex-1 min-h-[160px] overflow-y-auto px-4 py-3">
+      {/* max-h caps this list's own natural size -- without it, a long
+          comment list has no upper bound, and since this sits inside a
+          self-stretch flex column matched against the player panel's
+          height, an unbounded list drags the WHOLE row (including the
+          player) taller instead of just scrolling internally. */}
+      <div className="flex-1 min-h-[160px] max-h-[50vh] overflow-y-auto px-4 py-3">
         {!video ? (
           <div className="h-full flex items-center justify-center text-center">
             <p className="text-[11.5px] text-neutral-600">No reel is being viewed right now.</p>

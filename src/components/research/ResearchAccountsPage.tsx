@@ -988,8 +988,8 @@ export function ResearchAccountsPage({
             {/* RIGHT: Intelligence (Comments/Notes) + Save to Collection —
                 one continuous card, matching the reference, instead of two
                 separate stacked panels the VA had to scroll past. */}
-            <div className="w-[390px] shrink-0 self-stretch flex">
-              <div className={PANEL + " flex-1 flex flex-col"} style={PANEL_STYLE}>
+            <div className="w-[390px] shrink-0 self-stretch flex min-h-0">
+              <div className={PANEL + " flex-1 flex flex-col min-h-0"} style={PANEL_STYLE}>
                 <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
                   Intelligence
                 </p>
