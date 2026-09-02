@@ -261,7 +261,16 @@ interface ActiveSession {
 export function useLiveResearchSession(workspaceId: string | undefined) {
   const [currentReel, setCurrentReel] = useState<ReelVideo | null>(null);
   const [hasPrev, setHasPrev] = useState(false);
-  const [status, setStatus] = useState<LiveSessionStatus>("idle");
+  const [status, setStatusRaw] = useState<LiveSessionStatus>("idle");
+  // TEMPORARY diagnostic only -- traces every status transition with a
+  // timestamp so a reported "millisecond flicker" can be pinned to an exact
+  // status value and caller instead of guessed at. Purely a console.log
+  // wrapper around the existing setter; no functional change. Remove once
+  // the flicker report is actually resolved.
+  const setStatus = useCallback((next: LiveSessionStatus) => {
+    console.log(`[live-session] status -> ${next} @ ${performance.now().toFixed(1)}ms`);
+    setStatusRaw(next);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   // Set only during retryWithWake's post-wake pause (see WAKE_STARTUP_DELAY_MS
   // below) — null the rest of the time, including during a normal
@@ -1050,6 +1059,8 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       // skipping is safe -- and necessary, since running endSession() here
       // for real would silently corrupt the still-in-progress wake/countdown
       // flow underneath it.
+      // TEMPORARY diagnostic log -- see setStatus's own comment.
+      console.log(`[live-session] handleUnload fired, waking=${wakingRef.current} @ ${performance.now().toFixed(1)}ms`);
       if (wakingRef.current) return;
       void endSession();
     }
