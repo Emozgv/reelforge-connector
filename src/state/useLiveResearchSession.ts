@@ -343,10 +343,15 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // Always leaves the UI in a genuinely neutral state, not just a cleared
   // ref — this is what makes "End research" (and the no-account/inactive-
   // account branch) actually show a clean start state instead of a stale
-  // last reel with no session behind it. Harmless when startSession calls
-  // this as its own first step too: the "idle" flash is immediately
-  // overwritten by "connecting" a moment later.
-  const endSession = useCallback(async () => {
+  // last reel with no session behind it.
+  //
+  // `silent` skips that visible "idle" flip — used only by startSession()
+  // calling this as its own first step, which turned out to actually paint
+  // a real "Research session ended." frame before immediately overwriting
+  // it with "checking", instead of the harmless never-visible flash this
+  // was assumed to be. Every other caller (End Research, tab-close/unmount,
+  // account-switch cleanup) keeps the real "idle" state exactly as before.
+  const endSession = useCallback(async (opts?: { silent?: boolean }) => {
     const session = sessionRef.current;
     if (session) lastIdleAccountRef.current = { accountId: session.accountId, platform: platformRef.current };
     sessionRef.current = null;
@@ -354,7 +359,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     setCurrentReel(null);
     setHasPrev(false);
     setError(null);
-    setStatus("idle");
+    if (!opts?.silent) setStatus("idle");
 
     // Release whatever lock this tab currently holds (or is mid-acquiring),
     // independent of whether a real Connector session was ever established.
@@ -673,7 +678,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       if (startInFlightRef.current) return;
       startInFlightRef.current = true;
       try {
-        await endSession();
+        await endSession({ silent: true });
 
         if (platform !== "instagram" && platform !== "tiktok") {
           setStatus("error");
