@@ -241,6 +241,7 @@ function StageDonut({ counts, total }: { counts: Record<Stage, number>; total: n
           strokeDasharray={`${dash} ${circumference - dash}`}
           strokeDashoffset={-segOffset}
           strokeLinecap="butt"
+          style={{ filter: `drop-shadow(0 0 3px ${STAGE_COLOR[stage]}90)` }}
         />
       ))}
     </svg>
