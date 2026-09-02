@@ -390,8 +390,8 @@ export function DashboardPage({
           <div className={["flex items-center px-[4px]", PANEL].join(" ")} style={PANEL_STYLE}>
             <div className="flex w-[212px] shrink-0 flex-col gap-[8px] px-[22px] py-[17px]">
               <div className="flex items-center gap-[7px]">
-                <Activity size={13} className="text-[#eccca2]" />
-                <p className="text-[9.5px] tracking-[1.4px] text-[#eccca2]">OPERATIONAL PULSE</p>
+                <Activity size={13} className="text-[#e8b273]" />
+                <p className="text-[9.5px] font-bold tracking-[1.4px] text-[#e8b273]">OPERATIONAL PULSE</p>
               </div>
               <p className="text-[9.5px] leading-snug text-[#79746b]">Live overview of your workspace</p>
             </div>
