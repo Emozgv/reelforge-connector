@@ -210,7 +210,12 @@ export function Sidebar({
               {active && (
                 <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-full bg-[#D39448]" style={{ boxShadow: "0 0 6px rgba(211,148,72,0.6)" }} />
               )}
-              <span className="shrink-0 opacity-85">{item.icon}</span>
+              <span
+                className="shrink-0 opacity-85"
+                style={active ? { filter: "drop-shadow(0 0 2px #D3944880)" } : undefined}
+              >
+                {item.icon}
+              </span>
               {item.label}
             </button>
           );

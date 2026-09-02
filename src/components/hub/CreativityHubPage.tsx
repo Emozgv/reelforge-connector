@@ -760,7 +760,7 @@ export function CreativityHubPage({
               className="press-feedback flex items-center gap-1.5 h-11 px-4 rounded-full border border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03] transition-colors text-[13px] text-neutral-100"
               style={HUB_CARD_STYLE}
             >
-              <Bookmark size={13} className="text-[#D39448]" />
+              <Bookmark size={13} className="text-[#D39448]" style={{ filter: "drop-shadow(0 0 2px #D3944880)" }} />
               <span className="tabular-nums text-neutral-100">{savedCountLabel}</span> saved
             </button>
 

@@ -65,7 +65,7 @@ function QuickActionButton({
   spinning,
   danger,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
@@ -97,6 +97,7 @@ function QuickActionButton({
           spinning ? "animate-spin" : "",
           inactive ? "text-neutral-600" : danger ? "text-rose-400" : "text-[#D39448]",
         ].join(" ")}
+        style={inactive ? undefined : { filter: danger ? "drop-shadow(0 0 2px #f4374780)" : "drop-shadow(0 0 2px #D3944880)" }}
       />
       {label}
     </button>
@@ -1022,7 +1023,7 @@ export function ResearchAccountsPage({
                     onClick={() => setSavedPopoverOpen(true)}
                     className="flex items-center justify-center gap-2 h-[52px] rounded-xl border border-white/[0.08] text-[13px] text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#D39448]/[0.05] transition-colors duration-150"
                   >
-                    <FolderOpen size={15} className="text-[#D39448]" />
+                    <FolderOpen size={15} className="text-[#D39448]" style={{ filter: "drop-shadow(0 0 2px #D3944880)" }} />
                     Creator's Collections
                   </button>
                   <button

@@ -457,14 +457,14 @@ export function DashboardPage({
                   <div className="flex flex-1 min-w-[130px] flex-col gap-[8px]">
                     <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #d9a86322" }}>
-                        <FolderOpen size={13} className="text-[#d9a863]" />
+                        <FolderOpen size={13} className="text-[#d9a863]" style={{ filter: "drop-shadow(0 0 2px #d9a86380)" }} />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Saved Concepts</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{savedTotal}</span>
                     </button>
                     <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4a90d926, #4a90d908 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4a90d922" }}>
-                        <Clapperboard size={13} className="text-[#6ba3d9]" />
+                        <Clapperboard size={13} className="text-[#6ba3d9]" style={{ filter: "drop-shadow(0 0 2px #6ba3d980)" }} />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Active Collections</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{activeCollectionsCount}</span>
@@ -477,14 +477,18 @@ export function DashboardPage({
                           boxShadow: needsAttention.length > 0 ? "inset 0 0 0 1px #e0664f22" : "inset 0 0 0 1px #d9a86322",
                         }}
                       >
-                        <AlertTriangle size={13} className={needsAttention.length > 0 ? "text-[#e0664f]" : "text-[#d9a863]"} />
+                        <AlertTriangle
+                          size={13}
+                          className={needsAttention.length > 0 ? "text-[#e0664f]" : "text-[#d9a863]"}
+                          style={{ filter: needsAttention.length > 0 ? "drop-shadow(0 0 2px #e0664f80)" : "drop-shadow(0 0 2px #d9a86380)" }}
+                        />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Needs Attention</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{needsAttention.length}</span>
                     </button>
                     <button onClick={onOpenHub} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4fb37a26, #4fb37a08 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4fb37a22" }}>
-                        <Radar size={13} className="text-[#6bc797]" />
+                        <Radar size={13} className="text-[#6bc797]" style={{ filter: "drop-shadow(0 0 2px #6bc79780)" }} />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Creativity Hub</span>
                       <span className="text-[10.5px] text-[#aaa49a] opacity-70">↗</span>
