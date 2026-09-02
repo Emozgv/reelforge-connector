@@ -15,7 +15,7 @@ type QueueRow = {
   concept_count: number;
 };
 
-type EventRow = { id: string; submission_id: string; event_type: string; message: string; created_at: string };
+type EventRow = { id: string; submission_id: string; event_type: string; message: string; created_at: string; actor_name: string | null };
 
 const STATUS_STYLES: Record<string, string> = {
   Requested: "bg-white/[0.06] text-neutral-300",
@@ -110,9 +110,12 @@ export function SydOwnerPage({ isOwner }: { isOwner: boolean }) {
         {events.length === 0 && <p className="text-[12px] text-neutral-600">No activity yet.</p>}
         <div className="space-y-1.5">
           {events.map((e) => (
-            <p key={e.id} className="text-[11.5px] text-neutral-400">
-              {e.message} <span className="text-neutral-600">— {new Date(e.created_at).toLocaleString()}</span>
-            </p>
+            <div key={e.id} className="flex items-center justify-between gap-3 text-[11.5px] text-neutral-400">
+              <span className="min-w-0">
+                {e.message} <span className="text-neutral-600">— {new Date(e.created_at).toLocaleString()}</span>
+              </span>
+              <span className="shrink-0 text-neutral-600">{e.actor_name ?? "Unknown"}</span>
+            </div>
           ))}
         </div>
       </div>
