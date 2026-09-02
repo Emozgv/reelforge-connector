@@ -17,6 +17,11 @@ import type { LiveComment } from "../../state/useLiveResearchSession";
 // while it's closed.
 const DWELL_MS = 5000;
 
+// Disabled ("View all N comments" was a dead promise -- no pagination/API
+// support for loading more than the initial batch exists) -- flip back to
+// true once that support is real.
+const SHOW_VIEW_ALL_COMMENTS = false;
+
 type ReelResult =
   | { status: "loaded"; comments: LiveComment[] }
   | { status: "empty" }
@@ -213,7 +218,12 @@ export function CommentsPanel({
         )}
       </div>
 
-      {result?.status === "loaded" && (
+      {/* Hidden rather than removed -- no pagination/API support for loading
+          more than this batch exists yet, so a disabled "View all N
+          comments" button just reads as a broken promise. Re-enable by
+          flipping SHOW_VIEW_ALL_COMMENTS back to true once that support is
+          real. */}
+      {SHOW_VIEW_ALL_COMMENTS && result?.status === "loaded" && (
         // No pagination/API support for loading more than this batch, so
         // this stays disabled rather than promising a "load more" that
         // isn't real — shown per the reference with the real fetched count.
