@@ -63,12 +63,17 @@ function QuickActionButton({
   onClick,
   disabled,
   spinning,
+  danger,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
   spinning?: boolean;
+  // Whole-button red treatment for a genuinely destructive/ending action
+  // (End Research) — only applied while it's actually clickable, so an
+  // inactive End Research still reads as inert, not alarming.
+  danger?: boolean;
 }) {
   const inactive = disabled || !onClick;
   return (
@@ -81,12 +86,17 @@ function QuickActionButton({
         "press-feedback flex items-center gap-2.5 h-12 px-3.5 rounded-lg border text-[12.5px] transition-colors duration-150",
         inactive
           ? "border-white/[0.06] bg-[#0c0c0e] text-neutral-600 cursor-not-allowed"
-          : "border-white/[0.07] bg-[#111114] text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#161613]",
+          : danger
+            ? "border-rose-500/30 bg-rose-500/[0.08] text-rose-200 hover:border-rose-500/50 hover:bg-rose-500/[0.14]"
+            : "border-white/[0.07] bg-[#111114] text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#161613]",
       ].join(" ")}
     >
       <Icon
         size={14}
-        className={[spinning ? "animate-spin" : "", inactive ? "text-neutral-600" : "text-[#D39448]"].join(" ")}
+        className={[
+          spinning ? "animate-spin" : "",
+          inactive ? "text-neutral-600" : danger ? "text-rose-400" : "text-[#D39448]",
+        ].join(" ")}
       />
       {label}
     </button>
@@ -904,7 +914,7 @@ export function ResearchAccountsPage({
                     icon={RefreshCw}
                     label="Refresh Feed"
                     spinning={liveSession.status === "connecting" || liveSession.status === "checking"}
-                    disabled={liveSession.status === "connecting" || liveSession.status === "checking"}
+                    disabled={liveSession.status !== "active"}
                     onClick={() => void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform)}
                   />
                   <QuickActionButton
@@ -912,6 +922,7 @@ export function ResearchAccountsPage({
                     label="End Research"
                     disabled={liveSession.status !== "active"}
                     onClick={() => void liveSession.endSession()}
+                    danger
                   />
                   {/* No "reviewed" state exists on any feed item yet. */}
                   <QuickActionButton icon={CheckCircle2} label="Mark All As Reviewed" />
