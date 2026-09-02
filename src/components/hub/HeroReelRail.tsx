@@ -153,7 +153,7 @@ export function HeroReelRails() {
   return (
     <div className="pointer-events-none absolute inset-0 hidden lg:block" aria-hidden>
       <div
-        className="absolute left-2 xl:left-6 2xl:left-10 top-0 bottom-0 flex items-center gap-3 xl:gap-4 opacity-[0.35]"
+        className="absolute left-2 xl:left-6 2xl:left-10 top-0 bottom-0 flex items-center gap-3 xl:gap-4 opacity-[0.55]"
         style={maskStyle}
       >
         <Column offset={grad(0)} imageOffset={img(0)} duration={36} />
@@ -163,7 +163,7 @@ export function HeroReelRails() {
         </div>
       </div>
       <div
-        className="absolute right-2 xl:right-6 2xl:right-10 top-0 bottom-0 flex items-center gap-3 xl:gap-4 opacity-[0.35]"
+        className="absolute right-2 xl:right-6 2xl:right-10 top-0 bottom-0 flex items-center gap-3 xl:gap-4 opacity-[0.55]"
         style={maskStyle}
       >
         <div className="hidden 2xl:block">
