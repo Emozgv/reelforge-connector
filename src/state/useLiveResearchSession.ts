@@ -14,7 +14,14 @@ const WAKE_TIMEOUT_MS = 15_000;
 // up from a cold launch -- not an extra wait added on top of WAKE_TIMEOUT_MS
 // (which only bounds how long we wait for it to become reachable at all).
 const WAKE_STARTUP_DELAY_SEC = 10;
-const BEGIN_SESSION_TIMEOUT_MS = 20_000;
+// Real, logged session-server timings show Connector's own cold-start
+// portion (chromium launch + navigation + first-reel polling) alone
+// legitimately taking up to ~27.6s in observed practice, with several
+// others in the 18-19.5s range -- on top of the edge-function invoke that
+// happens before Connector is even reached. 20s was cutting it too close,
+// causing a fully-working-but-slow attempt to be abandoned (falling back to
+// "Start ReelForge Connector") right before it would have succeeded.
+const BEGIN_SESSION_TIMEOUT_MS = 35_000;
 // Bounds waitForUpdateToFinish's poll once Connector has announced it's
 // updating -- generous enough for a real download+install+relaunch (the
 // macOS/Windows installers are tens of MB) on an ordinary connection, not
