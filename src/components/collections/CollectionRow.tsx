@@ -189,13 +189,15 @@ export function CollectionRow({
         className="shrink-0 text-neutral-700 group-hover:text-[#D39448] transition-colors duration-150"
       />
 
-      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          className="w-7 h-7 rounded-md flex items-center justify-center text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05] transition-colors duration-150"
-        >
-          <MoreHorizontal size={14} />
-        </button>
+      <div className="relative shrink-0 w-7 h-7" onClick={(e) => e.stopPropagation()}>
+        {current.name !== "Quick Saves" && (
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="w-7 h-7 rounded-md flex items-center justify-center text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.05] transition-colors duration-150"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        )}
         {menuOpen && (
           <div
             onMouseLeave={() => setMenuOpen(false)}
@@ -213,24 +215,28 @@ export function CollectionRow({
               </button>
             ) : (
               <>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setRenaming(true);
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
-                >
-                  Rename
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDuplicate();
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
-                >
-                  Duplicate
-                </button>
+                {current.name !== "Quick Saves" && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setRenaming(true);
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                  >
+                    Rename
+                  </button>
+                )}
+                {current.name !== "Quick Saves" && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDuplicate();
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                  >
+                    Duplicate
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setMenuOpen(false);
