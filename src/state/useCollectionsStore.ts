@@ -865,46 +865,6 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     void logActivity(collectionId, "collection_status_changed", `Archived "${collectionBaseName(source.name)}"`);
   }
 
-  // Nur diese eine Version. Die Sammlung selbst bleibt aktiv, solange noch
-  // eine andere Version uebrig ist -- deshalb der Riegel unten: die letzte
-  // verbliebene Version laesst sich hier nicht wegarchivieren, dafuer gibt es
-  // "Archive collection". Die Oberflaeche blendet die Aktion dann ohnehin aus,
-  // der Riegel ist die zweite Sicherung.
-  //
-  // Im Archiv taucht eine so archivierte Version weiterhin unter ihrer
-  // Sammlung auf, nicht als eigenstaendige: die Zusammenfassung laeuft ueber
-  // den Namensstamm (siehe groupCollectionsByFamily), nicht ueber ein
-  // gespeichertes Merkmal -- eine archivierte "Foo 2" bleibt damit von selbst
-  // ein Teil von "Foo".
-  async function archiveCollectionVersion(collectionId: string) {
-    const source = collectionsRef.current.find((c) => c.id === collectionId);
-    if (!source) return;
-    const aktive = collectionFamily(
-      source.name,
-      collectionsRef.current.filter((c) => c.creatorId === source.creatorId)
-    ).filter((f) => !f.archivedAt);
-    if (aktive.length <= 1) return;
-
-    const archivedAtIso = new Date().toISOString();
-    const previous = collectionsRef.current;
-    setCollections((prev) =>
-      prev.map((c) => (c.id === collectionId ? { ...c, archivedAt: archivedAtIso } : c))
-    );
-
-    const { error: updateError } = await supabase
-      .schema("client_os")
-      .from("collections")
-      .update({ archived_at: archivedAtIso })
-      .eq("id", collectionId);
-
-    if (updateError) {
-      setCollections(previous);
-      setSaveError("Couldn't archive that version — please try again.");
-      return;
-    }
-    void logActivity(collectionId, "collection_status_changed", `Archived version "${source.name}"`);
-  }
-
   async function restoreCollectionFamily(collectionId: string) {
     const source = collectionsRef.current.find((c) => c.id === collectionId);
     if (!source) return;
@@ -961,7 +921,6 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     assignConceptToCreator,
     deleteCollection,
     archiveCollectionFamily,
-    archiveCollectionVersion,
     restoreCollectionFamily,
   };
 }
