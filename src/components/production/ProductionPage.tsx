@@ -180,7 +180,7 @@ export function ProductionPage({
         }
       `}</style>
 
-      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-10 pb-8">
+      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
         {/* Wortgleich der Sternenhimmel aus Collections: 160 hoch, 110
             Sterne, kein Verlauf darueber. Vorher 190 mit 130 Sternen und
             einem Verlauf aus dem Entwurf -- damit sah er anders aus als auf
@@ -195,12 +195,12 @@ export function ProductionPage({
             am Container und wanderte bei jeder Abstandsaenderung mit; jetzt
             haengt er an der Kopfzeile und bleibt oben, wo er hingehoert. */}
         <div className="relative flex items-start justify-between gap-6">
-          <div className="min-w-0 flex flex-col gap-2.5">
+          <div className="min-w-0">
             <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
-            <h1 className="font-serif font-medium text-[40px] leading-[42px] tracking-[-0.6px] text-[#f2f0ef]">
+            <h1 className="mt-1 font-serif font-medium text-[34px] tracking-[-0.6px] text-[#f2f0ef]">
               Everything in motion.
             </h1>
-            <p className="text-[14px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
+            <p className="mt-1.5 text-[13px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
               Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
             </p>
           </div>
