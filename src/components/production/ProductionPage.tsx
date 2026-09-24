@@ -180,7 +180,7 @@ export function ProductionPage({
         }
       `}</style>
 
-      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-10 pb-8">
         {/* Kopfband: im Entwurf 190 hoch mit Verlauf nach #030404 (3373:624). */}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[190px] overflow-hidden">
           <div className="dashboard-starfield-boost rf-production-starfield absolute inset-0">
@@ -193,12 +193,12 @@ export function ProductionPage({
         </div>
 
         {/* Kopf — Figma 3373:625 */}
-        <div className="relative flex flex-col gap-1.5">
+        <div className="relative flex flex-col gap-2.5">
           <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
           <h1 className="font-serif font-medium text-[40px] leading-[42px] tracking-[-0.6px] text-[#f2f0ef]">
             Everything in motion.
           </h1>
-          <p className="text-[14px] tracking-[0.1px] text-[#bdbdc1] max-w-2xl">
+          <p className="text-[14px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
             Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
           </p>
 
@@ -207,7 +207,7 @@ export function ProductionPage({
               Handlung dahinter. */}
           <div
             title="Productions are started from a Collection"
-            className="absolute right-0 top-1 h-9 px-4 rounded-lg flex items-center justify-center gap-2 cursor-default select-none"
+            className="absolute right-0 top-[30px] h-9 px-4 rounded-lg flex items-center justify-center gap-2 cursor-default select-none"
             style={{
               backgroundImage: "linear-gradient(90deg, #D39448, #EAC088)",
               boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)",
@@ -220,7 +220,7 @@ export function ProductionPage({
 
         {/* Filterleiste — Figma 3373:636 */}
         <div
-          className="relative mt-5 h-[52px] p-[7px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
+          className="relative mt-7 h-[52px] p-[7px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
           style={{ background: "linear-gradient(180deg, #070707, #020202)" }}
         >
           <div className="relative shrink-0">
