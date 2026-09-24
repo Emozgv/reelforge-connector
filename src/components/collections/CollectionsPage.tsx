@@ -53,8 +53,12 @@ export function CollectionsPage({
   const { collections, renameCollection, duplicateCollection, deleteCollection } = collectionsStore;
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
   const [createOpen, setCreateOpen] = useState(false);
-  // Archiving is a whole-family action (see collectionsStore.archiveCollectionFamily),
-  // so this is a simple binary view split, not a per-row filter.
+  // Zwei Ansichten, kein Filter je Zeile. Archiviert wird auf zwei Ebenen:
+  // das Karten-Menue nimmt die ganze Sammlung mit allen Versionen
+  // (archiveCollectionFamily), das Versionsmenue nur die eine Version
+  // (archiveCollectionVersion). Beides landet in derselben Archiv-Ansicht,
+  // und eine einzeln archivierte Version steht dort weiterhin unter ihrer
+  // Sammlung, weil die Zusammenfassung ueber den Namensstamm laeuft.
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   // Welche Version eine Sammlung gerade zeigt. In der Uebersicht waehlt das
   // Versionsmenue nur aus, es oeffnet nicht — geoeffnet wird ausschliesslich
@@ -305,6 +309,7 @@ export function CollectionsPage({
                           if (result.id) setActiveCollectionId(result.id);
                         }}
                         onArchive={() => void collectionsStore.archiveCollectionFamily(current.id)}
+                        onArchiveVersion={(id) => void collectionsStore.archiveCollectionVersion(id)}
                         onRestore={() => void collectionsStore.restoreCollectionFamily(current.id)}
                       />
                     );

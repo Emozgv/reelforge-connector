@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Check, Plus } from "lucide-react";
+import { Archive, Check, Plus } from "lucide-react";
 import type { CollectionStatus } from "../../types";
 import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "./CollectionRow";
 
@@ -21,6 +21,7 @@ export function CollectionVersionMenu({
   nextName,
   onSwitch,
   onCreateNext,
+  onArchiveVersion,
   children,
 }: {
   family: VersionEntry[];
@@ -28,6 +29,12 @@ export function CollectionVersionMenu({
   nextName: string;
   onSwitch: (id: string) => void;
   onCreateNext: () => void;
+  // Archiviert genau diese eine Version. Nur die Collections-Uebersicht
+  // reicht das durch -- im Workspace und im Popover der Creativity Hub
+  // bleibt das Menue wie es war, dort fehlt die Aktion schlicht.
+  // Bei nur noch einer Version wird sie nicht angeboten: dann ist
+  // "Archive collection" im Karten-Menue der richtige Weg.
+  onArchiveVersion?: (id: string) => void;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -46,30 +53,57 @@ export function CollectionVersionMenu({
             onClick={(e) => e.stopPropagation()}
           >
             {family.map((f) => (
-              <button
+              // Zwei Schaltflaechen nebeneinander statt einer in der anderen —
+              // eine Schaltflaeche in einer Schaltflaeche ist ungueltiges HTML
+              // und React meldet es als Fehler.
+              <span
                 key={f.id}
-                onClick={() => {
-                  setOpen(false);
-                  if (f.id !== currentId) onSwitch(f.id);
-                }}
                 className={[
-                  "w-full flex items-center justify-between gap-2 text-left px-2.5 py-1.5 rounded-md text-[12px] transition-colors",
-                  f.id === currentId ? "text-neutral-100 bg-white/[0.06]" : "text-neutral-300 hover:bg-white/[0.06]",
+                  "group/version flex items-center rounded-md transition-colors",
+                  f.id === currentId ? "bg-white/[0.06]" : "hover:bg-white/[0.06]",
                 ].join(" ")}
               >
-                <span className="truncate">{f.name}</span>
-                <span className="flex items-center gap-1.5 shrink-0">
-                  <span
-                    className={[
-                      "text-[9.5px] font-medium px-1 py-[1px] rounded-[3px]",
-                      COLLECTION_STATUS_STYLES[effectiveCollectionStatus(f)],
-                    ].join(" ")}
-                  >
-                    {effectiveCollectionStatus(f)}
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    if (f.id !== currentId) onSwitch(f.id);
+                  }}
+                  className={[
+                    "min-w-0 flex-1 flex items-center justify-between gap-2 text-left pl-2.5 py-1.5 text-[12px]",
+                    onArchiveVersion && family.length > 1 ? "pr-1" : "pr-2.5",
+                    f.id === currentId ? "text-neutral-100" : "text-neutral-300",
+                  ].join(" ")}
+                >
+                  <span className="truncate">{f.name}</span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={[
+                        "text-[9.5px] font-medium px-1 py-[1px] rounded-[3px]",
+                        COLLECTION_STATUS_STYLES[effectiveCollectionStatus(f)],
+                      ].join(" ")}
+                    >
+                      {effectiveCollectionStatus(f)}
+                    </span>
+                    {f.id === currentId && <Check size={11} className="text-[#D39448]" />}
                   </span>
-                  {f.id === currentId && <Check size={11} className="text-[#D39448]" />}
-                </span>
-              </button>
+                </button>
+
+                {/* Nur wenn noch eine weitere Version uebrig ist — die letzte
+                    verbliebene archiviert man ueber "Archive collection". */}
+                {onArchiveVersion && family.length > 1 && (
+                  <button
+                    title="Archive version"
+                    aria-label={`Archive version ${f.name}`}
+                    onClick={() => {
+                      setOpen(false);
+                      onArchiveVersion(f.id);
+                    }}
+                    className="shrink-0 pr-2.5 pl-1 py-1.5 text-neutral-600 opacity-0 group-hover/version:opacity-100 focus-visible:opacity-100 hover:text-neutral-200 transition-opacity duration-150"
+                  >
+                    <Archive size={11} />
+                  </button>
+                )}
+              </span>
             ))}
 
             <span className="block my-1 h-px bg-white/[0.06]" />

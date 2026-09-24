@@ -26,6 +26,7 @@ export function CollectionCard({
   onDelete,
   onStartNext,
   onArchive,
+  onArchiveVersion,
   onRestore,
 }: {
   family: Collection[];
@@ -39,6 +40,7 @@ export function CollectionCard({
   onDelete: () => void;
   onStartNext: () => void;
   onArchive?: () => void;
+  onArchiveVersion?: (id: string) => void;
   onRestore?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -116,6 +118,7 @@ export function CollectionCard({
               nextName={suggestedName}
               onSwitch={onSwitch}
               onCreateNext={onStartNext}
+              onArchiveVersion={archived ? undefined : onArchiveVersion}
             >
               {title}
             </CollectionVersionMenu>
@@ -222,7 +225,7 @@ export function CollectionCard({
                   }}
                   className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
                 >
-                  Archive{family.length > 1 ? " all versions" : ""}
+                  Archive collection
                 </button>
                 <button
                   onClick={() => {
