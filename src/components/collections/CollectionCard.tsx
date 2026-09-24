@@ -79,7 +79,7 @@ export function CollectionCard({
   }
 
   const title = (
-    <h3 className="text-[14px] font-semibold text-[#f2f0f1] truncate">{current.name}</h3>
+    <h3 className="text-[13px] font-semibold text-[#f2f0f1] truncate">{current.name}</h3>
   );
 
   return (
@@ -87,10 +87,10 @@ export function CollectionCard({
       onClick={() => {
         if (!renaming) onOpen();
       }}
-      className="group relative flex h-[126px] items-stretch p-[11px] rounded-[10px] border border-[#25262a] hover:border-[#32333a] transition-colors duration-150 cursor-pointer"
+      className="group relative flex h-[104px] items-stretch p-2.5 rounded-[10px] border border-[#25262a] hover:border-[#32333a] transition-colors duration-150 cursor-pointer"
       style={{ backgroundImage: "linear-gradient(114.75deg, rgb(21,23,26) 0%, rgb(16,18,21) 100%)" }}
     >
-      <div className="w-[66px] shrink-0 mr-[15px] rounded-[6px] overflow-hidden bg-black/30">
+      <div className="w-[54px] shrink-0 mr-3 rounded-[6px] overflow-hidden bg-black/30">
         {cover?.thumbnailUrl && !thumbFailed ? (
           <img
             src={cover.thumbnailUrl}
@@ -108,7 +108,7 @@ export function CollectionCard({
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="pr-[70px]">
+        <div className="pr-[62px]">
           {renaming ? (
             <input
               autoFocus
@@ -123,7 +123,7 @@ export function CollectionCard({
                 }
               }}
               onBlur={commitRename}
-              className="w-full h-6 rounded surface-field px-1.5 text-[14px] text-neutral-100 outline-none focus-glow"
+              className="w-full h-6 rounded surface-field px-1.5 text-[13px] text-neutral-100 outline-none focus-glow"
             />
           ) : !archived && isVersionableCollection(current.name) ? (
             <CollectionVersionMenu
@@ -140,54 +140,54 @@ export function CollectionCard({
           )}
         </div>
 
-        <p className="mt-[5px] text-[12px] text-[#85858b]">
+        <p className="mt-1 text-[11.5px] text-[#85858b]">
           {total} concept{total === 1 ? "" : "s"}
         </p>
-        <p className="mt-[5px] text-[11px] text-[#76777c]">
-          {used} used <span className="px-[7px]">•</span> {available} available
+        <p className="mt-1 text-[10.5px] text-[#76777c]">
+          {used} used <span className="px-1.5">•</span> {available} available
         </p>
 
-        <div className="mt-auto flex items-center gap-[9px]">
+        <div className="mt-auto flex items-center gap-2">
           {creator && (
             <span
               title={creator.name}
-              className="w-[13px] h-[13px] rounded-full shrink-0"
+              className="w-[11px] h-[11px] rounded-full shrink-0"
               style={{ background: creator.avatarColor, boxShadow: `0 0 10px 0 ${creator.avatarColor}` }}
             />
           )}
           <span
             className={[
-              "shrink-0 px-[7px] py-[2px] rounded-[4px] text-[11px] leading-[17px] whitespace-nowrap",
+              "shrink-0 px-1.5 py-[2px] rounded-[4px] text-[10px] leading-[15px] whitespace-nowrap",
               STATUS_BADGE[status] ?? STATUS_BADGE.Draft,
             ].join(" ")}
           >
             {status}
           </span>
-          <span className="ml-auto shrink-0 text-[11px] text-[#77787d] whitespace-nowrap">
+          <span className="ml-auto shrink-0 text-[10.5px] text-[#77787d] whitespace-nowrap">
             Edited {formatRelativeTime(current.updatedAt).replace(/^Just now$/, "just now")}
           </span>
         </div>
       </div>
 
       {family.length > 1 && (
-        <div className="absolute right-[43px] top-[12px] px-[9px] py-[5px] rounded-[5px] bg-[#1a1b20] border border-[#24262b] text-[11px] text-[#898a90] whitespace-nowrap">
+        <div className="absolute right-[36px] top-2.5 px-2 py-[3px] rounded-[5px] bg-[#1a1b20] border border-[#24262b] text-[10px] text-[#898a90] whitespace-nowrap">
           {family.length} versions
         </div>
       )}
 
       <span
         aria-hidden
-        className="absolute right-[20px] top-[52px] text-[23px] font-extralight leading-none text-[#e4e4e5] opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+        className="absolute right-[16px] top-[44px] text-[18px] font-extralight leading-none text-[#e4e4e5] opacity-0 group-hover:opacity-100 transition-opacity duration-150"
       >
         →
       </span>
 
-      <div className="absolute right-[12px] top-[8px]" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute right-2.5 top-1.5" onClick={(e) => e.stopPropagation()}>
         {current.name !== "Quick Saves" && (
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Collection actions"
-            className="w-[22px] h-[16px] flex items-center justify-center text-[16px] tracking-[1px] leading-[8px] text-[#c2c3c4] hover:text-neutral-100 transition-colors duration-150"
+            className="w-5 h-4 flex items-center justify-center text-[14px] tracking-[1px] leading-[8px] text-[#c2c3c4] hover:text-neutral-100 transition-colors duration-150"
           >
             ···
           </button>

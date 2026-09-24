@@ -17,10 +17,10 @@ export function CreatorFilterBar({
   onSelect: (id: string | "all") => void;
 }) {
   const base =
-    "flex items-center h-[44px] px-[17px] rounded-[22px] text-[13px] transition-colors duration-150 shrink-0";
+    "flex items-center h-[34px] px-[14px] rounded-full text-[12.5px] transition-colors duration-150 shrink-0";
 
   return (
-    <div className="flex items-center gap-[10px] flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       <button
         onClick={() => onSelect("all")}
         className={[
@@ -49,7 +49,7 @@ export function CreatorFilterBar({
             onClick={() => onSelect(c.id)}
             className={[
               base,
-              "gap-[12px]",
+              "gap-2",
               active
                 ? "border border-[#d08d36] text-[#f1eee8]"
                 : "border border-[#222326] bg-[rgba(8,9,10,0.65)] text-[#bbb9bd] hover:border-[#32333a]",
@@ -61,7 +61,7 @@ export function CreatorFilterBar({
             }
           >
             <span
-              className="w-[19px] h-[19px] rounded-full shrink-0 overflow-hidden"
+              className="w-[15px] h-[15px] rounded-full shrink-0 overflow-hidden"
               style={
                 c.profileImage
                   ? undefined
