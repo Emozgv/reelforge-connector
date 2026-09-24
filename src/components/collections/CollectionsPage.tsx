@@ -56,6 +56,15 @@ export function CollectionsPage({
   // Archiving is a whole-family action (see collectionsStore.archiveCollectionFamily),
   // so this is a simple binary view split, not a per-row filter.
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
+  // Welche Version eine Sammlung gerade zeigt. In der Uebersicht waehlt das
+  // Versionsmenue nur aus, es oeffnet nicht — geoeffnet wird ausschliesslich
+  // ueber die Karte selbst. Im Workspace bleibt das Menue wie es war: dort
+  // wechselt es weiterhin direkt die geoeffnete Version.
+  //
+  // Schluessel ist die aelteste Version der Reihe, weil die stabil bleibt,
+  // egal welche gerade gewaehlt ist — eine Auswahl ueberlebt damit auch das
+  // Filtern nach Creator oder den Wechsel ins Archiv und zurueck.
+  const [selectedVersion, setSelectedVersion] = useState<Record<string, string>>({});
   const activeCollectionId = openCollectionId;
   const setActiveCollectionId = (id: string | null) => {
     collectionsStore.clearSaveError();
@@ -268,16 +277,26 @@ export function CollectionsPage({
 
                 <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(310px,1fr))]">
                   {families.map((family) => {
-                    const current = family[family.length - 1];
+                    // Die aelteste Version traegt die Reihe — sie bleibt
+                    // dieselbe, egal welche Version gerade gewaehlt ist.
+                    const familyKey = family[0].id;
+                    // Ohne eigene Wahl zeigt die Karte weiterhin die neueste
+                    // Version; zeigt eine alte Wahl ins Leere (etwa nachdem
+                    // eine Version geloescht wurde), faellt sie ebenfalls
+                    // darauf zurueck.
+                    const current =
+                      family.find((f) => f.id === selectedVersion[familyKey]) ?? family[family.length - 1];
                     return (
                       <CollectionCard
-                        key={current.id}
+                        key={familyKey}
                         family={family}
                         current={current}
                         creators={creators}
                         archived={viewMode === "archived"}
                         onOpen={() => setActiveCollectionId(current.id)}
-                        onSwitch={(id) => setActiveCollectionId(id)}
+                        onSwitch={(id) =>
+                          setSelectedVersion((prev) => ({ ...prev, [familyKey]: id }))
+                        }
                         onRename={(name) => renameCollection(current.id, name)}
                         onDuplicate={() => duplicateCollection(current.id)}
                         onDelete={() => deleteCollection(current.id)}
