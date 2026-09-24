@@ -136,7 +136,7 @@ export function ProductionPage({
         }
       `}</style>
 
-      <div className="relative pt-[29px] pl-[26px] pr-[22px] pb-[16px]">
+      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
         {/* Kopfband: im Entwurf 190 hoch mit Verlauf nach #030404 (3373:624). */}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[190px] overflow-hidden">
           <div className="dashboard-starfield-boost rf-production-starfield absolute inset-0">
@@ -149,12 +149,12 @@ export function ProductionPage({
         </div>
 
         {/* Kopf — Figma 3373:625 */}
-        <div className="relative h-[130px] px-[10px] py-[3px] flex flex-col gap-[10px]">
-          <span className="block text-[11px] tracking-[2.3px] uppercase text-[#eaa23a]">Production</span>
-          <h1 className="font-serif font-medium text-[48px] leading-[48px] tracking-[-0.7px] text-[#f2f0ef]">
+        <div className="relative flex flex-col gap-1.5">
+          <span className="block text-[11px] tracking-[0.22em] uppercase text-[#eaa23a] font-medium">Production</span>
+          <h1 className="font-serif font-medium text-[34px] leading-[38px] tracking-[-0.5px] text-[#f2f0ef]">
             Everything in motion.
           </h1>
-          <p className="pt-px text-[16px] tracking-[0.1px] text-[#bdbdc1]">
+          <p className="text-[13px] tracking-[0.1px] text-[#bdbdc1] max-w-xl">
             Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
           </p>
 
@@ -163,29 +163,29 @@ export function ProductionPage({
               Handlung dahinter. */}
           <div
             title="Productions are started from a Collection"
-            className="absolute right-[3px] top-[54px] w-[175px] h-[43px] rounded-[11px] border border-[#e9a03b] flex items-center justify-center gap-[12px] cursor-default select-none"
+            className="absolute right-0 top-1 h-9 px-4 rounded-[10px] border border-[#e9a03b] flex items-center justify-center gap-2 cursor-default select-none"
             style={{
               backgroundImage: "linear-gradient(to bottom, #f6b654, #eaa03c)",
-              filter: "drop-shadow(0px 8px 12.5px rgba(231,154,47,0.16))",
+              filter: "drop-shadow(0px 6px 9px rgba(231,154,47,0.16))",
             }}
           >
-            <Plus size={16} strokeWidth={2.4} className="text-[#17100a]" />
-            <span className="text-[13.3px] font-semibold text-[#17100a]">New Production</span>
+            <Plus size={14} strokeWidth={2.4} className="text-[#17100a]" />
+            <span className="text-[12.5px] font-semibold text-[#17100a]">New Production</span>
           </div>
         </div>
 
         {/* Filterleiste — Figma 3373:636 */}
         <div
-          className="relative mt-[3px] h-[67px] p-[9px] rounded-[13px] border border-[#27221c] flex items-center gap-[9px]"
+          className="relative mt-5 h-[52px] p-[7px] rounded-xl border border-[#27221c] flex items-center gap-2"
           style={{ background: "rgba(9,9,10,0.88)" }}
         >
           <div className="relative shrink-0">
             <button
               onClick={() => setCreatorOpen((v) => !v)}
-              className="min-w-[157px] h-[43px] px-[14px] rounded-[22px] bg-[#121315] border border-[#27292c] flex items-center gap-[10px] text-[13px] text-[#dddde0] hover:border-[#3a3c40] transition-colors duration-150"
+              className="min-w-[132px] h-[34px] px-3 rounded-full bg-[#121315] border border-[#27292c] flex items-center gap-2 text-[12.5px] text-[#dddde0] hover:border-[#3a3c40] transition-colors duration-150"
             >
               <span
-                className="w-[24px] h-[24px] rounded-[12px] shrink-0 overflow-hidden"
+                className="w-[18px] h-[18px] rounded-full shrink-0 overflow-hidden"
                 style={
                   aktiverCreator
                     ? aktiverCreator.profileImage
@@ -207,7 +207,7 @@ export function ProductionPage({
             {creatorOpen && (
               <div
                 onMouseLeave={() => setCreatorOpen(false)}
-                className="absolute left-0 top-[48px] z-30 w-[210px] rounded-lg surface-panel-strong p-1 animate-fade-in max-h-72 overflow-y-auto"
+                className="absolute left-0 top-10 z-30 w-[200px] rounded-lg surface-panel-strong p-1 animate-fade-in max-h-72 overflow-y-auto"
               >
                 <button
                   onClick={() => {
@@ -243,9 +243,9 @@ export function ProductionPage({
           {/* Nur Optik: eine Quelle je Auftrag gibt es im Bestand nicht. */}
           <div
             title="Not available yet"
-            className="min-w-[176px] h-[43px] px-[14px] rounded-[22px] bg-[#121315] border border-[#27292c] flex items-center gap-[10px] text-[13px] text-[#dddde0] shrink-0 cursor-default select-none opacity-70"
+            className="min-w-[142px] h-[34px] px-3 rounded-full bg-[#121315] border border-[#27292c] flex items-center gap-2 text-[12.5px] text-[#dddde0] shrink-0 cursor-default select-none opacity-70"
           >
-            <Database size={15} className="text-[#9b9ca1] shrink-0" />
+            <Database size={13} className="text-[#9b9ca1] shrink-0" />
             All Sources
             <ChevronDown size={13} className="ml-auto shrink-0 text-[#939398]" />
           </div>
@@ -265,18 +265,18 @@ export function ProductionPage({
           </div>
 
           <div className="ml-auto relative shrink-0">
-            <Search size={14} className="absolute left-[14px] top-1/2 -translate-y-1/2 text-[#a8a9ad]" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a9ad]" />
             <input
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search productions..."
-              className="w-[270px] h-[43px] pl-[38px] pr-[14px] rounded-[11px] bg-[#141518] border border-[#303236] text-[12px] text-neutral-100 placeholder:text-[#84858a] outline-none focus-glow"
+              className="w-[230px] h-[34px] pl-8 pr-3 rounded-[10px] bg-[#141518] border border-[#303236] text-[12px] text-neutral-100 placeholder:text-[#84858a] outline-none focus-glow"
             />
           </div>
         </div>
 
         {alleZeilen.length === 0 ? (
-          <div className={`relative mt-[21px] ${PANEL} py-16 text-center`} style={{ backgroundImage: PANEL_BG }}>
+          <div className={`relative mt-4 ${PANEL} py-16 text-center`} style={{ backgroundImage: PANEL_BG }}>
             <Clapperboard size={20} className="mx-auto text-neutral-700 mb-2" />
             <p className="text-[13px] text-neutral-400">Nothing sent to ReelForge yet.</p>
             <p className="text-[12px] text-neutral-600 mt-1">
@@ -284,17 +284,17 @@ export function ProductionPage({
             </p>
           </div>
         ) : (
-          <div className="relative mt-[21px] flex items-start gap-[17px]">
-            <div className="flex-1 min-w-0 flex flex-col gap-[15px]">
+          <div className="relative mt-4 flex items-start gap-3">
+            <div className="flex-1 min-w-0 flex flex-col gap-3">
               <Panel
-                icon={<AlertTriangle size={17} className="text-[#f2a633]" />}
+                icon={<AlertTriangle size={13} className="text-[#f2a633]" />}
                 titel="Needs Attention"
                 titelFarbe="#f1a846"
                 unter="Items that need your input to keep production moving."
                 leer="Nothing is waiting on you right now."
                 anzahl={aufmerksam.length}
               >
-                <div className="grid gap-[11px] [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
+                <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
                   {aufmerksam.map((r) => (
                     <AufmerksamKarte key={r.submissionId} row={r} onOpen={() => onOpenCollection(r.collectionId)} />
                   ))}
@@ -302,7 +302,7 @@ export function ProductionPage({
               </Panel>
 
               <Panel
-                icon={<Sparkles size={16} className="text-[#f2a633]" />}
+                icon={<Sparkles size={13} className="text-[#f2a633]" />}
                 titel="Production Pipeline"
                 titelFarbe="#f1a846"
                 unter="Active production items, from first cut to final delivery."
@@ -318,9 +318,9 @@ export function ProductionPage({
               </Panel>
             </div>
 
-            <div className="w-[380px] shrink-0 flex flex-col gap-[15px]">
+            <div className="w-[330px] shrink-0 flex flex-col gap-3">
               <Panel
-                icon={<span className="text-[17px] leading-none text-[#31c98c]">◉</span>}
+                icon={<span className="text-[13px] leading-none text-[#31c98c]">◉</span>}
                 titel="Finished"
                 titelFarbe="#3fd096"
                 unter="Recently completed and delivered content."
@@ -335,7 +335,7 @@ export function ProductionPage({
               </Panel>
 
               <Panel
-                icon={<Ban size={16} className="text-[#ff474d]" />}
+                icon={<Ban size={13} className="text-[#ff474d]" />}
                 titel="Cancelled"
                 titelFarbe="#ff5358"
                 unter="Recently cancelled or archived items."
@@ -374,18 +374,18 @@ function Chip({
     <button
       onClick={onClick}
       className={[
-        "h-[35px] px-[11px] rounded-[18px] flex items-center gap-[8px] text-[11px] whitespace-nowrap transition-colors duration-150",
+        "h-[30px] px-2.5 rounded-full flex items-center gap-1.5 text-[11.5px] whitespace-nowrap transition-colors duration-150",
         aktiv ? "bg-[#D39448]/[0.16] text-[#D39448]" : "text-[#c4c4c8] hover:bg-white/[0.04]",
       ].join(" ")}
     >
       {dot && (
         <span
-          className="w-[10px] h-[10px] rounded-[5px] border-2 shrink-0"
+          className="w-[8px] h-[8px] rounded-full border-2 shrink-0"
           style={{ borderColor: dot }}
         />
       )}
       {label}
-      <span className="h-[20px] min-w-[20px] px-[6px] rounded-[10px] bg-[#292a2e] text-[10px] text-[#bfc0c4] flex items-center justify-center">
+      <span className="h-[17px] min-w-[17px] px-1.5 rounded-full bg-[#292a2e] text-[10px] text-[#bfc0c4] flex items-center justify-center">
         {count}
       </span>
     </button>
@@ -413,16 +413,16 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${PANEL} px-[15px] py-[14px]`} style={{ backgroundImage: PANEL_BG }}>
-      <div className="flex items-start gap-[11px] pb-[14px]">
+    <div className={`${PANEL} px-3 py-3`} style={{ backgroundImage: PANEL_BG }}>
+      <div className="flex items-start gap-2.5 pb-2.5">
         <span className="shrink-0 leading-none pt-[1px]">{icon}</span>
         <div className="min-w-0">
-          <h2 className="text-[13px] tracking-[2px] uppercase" style={{ color: titelFarbe }}>
+          <h2 className="text-[11px] tracking-[0.18em] uppercase font-medium" style={{ color: titelFarbe }}>
             {titel}
           </h2>
-          <p className="mt-[5px] text-[11px] text-[#818287]">{unter}</p>
+          <p className="mt-0.5 text-[11.5px] text-[#818287]">{unter}</p>
         </div>
-        {rechts && <span className="ml-auto shrink-0 pt-[4px]">{rechts}</span>}
+        {rechts && <span className="ml-auto shrink-0 pt-0.5">{rechts}</span>}
       </div>
       {anzahl === 0 ? <p className="py-6 text-center text-[12px] text-[#818287]">{leer}</p> : children}
     </div>
@@ -468,8 +468,8 @@ function CreatorZeile({ row, grosse }: { row: ProductionRow; grosse: number }) {
 // Wahrheit, statt eine Quelle zu erfinden.
 function QuellenSchild() {
   return (
-    <span className="h-[27px] px-[10px] rounded-[8px] bg-[#19191e] flex items-center gap-[6px] text-[10px] text-[#bebec3] shrink-0">
-      <Sparkles size={11} className="text-[#bebec3]" />
+    <span className="h-[22px] px-2 rounded-md bg-[#19191e] flex items-center gap-1.5 text-[10px] text-[#bebec3] shrink-0">
+      <Sparkles size={10} className="text-[#bebec3]" />
       ReelForge
     </span>
   );
@@ -483,22 +483,22 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
       className="relative text-left rounded-[10px] border border-[#202226] overflow-hidden hover:border-[#D39448]/35 transition-colors duration-150"
       style={{ backgroundImage: ROW_BG }}
     >
-      <span className="flex gap-[12px] p-[11px]">
-        <Bild row={row} klasse="w-[68px] h-[73px] rounded-[6px]" />
-        <span className="flex-1 min-w-0 flex flex-col gap-[6px] pt-[2px]">
-          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
-          <span className="text-[11px] text-[#8c8d91]">
+      <span className="flex gap-2.5 p-2.5">
+        <Bild row={row} klasse="w-[54px] h-[58px] rounded-[6px]" />
+        <span className="flex-1 min-w-0 flex flex-col gap-1 pt-0.5">
+          <span className="text-[13px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="text-[11.5px] text-[#8c8d91]">
             {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
           </span>
-          <span className="flex items-center gap-[7px] pt-[3px] min-w-0">
-            <CreatorZeile row={row} grosse={20} />
+          <span className="flex items-center gap-2 pt-0.5 min-w-0">
+            <CreatorZeile row={row} grosse={16} />
             <span className="ml-auto">
               <QuellenSchild />
             </span>
           </span>
         </span>
       </span>
-      <span className="flex items-center gap-[7px] px-[11px] py-[8px] border-t border-[#202226]">
+      <span className="flex items-center gap-2 px-2.5 py-1.5 border-t border-[#202226]">
         <AlertTriangle size={11} className="text-[#ff484d] shrink-0" />
         <span className="text-[10px] text-[#ff484d] truncate">{NAECHSTER_SCHRITT[row.status]}</span>
         <span className="ml-auto text-[10px] text-[#838489] shrink-0">{row.sentAt}</span>
@@ -513,17 +513,17 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
   return (
     <button
       onClick={onOpen}
-      className="w-full h-[60px] px-[8px] grid items-center gap-[10px] border-b border-[#25262a] last:border-b-0 text-left hover:brightness-125 transition-[filter] duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
+      className="w-full h-[48px] px-2 grid items-center gap-2.5 border-b border-[#25262a] last:border-b-0 text-left hover:brightness-125 transition-[filter] duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
       style={{ backgroundImage: ROW_BG }}
     >
-      <span className="flex items-center gap-[11px] min-w-0">
-        <Bild row={row} klasse="w-[77px] h-[49px] rounded-[5px]" />
-        <span className="min-w-0 flex flex-col gap-[4px]">
-          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
-          <span className="flex items-center gap-[6px] min-w-0">
-            <span className="text-[11px] text-[#8c8d91] shrink-0">{row.conceptCount} concepts</span>
+      <span className="flex items-center gap-2.5 min-w-0">
+        <Bild row={row} klasse="w-[62px] h-[40px] rounded-[5px]" />
+        <span className="min-w-0 flex flex-col gap-0.5">
+          <span className="text-[13px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10.5px] text-[#8c8d91] shrink-0">{row.conceptCount} concepts</span>
             <span className="text-[#4f5054]">•</span>
-            <CreatorZeile row={row} grosse={19} />
+            <CreatorZeile row={row} grosse={16} />
           </span>
         </span>
       </span>
@@ -536,12 +536,12 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
         {st.label}
       </span>
 
-      <span className="text-[11px] leading-[17px] text-[#a9aaae] min-w-0">
+      <span className="text-[10.5px] leading-[15px] text-[#a9aaae] min-w-0">
         <span className="block truncate">{NAECHSTER_SCHRITT[row.status]}</span>
         <span className="block truncate">{row.eta ? `ETA ${row.eta}` : row.sentAt}</span>
       </span>
 
-      <span className="text-right text-[14px] tracking-[1px] text-[#6d6e73]">···</span>
+      <span className="text-right text-[13px] tracking-[1px] text-[#6d6e73]">···</span>
     </button>
   );
 }
@@ -552,19 +552,19 @@ function SeitenZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }
   return (
     <button
       onClick={onOpen}
-      className="h-[71px] flex items-center gap-[10px] border-b border-[#202226] last:border-b-0 text-left hover:bg-white/[0.02] transition-colors duration-150"
+      className="h-[58px] flex items-center gap-2.5 border-b border-[#202226] last:border-b-0 text-left hover:bg-white/[0.02] transition-colors duration-150"
     >
-      <Bild row={row} klasse="w-[50px] h-[52px] rounded-[5px]" />
+      <Bild row={row} klasse="w-[40px] h-[44px] rounded-[5px]" />
       <span className="flex-1 min-w-0 pl-[2px]">
-        <span className="block text-[12px] text-[#efeff2] truncate">{row.collectionName}</span>
-        <span className="block pt-[5px]">
+        <span className="block text-[12.5px] text-[#efeff2] truncate">{row.collectionName}</span>
+        <span className="block pt-0.5">
           <CreatorZeile row={row} grosse={19} />
         </span>
-        <span className="block text-[11px] text-[#8c8d91]">
+        <span className="block text-[10.5px] text-[#8c8d91]">
           {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
         </span>
       </span>
-      <span className="shrink-0 flex flex-col items-end gap-[4px] pr-[2px]">
+      <span className="shrink-0 flex flex-col items-end gap-0.5 pr-0.5">
         <span className="flex items-center gap-[5px] text-[10px]" style={{ color: st.color }}>
           <span className="w-[6px] h-[6px] rounded-full" style={{ background: st.color }} />
           {st.label}
