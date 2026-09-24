@@ -31,13 +31,41 @@ const CHIPS: { label: string; status: SubmissionStatus; dot: string }[] = [
   { label: "Cancelled", status: "Cancelled", dot: "#ff474d" },
 ];
 
-const STATUS_TEXT: Record<SubmissionStatus, { label: string; color: string }> = {
-  "Check Inbox": { label: "Needs Attention", color: "#ff6a6f" },
-  "In Progress": { label: "In Production", color: "#5eb1ff" },
-  Sent: { label: "Review", color: "#f2b552" },
-  Finished: { label: "Delivered", color: "#3fd096" },
-  Cancelled: { label: "Cancelled", color: "#ff5358" },
+// Die Statuspille aus dem Entwurf (Figma 3373:818): Radialverlauf,
+// 2px-Ring in der Statusfarbe, Schein 0 0 8px in derselben Farbe.
+// Der Blauton ist wortgleich uebernommen, die anderen vier sind derselbe
+// Aufbau in ihrer jeweiligen Farbe.
+const STATUS_TEXT: Record<
+  SubmissionStatus,
+  { label: string; color: string; von: string; bis: string; schein: string }
+> = {
+  "Check Inbox": { label: "Needs Attention", color: "#ff6a6f", von: "rgba(63,24,26,1)", bis: "rgba(33,15,16,1)", schein: "rgba(231,60,65,0.14)" },
+  "In Progress": { label: "In Production", color: "#5eb1ff", von: "rgba(20,40,63,1)", bis: "rgba(13,23,33,1)", schein: "rgba(35,132,231,0.14)" },
+  Sent: { label: "Review", color: "#f2b552", von: "rgba(63,48,20,1)", bis: "rgba(33,26,13,1)", schein: "rgba(231,160,35,0.14)" },
+  Finished: { label: "Delivered", color: "#3fd096", von: "rgba(18,56,42,1)", bis: "rgba(11,28,22,1)", schein: "rgba(35,208,150,0.14)" },
+  Cancelled: { label: "Cancelled", color: "#ff5358", von: "rgba(56,22,24,1)", bis: "rgba(28,13,14,1)", schein: "rgba(231,60,65,0.10)" },
 };
+
+function StatusPille({ status }: { status: SubmissionStatus }) {
+  const st = STATUS_TEXT[status];
+  return (
+    <span
+      className="h-[26px] min-w-[92px] pl-2.5 pr-3 rounded-[13px] flex items-center gap-1.5 shrink-0"
+      style={{
+        backgroundImage: `radial-gradient(circle at 50% 50%, ${st.von} 0%, ${st.bis} 100%)`,
+        filter: `drop-shadow(0 0 8px ${st.schein})`,
+      }}
+    >
+      <span
+        className="w-2 h-2 rounded-[3px] border-2 shrink-0"
+        style={{ borderColor: st.color }}
+      />
+      <span className="text-[10px] whitespace-nowrap" style={{ color: st.color }}>
+        {st.label}
+      </span>
+    </span>
+  );
+}
 
 // Der naechste Schritt ist im Bestand nicht gespeichert. Statt einen zu
 // erfinden, wird er aus dem Zustand abgeleitet -- das ist wahr und sagt
@@ -130,6 +158,8 @@ export function ProductionPage({
   return (
     <div className="relative h-full overflow-y-auto" style={{ background: "#030404" }}>
       <style>{`
+        .rf-chiprolle { scrollbar-width: none; -ms-overflow-style: none; }
+        .rf-chiprolle::-webkit-scrollbar { display: none; }
         .rf-production-starfield .star-twinkle { opacity: 0.6 !important; box-shadow: 0 0 4px rgba(255,250,240,0.45) !important; transform: scale(0.85); }
         @media (prefers-reduced-motion: no-preference) {
           .rf-production-starfield .star-twinkle { animation-name: star-twinkle-boosted !important; }
@@ -176,7 +206,7 @@ export function ProductionPage({
 
         {/* Filterleiste — Figma 3373:636 */}
         <div
-          className="relative mt-5 h-[52px] p-[7px] rounded-xl border border-[#27221c] flex items-center gap-2"
+          className="relative mt-5 h-[52px] p-[7px] rounded-xl border border-[#27221c] flex flex-nowrap items-center gap-2 overflow-hidden"
           style={{ background: "rgba(9,9,10,0.88)" }}
         >
           <div className="relative shrink-0">
@@ -250,7 +280,7 @@ export function ProductionPage({
             <ChevronDown size={13} className="ml-auto shrink-0 text-[#939398]" />
           </div>
 
-          <div className="flex items-center gap-[2px] flex-wrap min-w-0">
+          <div className="rf-chiprolle flex flex-nowrap items-center gap-[5px] min-w-0 overflow-x-auto h-[38px] px-[6px] rounded-[19px] bg-[#101113] border border-[#26282b]">
             <Chip label="All" count={gefiltert.length} aktiv={status === "all"} onClick={() => setStatus("all")} />
             {CHIPS.map((c) => (
               <Chip
@@ -264,13 +294,17 @@ export function ProductionPage({
             ))}
           </div>
 
-          <div className="ml-auto relative shrink-0">
+          {/* Gibt als Erstes nach, wenn das Fenster schmal wird -- die Chips
+              bleiben dafuer vollstaendig und in einer Zeile. Unter etwa
+              1300 Breite schrumpft das Feld bis auf die Lupe, statt dass
+              die Leiste umbricht oder etwas abgeschnitten wird. */}
+          <div className="ml-auto relative min-w-[40px] flex-1 max-w-[230px]">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a9ad]" />
             <input
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search productions..."
-              className="w-[230px] h-[34px] pl-8 pr-3 rounded-[10px] bg-[#141518] border border-[#303236] text-[12px] text-neutral-100 placeholder:text-[#84858a] outline-none focus-glow"
+              className="w-full h-[34px] pl-8 pr-3 rounded-[10px] bg-[#141518] border border-[#303236] text-[12px] text-neutral-100 placeholder:text-[#84858a] outline-none focus-glow"
             />
           </div>
         </div>
@@ -291,6 +325,7 @@ export function ProductionPage({
                 titel="Needs Attention"
                 titelFarbe="#f1a846"
                 unter="Items that need your input to keep production moving."
+                rechts={<span className="text-[11px] text-[#9a9ba0]">View all ›</span>}
                 leer="Nothing is waiting on you right now."
                 anzahl={aufmerksam.length}
               >
@@ -318,12 +353,13 @@ export function ProductionPage({
               </Panel>
             </div>
 
-            <div className="w-[330px] shrink-0 flex flex-col gap-3">
+            <div className="w-[360px] shrink-0 flex flex-col gap-3">
               <Panel
                 icon={<span className="text-[13px] leading-none text-[#31c98c]">◉</span>}
                 titel="Finished"
                 titelFarbe="#3fd096"
                 unter="Recently completed and delivered content."
+                rechts={<span className="text-[11px] text-[#9a9ba0]">View all ›</span>}
                 leer="Nothing delivered yet."
                 anzahl={fertig.length}
               >
@@ -339,6 +375,7 @@ export function ProductionPage({
                 titel="Cancelled"
                 titelFarbe="#ff5358"
                 unter="Recently cancelled or archived items."
+                rechts={<span className="text-[11px] text-[#9a9ba0]">View all ›</span>}
                 leer="Nothing cancelled."
                 anzahl={abgebrochen.length}
               >
@@ -374,9 +411,17 @@ function Chip({
     <button
       onClick={onClick}
       className={[
-        "h-[30px] px-2.5 rounded-full flex items-center gap-1.5 text-[11.5px] whitespace-nowrap transition-colors duration-150",
-        aktiv ? "bg-[#D39448]/[0.16] text-[#D39448]" : "text-[#c4c4c8] hover:bg-white/[0.04]",
+        "h-[30px] px-2 rounded-full flex items-center gap-1.5 text-[11.5px] whitespace-nowrap shrink-0 transition-colors duration-150",
+        aktiv ? "border border-[#af7427] text-[#ffd18a]" : "text-[#c4c4c8] hover:bg-white/[0.04]",
       ].join(" ")}
+      style={
+        aktiv
+          ? {
+              backgroundImage: "linear-gradient(to right, #5a3b1f, #241d16)",
+              filter: "drop-shadow(0 0 7.5px rgba(243,162,56,0.12))",
+            }
+          : undefined
+      }
     >
       {dot && (
         <span
@@ -407,6 +452,7 @@ function Panel({
   titel: string;
   titelFarbe: string;
   unter: string;
+  // Rechts oben im Panel — im Entwurf "View all ›" bzw. der Sortierhinweis.
   rechts?: React.ReactNode;
   leer: string;
   anzahl: number;
@@ -420,9 +466,9 @@ function Panel({
           <h2 className="text-[11px] tracking-[0.18em] uppercase font-medium" style={{ color: titelFarbe }}>
             {titel}
           </h2>
-          <p className="mt-0.5 text-[11.5px] text-[#818287]">{unter}</p>
+          <p className="mt-0.5 text-[11px] text-[#818287]">{unter}</p>
         </div>
-        {rechts && <span className="ml-auto shrink-0 pt-0.5">{rechts}</span>}
+        {rechts && <span className="ml-auto shrink-0 pl-2 pt-0.5 whitespace-nowrap">{rechts}</span>}
       </div>
       {anzahl === 0 ? <p className="py-6 text-center text-[12px] text-[#818287]">{leer}</p> : children}
     </div>
@@ -468,8 +514,8 @@ function CreatorZeile({ row, grosse }: { row: ProductionRow; grosse: number }) {
 // Wahrheit, statt eine Quelle zu erfinden.
 function QuellenSchild() {
   return (
-    <span className="h-[22px] px-2 rounded-md bg-[#19191e] flex items-center gap-1.5 text-[10px] text-[#bebec3] shrink-0">
-      <Sparkles size={10} className="text-[#bebec3]" />
+    <span className="h-[26px] min-w-[86px] px-3 rounded-[9px] bg-[#171820] flex items-center justify-center gap-1.5 text-[10px] text-[#cfb6e7] shrink-0">
+      <Sparkles size={11} className="text-[#cfb6e7]" />
       ReelForge
     </span>
   );
@@ -532,9 +578,7 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
         <QuellenSchild />
       </span>
 
-      <span className="text-[10px] truncate" style={{ color: st.color }}>
-        {st.label}
-      </span>
+      <StatusPille status={row.status} />
 
       <span className="text-[10.5px] leading-[15px] text-[#a9aaae] min-w-0">
         <span className="block truncate">{NAECHSTER_SCHRITT[row.status]}</span>
