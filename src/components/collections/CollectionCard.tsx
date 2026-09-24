@@ -26,6 +26,7 @@ export function CollectionCard({
   onDelete,
   onStartNext,
   onArchive,
+  onArchiveVersion,
   onRestore,
 }: {
   family: Collection[];
@@ -39,6 +40,8 @@ export function CollectionCard({
   onDelete: () => void;
   onStartNext: () => void;
   onArchive?: () => void;
+  // Archiviert nur die Version, die die Karte gerade zeigt.
+  onArchiveVersion?: (id: string) => void;
   onRestore?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -222,8 +225,23 @@ export function CollectionCard({
                   }}
                   className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
                 >
-                  Archive{family.length > 1 ? " all versions" : ""}
+                  Archive collection
                 </button>
+                {/* Nur wenn es ueberhaupt eine zweite Version gibt — bei einer
+                    einzigen waere das dasselbe wie "Archive collection", nur
+                    unter anderem Namen. Gemeint ist immer die Version, die die
+                    Karte gerade zeigt. */}
+                {family.length > 1 && onArchiveVersion && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onArchiveVersion(current.id);
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                  >
+                    Archive this version
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setMenuOpen(false);

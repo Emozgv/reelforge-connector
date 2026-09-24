@@ -305,6 +305,7 @@ export function CollectionsPage({
                           if (result.id) setActiveCollectionId(result.id);
                         }}
                         onArchive={() => void collectionsStore.archiveCollectionFamily(current.id)}
+                        onArchiveVersion={(id) => void collectionsStore.archiveCollectionVersion(id)}
                         onRestore={() => void collectionsStore.restoreCollectionFamily(current.id)}
                       />
                     );
