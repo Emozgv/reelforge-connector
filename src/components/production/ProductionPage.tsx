@@ -64,7 +64,7 @@ function StatusPille({ status }: { status: SubmissionStatus }) {
   const st = STATUS_TEXT[status];
   return (
     <span
-      className="h-[24px] min-w-[86px] pl-2.5 pr-3 rounded-[12px] flex items-center gap-1.5 shrink-0"
+      className="h-[26px] min-w-[92px] pl-2.5 pr-3 rounded-[13px] flex items-center gap-1.5 shrink-0"
       style={{
         backgroundImage: `radial-gradient(circle at 50% 50%, ${st.von} 0%, ${st.bis} 100%)`,
         filter: `drop-shadow(0 0 8px ${st.schein})`,
@@ -180,7 +180,7 @@ export function ProductionPage({
         }
       `}</style>
 
-      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-10 pb-8">
         {/* Wortgleich der Sternenhimmel aus Collections: 160 hoch, 110
             Sterne, kein Verlauf darueber. Vorher 190 mit 130 Sternen und
             einem Verlauf aus dem Entwurf -- damit sah er anders aus als auf
@@ -195,12 +195,12 @@ export function ProductionPage({
             am Container und wanderte bei jeder Abstandsaenderung mit; jetzt
             haengt er an der Kopfzeile und bleibt oben, wo er hingehoert. */}
         <div className="relative flex items-start justify-between gap-6">
-          <div className="min-w-0 flex flex-col gap-2">
+          <div className="min-w-0 flex flex-col gap-2.5">
             <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
-            <h1 className="font-serif font-medium text-[34px] leading-[36px] tracking-[-0.6px] text-[#f2f0ef]">
+            <h1 className="font-serif font-medium text-[40px] leading-[42px] tracking-[-0.6px] text-[#f2f0ef]">
               Everything in motion.
             </h1>
-            <p className="text-[13px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
+            <p className="text-[14px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
               Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
             </p>
           </div>
@@ -223,13 +223,13 @@ export function ProductionPage({
 
         {/* Filterleiste — Figma 3373:636 */}
         <div
-          className="relative mt-5 h-[46px] p-[6px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
+          className="relative mt-7 h-[52px] p-[7px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
           style={{ background: "linear-gradient(180deg, #070707, #020202)" }}
         >
           <div className="relative shrink-0">
             <button
               onClick={() => setCreatorOpen((v) => !v)}
-              className="min-w-[132px] h-[32px] px-3 rounded-full border border-white/[0.08] flex items-center gap-2 text-[12.5px] text-neutral-200 hover:text-neutral-50 hover:border-[#D39448]/35 transition-colors duration-150"
+              className="min-w-[132px] h-[34px] px-3 rounded-full border border-white/[0.08] flex items-center gap-2 text-[12.5px] text-neutral-200 hover:text-neutral-50 hover:border-[#D39448]/35 transition-colors duration-150"
             >
               <span
                 className="w-[18px] h-[18px] rounded-full shrink-0 overflow-hidden"
@@ -290,14 +290,14 @@ export function ProductionPage({
           {/* Nur Optik: eine Quelle je Auftrag gibt es im Bestand nicht. */}
           <div
             title="Not available yet"
-            className="min-w-[142px] h-[32px] px-3 rounded-full border border-white/[0.08] flex items-center gap-2 text-[12.5px] text-neutral-200 shrink-0 cursor-default select-none opacity-70"
+            className="min-w-[142px] h-[34px] px-3 rounded-full border border-white/[0.08] flex items-center gap-2 text-[12.5px] text-neutral-200 shrink-0 cursor-default select-none opacity-70"
           >
             <Database size={13} className="text-[#9b9ca1] shrink-0" />
             All Sources
             <ChevronDown size={13} className="ml-auto shrink-0 text-[#939398]" />
           </div>
 
-          <div className="rf-chiprolle flex flex-nowrap items-center gap-[5px] min-w-0 overflow-x-auto h-[34px] px-[5px] rounded-[17px] bg-[#101113] border border-[#26282b]">
+          <div className="rf-chiprolle flex flex-nowrap items-center gap-[5px] min-w-0 overflow-x-auto h-[38px] px-[6px] rounded-[19px] bg-[#101113] border border-[#26282b]">
             <Chip label="All" count={gefiltert.length} aktiv={status === "all"} onClick={() => setStatus("all")} />
             {CHIPS.map((c) => (
               <Chip
@@ -322,13 +322,13 @@ export function ProductionPage({
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search productions..."
-              className="w-full h-[32px] pl-8 pr-3 rounded-lg surface-field text-[12px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+              className="w-full h-[34px] pl-8 pr-3 rounded-lg surface-field text-[12px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
             />
           </div>
         </div>
 
         {alleZeilen.length === 0 ? (
-          <div className={`relative mt-4 ${PANEL} py-12 text-center`} style={PANEL_STYLE}>
+          <div className={`relative mt-4 ${PANEL} py-16 text-center`} style={PANEL_STYLE}>
             <Clapperboard size={20} className="mx-auto text-neutral-700 mb-2" />
             <p className="text-[13px] text-neutral-400">Nothing sent to ReelForge yet.</p>
             <p className="text-[12px] text-neutral-600 mt-1">
@@ -371,7 +371,7 @@ export function ProductionPage({
               </Panel>
             </div>
 
-            <div className="w-[340px] shrink-0 flex flex-col gap-3">
+            <div className="w-[360px] shrink-0 flex flex-col gap-3">
               <Panel
                 icon={<CheckCircle2 size={15} className="text-[#31c98c]" />}
                 titel="Finished"
@@ -431,7 +431,7 @@ function Chip({
     <button
       onClick={onClick}
       className={[
-        "h-[28px] px-2 rounded-full flex items-center gap-1.5 text-[11px] whitespace-nowrap shrink-0 transition-colors duration-150",
+        "h-[30px] px-2 rounded-full flex items-center gap-1.5 text-[11px] whitespace-nowrap shrink-0 transition-colors duration-150",
         aktiv ? "border border-[#af7427] text-[#ffd18a]" : "text-[#c4c4c8] hover:bg-white/[0.04]",
       ].join(" ")}
       style={
@@ -474,8 +474,8 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${PANEL} pt-2.5 px-3 pb-3`} style={PANEL_STYLE}>
-      <div className="flex items-start gap-2.5 pb-3">
+    <div className={`${PANEL} px-3 py-3`} style={PANEL_STYLE}>
+      <div className="flex items-start gap-2.5 pb-3.5">
         <span className="shrink-0 leading-none pt-[1px]">{icon}</span>
         <div className="min-w-0">
           <h2 className="text-[13px] tracking-[2px] uppercase font-semibold" style={{ color: titelFarbe }}>
@@ -529,7 +529,7 @@ function CreatorZeile({ row, grosse }: { row: ProductionRow; grosse: number }) {
 // Wahrheit, statt eine Quelle zu erfinden.
 function QuellenSchild() {
   return (
-    <span className="h-[24px] min-w-[80px] px-3 rounded-[9px] bg-[#171820] flex items-center justify-center gap-1.5 text-[10px] text-[#cfb6e7] shrink-0">
+    <span className="h-[26px] min-w-[86px] px-3 rounded-[9px] bg-[#171820] flex items-center justify-center gap-1.5 text-[10px] text-[#cfb6e7] shrink-0">
       <Sparkles size={11} className="text-[#cfb6e7]" />
       ReelForge
     </span>
@@ -544,9 +544,9 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
       className={`relative text-left rounded-xl overflow-hidden transition-colors duration-150 ${ROW}`}
     >
       <span className="flex gap-2.5 p-2.5">
-        <Bild row={row} klasse="w-[50px] h-[52px] rounded-[6px]" />
+        <Bild row={row} klasse="w-[54px] h-[58px] rounded-[6px]" />
         <span className="flex-1 min-w-0 flex flex-col gap-1 pt-0.5">
-          <span className="text-[13px] font-medium text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
           <span className="text-[11px] text-[#8c8d91]">
             {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
           </span>
@@ -573,12 +573,12 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
   return (
     <button
       onClick={onOpen}
-      className="w-full h-[44px] px-2 grid items-center gap-2.5 bg-[#111114] border-b border-white/[0.06] last:border-b-0 text-left hover:bg-[#161613] transition-colors duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
+      className="w-full h-[48px] px-2 grid items-center gap-2.5 bg-[#111114] border-b border-white/[0.06] last:border-b-0 text-left hover:bg-[#161613] transition-colors duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
     >
       <span className="flex items-center gap-2.5 min-w-0">
-        <Bild row={row} klasse="w-[56px] h-[36px] rounded-[5px]" />
+        <Bild row={row} klasse="w-[62px] h-[40px] rounded-[5px]" />
         <span className="min-w-0 flex flex-col gap-0.5">
-          <span className="text-[13px] font-medium text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="text-[11px] text-[#8c8d91] shrink-0">{row.conceptCount} concepts</span>
             <span className="text-[#4f5054]">•</span>
@@ -609,9 +609,9 @@ function SeitenZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }
   return (
     <button
       onClick={onOpen}
-      className="h-[52px] flex items-center gap-2.5 border-b border-white/[0.06] last:border-b-0 text-left hover:bg-white/[0.03] transition-colors duration-150"
+      className="h-[58px] flex items-center gap-2.5 border-b border-white/[0.06] last:border-b-0 text-left hover:bg-white/[0.03] transition-colors duration-150"
     >
-      <Bild row={row} klasse="w-[36px] h-[40px] rounded-[5px]" />
+      <Bild row={row} klasse="w-[40px] h-[44px] rounded-[5px]" />
       <span className="flex-1 min-w-0 pl-[2px]">
         <span className="block text-[12px] font-medium text-[#efeff2] truncate">{row.collectionName}</span>
         <span className="block pt-0.5">
