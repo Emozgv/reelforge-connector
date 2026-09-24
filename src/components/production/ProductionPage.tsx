@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Ban, ChevronDown, Clapperboard, Database, Plus, Search, Sparkles } from "lucide-react";
+import { Activity, AlertTriangle, Ban, CheckCircle2, ChevronDown, Circle, Clapperboard, Database, Plus, Search, Sparkles } from "lucide-react";
 import type { Collection, Creator, SubmissionStatus } from "../../types";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
@@ -23,12 +23,19 @@ const ROW_BG = "linear-gradient(90deg, rgba(16,17,19,0.95) 0%, rgba(10,11,13,0.9
 
 // Die Beschriftungen des Entwurfs auf die Zustaende, die es wirklich gibt.
 // "Review" heisst im Bestand "Sent": abgeschickt, noch nicht angefasst.
-const CHIPS: { label: string; status: SubmissionStatus; dot: string }[] = [
-  { label: "Needs Attention", status: "Check Inbox", dot: "#ff4047" },
-  { label: "In Production", status: "In Progress", dot: "#258eff" },
-  { label: "Review", status: "Sent", dot: "#f2a633" },
-  { label: "Finished", status: "Finished", dot: "#31c98c" },
-  { label: "Cancelled", status: "Cancelled", dot: "#ff474d" },
+// Die Zeichen aus dem Bild: Warndreieck, zwei offene Kreise, Haken im
+// Kreis, durchgestrichener Kreis -- jeweils in ihrer Farbe.
+const CHIPS: {
+  label: string;
+  status: SubmissionStatus;
+  farbe: string;
+  Zeichen: typeof Circle;
+}[] = [
+  { label: "Needs Attention", status: "Check Inbox", farbe: "#ff4047", Zeichen: AlertTriangle },
+  { label: "In Production", status: "In Progress", farbe: "#258eff", Zeichen: Circle },
+  { label: "Review", status: "Sent", farbe: "#f2a633", Zeichen: Circle },
+  { label: "Finished", status: "Finished", farbe: "#31c98c", Zeichen: CheckCircle2 },
+  { label: "Cancelled", status: "Cancelled", farbe: "#ff474d", Zeichen: Ban },
 ];
 
 // Die Statuspille aus dem Entwurf (Figma 3373:818): Radialverlauf,
@@ -286,7 +293,8 @@ export function ProductionPage({
               <Chip
                 key={c.status}
                 label={c.label}
-                dot={c.dot}
+                Zeichen={c.Zeichen}
+                farbe={c.farbe}
                 count={zahl(c.status)}
                 aktiv={status === c.status}
                 onClick={() => setStatus(status === c.status ? "all" : c.status)}
@@ -337,7 +345,7 @@ export function ProductionPage({
               </Panel>
 
               <Panel
-                icon={<Sparkles size={13} className="text-[#f2a633]" />}
+                icon={<Activity size={13} strokeWidth={2.2} className="text-[#f2a633]" />}
                 titel="Production Pipeline"
                 titelFarbe="#f1a846"
                 unter="Active production items, from first cut to final delivery."
@@ -355,7 +363,7 @@ export function ProductionPage({
 
             <div className="w-[360px] shrink-0 flex flex-col gap-3">
               <Panel
-                icon={<span className="text-[13px] leading-none text-[#31c98c]">◉</span>}
+                icon={<CheckCircle2 size={13} className="text-[#31c98c]" />}
                 titel="Finished"
                 titelFarbe="#3fd096"
                 unter="Recently completed and delivered content."
@@ -398,13 +406,15 @@ function Chip({
   label,
   count,
   aktiv,
-  dot,
+  Zeichen,
+  farbe,
   onClick,
 }: {
   label: string;
   count: number;
   aktiv: boolean;
-  dot?: string;
+  Zeichen?: typeof Circle;
+  farbe?: string;
   onClick: () => void;
 }) {
   return (
@@ -423,12 +433,7 @@ function Chip({
           : undefined
       }
     >
-      {dot && (
-        <span
-          className="w-[8px] h-[8px] rounded-full border-2 shrink-0"
-          style={{ borderColor: dot }}
-        />
-      )}
+      {Zeichen && <Zeichen size={11} strokeWidth={2} className="shrink-0" style={{ color: farbe }} />}
       {label}
       <span className="h-[17px] min-w-[17px] px-1.5 rounded-full bg-[#292a2e] text-[10px] text-[#bfc0c4] flex items-center justify-center">
         {count}
