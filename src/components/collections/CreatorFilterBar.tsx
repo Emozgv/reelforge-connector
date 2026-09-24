@@ -1,12 +1,9 @@
 import type { Creator } from "../../types";
 
-// Figma node 3368:23 — the chip row above the creator sections.
-// Exact values, not approximated:
-//   chip        h44, radius 22, px17, gap 12, text 13px
-//   inactive    bg rgba(8,9,10,0.65), border #222326, text #bbb9bd
-//   active      border #d08d36, bg rgba(122,76,25,0.15), text #f1eee8,
-//               inset shadow 0 0 13px rgba(209,143,52,0.06)
-//   dot         19px round, creator colour, glow 0 0 10px <colour>
+// Dieselben Chips wie in ResearchAccountsPage (dort die Account-Auswahl):
+// h-9, rounded-full, aktiv in #D39448 auf 16 % Fuellung mit 60 % Rand,
+// inaktiv weisser 8-%-Rand mit Gold-Hover. Wortgleich uebernommen, damit
+// beide Seiten dieselbe Sprache sprechen.
 export function CreatorFilterBar({
   creators,
   activeId,
@@ -17,28 +14,19 @@ export function CreatorFilterBar({
   onSelect: (id: string | "all") => void;
 }) {
   const base =
-    "flex items-center h-[34px] px-[14px] rounded-full text-[12.5px] transition-colors duration-150 shrink-0";
+    "press-feedback group flex items-center gap-2 h-9 rounded-full border transition-all duration-150 shrink-0";
+  const tone = (active: boolean) =>
+    active
+      ? "border-[#D39448]/60 bg-[#D39448]/[0.16] text-[#D39448]"
+      : "border-white/[0.08] text-neutral-200 hover:text-neutral-50 hover:border-[#D39448]/35";
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <button
         onClick={() => onSelect("all")}
-        className={[
-          base,
-          activeId === "all"
-            ? "border border-[#d08d36] text-[#f1eee8]"
-            : "border border-[#222326] bg-[rgba(8,9,10,0.65)] text-[#bbb9bd] hover:border-[#32333a]",
-        ].join(" ")}
-        style={
-          activeId === "all"
-            ? {
-                background: "rgba(122,76,25,0.15)",
-                boxShadow: "inset 0 0 13px 0 rgba(209,143,52,0.06)",
-              }
-            : undefined
-        }
+        className={[base, "px-3", tone(activeId === "all")].join(" ")}
       >
-        All
+        <span className="text-[12.5px]">All</span>
       </button>
 
       {creators.map((c) => {
@@ -47,32 +35,17 @@ export function CreatorFilterBar({
           <button
             key={c.id}
             onClick={() => onSelect(c.id)}
-            className={[
-              base,
-              "gap-2",
-              active
-                ? "border border-[#d08d36] text-[#f1eee8]"
-                : "border border-[#222326] bg-[rgba(8,9,10,0.65)] text-[#bbb9bd] hover:border-[#32333a]",
-            ].join(" ")}
-            style={
-              active
-                ? { background: "rgba(122,76,25,0.15)", boxShadow: "inset 0 0 13px 0 rgba(209,143,52,0.06)" }
-                : undefined
-            }
+            className={[base, "pl-1.5 pr-3", tone(active)].join(" ")}
           >
             <span
-              className="w-[15px] h-[15px] rounded-full shrink-0 overflow-hidden"
-              style={
-                c.profileImage
-                  ? undefined
-                  : { background: c.avatarColor, boxShadow: `0 0 10px 0 ${c.avatarColor}` }
-              }
+              className="w-[22px] h-[22px] rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
+              style={c.profileImage ? undefined : { background: c.avatarColor }}
             >
               {c.profileImage && (
                 <img src={c.profileImage} alt={c.name} className="w-full h-full object-cover" />
               )}
             </span>
-            {c.name}
+            <span className="text-[12.5px]">{c.name}</span>
           </button>
         );
       })}

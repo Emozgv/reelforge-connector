@@ -4,7 +4,7 @@ import { formatRelativeTime } from "../../lib/relativeTime";
 import { isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
-import { effectiveCollectionStatus } from "./CollectionRow";
+import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "./CollectionRow";
 
 // Figma's Collections Overview draws each Collection as a card, not as a row
 // (node 3368:69 and its siblings). CollectionRow stays exactly as it is —
@@ -13,21 +13,6 @@ import { effectiveCollectionStatus } from "./CollectionRow";
 // effectiveCollectionStatus from it, and those pages are out of scope here.
 // This card reuses the same actions, the same version menu and the same
 // status derivation; only the presentation is new.
-
-// Exact values read from Figma, not approximated:
-// card       bg linear-gradient(114.75deg, #15171a 0%, #101215 100%), border #25262a, r10, p11, h126
-// title      14px semibold #f2f0f1   ·  concepts 12px #85858b
-// counts     11px #76777c            ·  versions pill bg #1a1b20 / border #24262b / r5 / 11px #898a90
-// "···"      16px #c2c3c4 tracking 1px  ·  "→" 23px extralight #e4e4e5
-// Draft      bg #1a1d21 / 11px #aaa9ae ·  Sent bg #10242c / 11px #1b8dba
-// edited     11px #77787d
-const STATUS_BADGE: Record<string, string> = {
-  Draft: "bg-[#1a1d21] text-[#aaa9ae]",
-  Sent: "bg-[#10242c] text-[#1b8dba]",
-  "In Progress": "bg-[#2a2113] text-[#d0a13f]",
-  Completed: "bg-[#12241a] text-[#4fb47d]",
-  Cancelled: "bg-[#1a1d21] text-[#77787d]",
-};
 
 export function CollectionCard({
   family,
@@ -79,7 +64,7 @@ export function CollectionCard({
   }
 
   const title = (
-    <h3 className="text-[13px] font-semibold text-[#f2f0f1] truncate">{current.name}</h3>
+    <h3 className="text-[13px] font-medium text-neutral-50 truncate">{current.name}</h3>
   );
 
   return (
@@ -87,8 +72,7 @@ export function CollectionCard({
       onClick={() => {
         if (!renaming) onOpen();
       }}
-      className="group relative flex h-[104px] items-stretch p-2.5 rounded-[10px] border border-[#25262a] hover:border-[#32333a] transition-colors duration-150 cursor-pointer"
-      style={{ backgroundImage: "linear-gradient(114.75deg, rgb(21,23,26) 0%, rgb(16,18,21) 100%)" }}
+      className="press-feedback group relative flex h-[104px] items-stretch p-2.5 rounded-xl border border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613] transition-colors duration-150 cursor-pointer"
     >
       <div className="w-[54px] shrink-0 mr-3 rounded-[6px] overflow-hidden bg-black/30">
         {cover?.thumbnailUrl && !thumbFailed ? (
@@ -140,10 +124,10 @@ export function CollectionCard({
           )}
         </div>
 
-        <p className="mt-1 text-[11.5px] text-[#85858b]">
+        <p className="mt-1 text-[11.5px] text-neutral-400">
           {total} concept{total === 1 ? "" : "s"}
         </p>
-        <p className="mt-1 text-[10.5px] text-[#76777c]">
+        <p className="mt-1 text-[10.5px] text-neutral-600">
           {used} used <span className="px-1.5">•</span> {available} available
         </p>
 
@@ -151,33 +135,33 @@ export function CollectionCard({
           {creator && (
             <span
               title={creator.name}
-              className="w-[11px] h-[11px] rounded-full shrink-0"
-              style={{ background: creator.avatarColor, boxShadow: `0 0 10px 0 ${creator.avatarColor}` }}
+              className="w-2 h-2 rounded-full shrink-0 ring-1 ring-white/15"
+              style={{ background: creator.avatarColor }}
             />
           )}
           <span
             className={[
-              "shrink-0 px-1.5 py-[2px] rounded-[4px] text-[10px] leading-[15px] whitespace-nowrap",
-              STATUS_BADGE[status] ?? STATUS_BADGE.Draft,
+              "shrink-0 px-1.5 py-[2px] rounded-[4px] text-[10px] font-medium leading-[15px] whitespace-nowrap",
+              COLLECTION_STATUS_STYLES[status],
             ].join(" ")}
           >
             {status}
           </span>
-          <span className="ml-auto shrink-0 text-[10.5px] text-[#77787d] whitespace-nowrap">
+          <span className="ml-auto shrink-0 text-[10.5px] text-neutral-600 whitespace-nowrap">
             Edited {formatRelativeTime(current.updatedAt).replace(/^Just now$/, "just now")}
           </span>
         </div>
       </div>
 
       {family.length > 1 && (
-        <div className="absolute right-[36px] top-2.5 px-2 py-[3px] rounded-[5px] bg-[#1a1b20] border border-[#24262b] text-[10px] text-[#898a90] whitespace-nowrap">
+        <div className="absolute right-[36px] top-2.5 px-2 py-[3px] rounded-md surface-field text-[10px] text-neutral-500 whitespace-nowrap">
           {family.length} versions
         </div>
       )}
 
       <span
         aria-hidden
-        className="absolute right-[16px] top-[44px] text-[18px] font-extralight leading-none text-[#e4e4e5] opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+        className="absolute right-[16px] top-[44px] text-[18px] font-extralight leading-none text-[#D39448] opacity-0 group-hover:opacity-100 transition-opacity duration-150"
       >
         →
       </span>
@@ -187,7 +171,7 @@ export function CollectionCard({
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Collection actions"
-            className="w-5 h-4 flex items-center justify-center text-[14px] tracking-[1px] leading-[8px] text-[#c2c3c4] hover:text-neutral-100 transition-colors duration-150"
+            className="w-5 h-4 flex items-center justify-center text-[14px] tracking-[1px] leading-[8px] text-neutral-500 hover:text-neutral-100 transition-colors duration-150"
           >
             ···
           </button>
