@@ -188,10 +188,10 @@ export function ProductionPage({
         {/* Kopf — Figma 3373:625 */}
         <div className="relative flex flex-col gap-1.5">
           <span className="block text-[11px] tracking-[0.22em] uppercase text-[#eaa23a] font-medium">Production</span>
-          <h1 className="font-serif font-medium text-[34px] leading-[38px] tracking-[-0.5px] text-[#f2f0ef]">
+          <h1 className="font-serif font-medium text-[40px] leading-[42px] tracking-[-0.6px] text-[#f2f0ef]">
             Everything in motion.
           </h1>
-          <p className="text-[13px] tracking-[0.1px] text-[#bdbdc1] max-w-xl">
+          <p className="text-[14px] tracking-[0.1px] text-[#bdbdc1] max-w-2xl">
             Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
           </p>
 
@@ -329,7 +329,7 @@ export function ProductionPage({
           <div className="relative mt-4 flex items-start gap-3">
             <div className="flex-1 min-w-0 flex flex-col gap-3">
               <Panel
-                icon={<AlertTriangle size={13} className="text-[#f2a633]" />}
+                icon={<AlertTriangle size={15} className="text-[#f2a633]" />}
                 titel="Needs Attention"
                 titelFarbe="#f1a846"
                 unter="Items that need your input to keep production moving."
@@ -345,7 +345,7 @@ export function ProductionPage({
               </Panel>
 
               <Panel
-                icon={<Activity size={13} strokeWidth={2.2} className="text-[#f2a633]" />}
+                icon={<Activity size={15} strokeWidth={2.2} className="text-[#f2a633]" />}
                 titel="Production Pipeline"
                 titelFarbe="#f1a846"
                 unter="Active production items, from first cut to final delivery."
@@ -363,7 +363,7 @@ export function ProductionPage({
 
             <div className="w-[360px] shrink-0 flex flex-col gap-3">
               <Panel
-                icon={<CheckCircle2 size={13} className="text-[#31c98c]" />}
+                icon={<CheckCircle2 size={15} className="text-[#31c98c]" />}
                 titel="Finished"
                 titelFarbe="#3fd096"
                 unter="Recently completed and delivered content."
@@ -379,7 +379,7 @@ export function ProductionPage({
               </Panel>
 
               <Panel
-                icon={<Ban size={13} className="text-[#ff474d]" />}
+                icon={<Ban size={15} className="text-[#ff474d]" />}
                 titel="Cancelled"
                 titelFarbe="#ff5358"
                 unter="Recently cancelled or archived items."
@@ -421,7 +421,7 @@ function Chip({
     <button
       onClick={onClick}
       className={[
-        "h-[30px] px-2 rounded-full flex items-center gap-1.5 text-[11.5px] whitespace-nowrap shrink-0 transition-colors duration-150",
+        "h-[30px] px-2 rounded-full flex items-center gap-1.5 text-[11px] whitespace-nowrap shrink-0 transition-colors duration-150",
         aktiv ? "border border-[#af7427] text-[#ffd18a]" : "text-[#c4c4c8] hover:bg-white/[0.04]",
       ].join(" ")}
       style={
@@ -465,10 +465,10 @@ function Panel({
 }) {
   return (
     <div className={`${PANEL} px-3 py-3`} style={{ backgroundImage: PANEL_BG }}>
-      <div className="flex items-start gap-2.5 pb-2.5">
+      <div className="flex items-start gap-2.5 pb-3.5">
         <span className="shrink-0 leading-none pt-[1px]">{icon}</span>
         <div className="min-w-0">
-          <h2 className="text-[11px] tracking-[0.18em] uppercase font-medium" style={{ color: titelFarbe }}>
+          <h2 className="text-[13px] tracking-[2px] uppercase font-semibold" style={{ color: titelFarbe }}>
             {titel}
           </h2>
           <p className="mt-0.5 text-[11px] text-[#818287]">{unter}</p>
@@ -537,8 +537,8 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
       <span className="flex gap-2.5 p-2.5">
         <Bild row={row} klasse="w-[54px] h-[58px] rounded-[6px]" />
         <span className="flex-1 min-w-0 flex flex-col gap-1 pt-0.5">
-          <span className="text-[13px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
-          <span className="text-[11.5px] text-[#8c8d91]">
+          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="text-[11px] text-[#8c8d91]">
             {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
           </span>
           <span className="flex items-center gap-2 pt-0.5 min-w-0">
@@ -570,9 +570,9 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
       <span className="flex items-center gap-2.5 min-w-0">
         <Bild row={row} klasse="w-[62px] h-[40px] rounded-[5px]" />
         <span className="min-w-0 flex flex-col gap-0.5">
-          <span className="text-[13px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[10.5px] text-[#8c8d91] shrink-0">{row.conceptCount} concepts</span>
+            <span className="text-[11px] text-[#8c8d91] shrink-0">{row.conceptCount} concepts</span>
             <span className="text-[#4f5054]">•</span>
             <CreatorZeile row={row} grosse={16} />
           </span>
@@ -585,7 +585,7 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
 
       <StatusPille status={row.status} />
 
-      <span className="text-[10.5px] leading-[15px] text-[#a9aaae] min-w-0">
+      <span className="text-[11px] leading-[17px] text-[#a9aaae] min-w-0">
         <span className="block truncate">{NAECHSTER_SCHRITT[row.status]}</span>
         <span className="block truncate">{row.eta ? `ETA ${row.eta}` : row.sentAt}</span>
       </span>
@@ -605,11 +605,11 @@ function SeitenZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }
     >
       <Bild row={row} klasse="w-[40px] h-[44px] rounded-[5px]" />
       <span className="flex-1 min-w-0 pl-[2px]">
-        <span className="block text-[12.5px] text-[#efeff2] truncate">{row.collectionName}</span>
+        <span className="block text-[12px] font-medium text-[#efeff2] truncate">{row.collectionName}</span>
         <span className="block pt-0.5">
           <CreatorZeile row={row} grosse={19} />
         </span>
-        <span className="block text-[10.5px] text-[#8c8d91]">
+        <span className="block text-[11px] text-[#8c8d91]">
           {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
         </span>
       </span>
