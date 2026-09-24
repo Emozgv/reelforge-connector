@@ -181,33 +181,36 @@ export function ProductionPage({
       `}</style>
 
       <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-10 pb-8">
-        {/* Kopfband: im Entwurf 190 hoch mit Verlauf nach #030404 (3373:624). */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[190px] overflow-hidden">
-          <div className="dashboard-starfield-boost rf-production-starfield absolute inset-0">
-            <StarfieldBackground starCount={130} />
-          </div>
-          <div
-            className="absolute inset-0"
-            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, #020203 96%)" }}
-          />
+        {/* Wortgleich der Sternenhimmel aus Collections: 160 hoch, 110
+            Sterne, kein Verlauf darueber. Vorher 190 mit 130 Sternen und
+            einem Verlauf aus dem Entwurf -- damit sah er anders aus als auf
+            den anderen Seiten. */}
+        <div className="dashboard-starfield-boost rf-production-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
+          <StarfieldBackground starCount={110} />
         </div>
 
         {/* Kopf — Figma 3373:625 */}
-        <div className="relative flex flex-col gap-2.5">
-          <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
-          <h1 className="font-serif font-medium text-[40px] leading-[42px] tracking-[-0.6px] text-[#f2f0ef]">
-            Everything in motion.
-          </h1>
-          <p className="text-[14px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
-            Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
-          </p>
+        {/* Kopf: Text links, Knopf rechts -- nebeneinander in einer Zeile
+            statt frei am Seitenrand haengend. Vorher sass der Knopf absolut
+            am Container und wanderte bei jeder Abstandsaenderung mit; jetzt
+            haengt er an der Kopfzeile und bleibt oben, wo er hingehoert. */}
+        <div className="relative flex items-start justify-between gap-6">
+          <div className="min-w-0 flex flex-col gap-2.5">
+            <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
+            <h1 className="font-serif font-medium text-[40px] leading-[42px] tracking-[-0.6px] text-[#f2f0ef]">
+              Everything in motion.
+            </h1>
+            <p className="text-[14px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
+              Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
+            </p>
+          </div>
 
           {/* Nur Optik: einen neuen Auftrag startet man heute aus einer
               Collection heraus ("Send to ReelForge"). Deshalb keine erfundene
               Handlung dahinter. */}
           <div
             title="Productions are started from a Collection"
-            className="absolute right-0 top-[30px] h-9 px-4 rounded-lg flex items-center justify-center gap-2 cursor-default select-none"
+            className="shrink-0 h-9 px-4 rounded-lg flex items-center justify-center gap-2 cursor-default select-none"
             style={{
               backgroundImage: "linear-gradient(90deg, #D39448, #EAC088)",
               boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)",
