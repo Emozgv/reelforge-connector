@@ -251,6 +251,10 @@ function App() {
                 onCloseCollection={closeCollectionWorkspace}
                 backLabel={PAGE_LABELS[collectionOrigin]}
                 isSydOwner={isSydOwner}
+                onOpenCreator={(creatorId) => {
+                  setOpenCreatorId(creatorId);
+                  setPage("creators");
+                }}
               />
             )}
             {page === "creators" && (
