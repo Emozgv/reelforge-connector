@@ -1,13 +1,53 @@
-import { Ban, Clapperboard, Inbox, PackageCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, Ban, ChevronDown, Clapperboard, Database, Plus, Search, Sparkles } from "lucide-react";
 import type { Collection, Creator, SubmissionStatus } from "../../types";
-import { DriveGlyph } from "../collections/DriveGlyph";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
+import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
-const SUBMISSION_STATUS_STYLES: Record<SubmissionStatus, string> = {
-  Sent: "text-neutral-400 bg-white/[0.05]",
-  "In Progress": "text-amber-300/80 bg-amber-400/10",
-  "Check Inbox": "text-[#D39448] bg-[#D39448]/20",
-  Cancelled: "text-neutral-500 bg-white/[0.04]",
-  Finished: "text-emerald-300/80 bg-emerald-400/10",
+// Alle Zahlen und Farben hier stammen aus dem Figma-Knoten 3373:623 (dem
+// Durchlauf, bei dem die Umwandlung echte Ebenen erzeugt hat) -- nicht
+// geschaetzt. Wo der Entwurf und die App auseinandergehen, steht es am
+// jeweiligen Ort dabei.
+//
+// Zwei bewusste Abweichungen, beide aus demselben Grund wie in Collections:
+//   - Schriften: der Entwurf nutzt Playfair Display und DM Sans, die App hat
+//     Fraunces und Inter. Global tauschen haette jede andere Seite veraendert.
+//   - Der Sternenhimmel im Kopf kommt aus der App (Research Accounts), im
+//     Entwurf ist er ein eingebettetes Bild.
+
+const PANEL_BG = "linear-gradient(144.8deg, rgba(13,14,15,0.96) 0%, rgba(6,7,8,0.96) 100%)";
+const PANEL = "rounded-[13px] border border-[#26221c]";
+
+// Zeilenverlauf der Pipeline (Figma 3373:796).
+const ROW_BG = "linear-gradient(90deg, rgba(16,17,19,0.95) 0%, rgba(10,11,13,0.95) 100%)";
+
+// Die Beschriftungen des Entwurfs auf die Zustaende, die es wirklich gibt.
+// "Review" heisst im Bestand "Sent": abgeschickt, noch nicht angefasst.
+const CHIPS: { label: string; status: SubmissionStatus; dot: string }[] = [
+  { label: "Needs Attention", status: "Check Inbox", dot: "#ff4047" },
+  { label: "In Production", status: "In Progress", dot: "#258eff" },
+  { label: "Review", status: "Sent", dot: "#f2a633" },
+  { label: "Finished", status: "Finished", dot: "#31c98c" },
+  { label: "Cancelled", status: "Cancelled", dot: "#ff474d" },
+];
+
+const STATUS_TEXT: Record<SubmissionStatus, { label: string; color: string }> = {
+  "Check Inbox": { label: "Needs Attention", color: "#ff6a6f" },
+  "In Progress": { label: "In Production", color: "#5eb1ff" },
+  Sent: { label: "Review", color: "#f2b552" },
+  Finished: { label: "Delivered", color: "#3fd096" },
+  Cancelled: { label: "Cancelled", color: "#ff5358" },
+};
+
+// Der naechste Schritt ist im Bestand nicht gespeichert. Statt einen zu
+// erfinden, wird er aus dem Zustand abgeleitet -- das ist wahr und sagt
+// dasselbe wie der Entwurf.
+const NAECHSTER_SCHRITT: Record<SubmissionStatus, string> = {
+  "Check Inbox": "Next: Your reply",
+  "In Progress": "Next: In production",
+  Sent: "Next: Pickup by ReelForge",
+  Finished: "Delivered",
+  Cancelled: "Cancelled",
 };
 
 interface ProductionRow {
@@ -21,6 +61,8 @@ interface ProductionRow {
   collectionId: string;
   collectionName: string;
   creator?: Creator;
+  thumbnailUrl?: string;
+  thumbGradient?: string;
 }
 
 export function ProductionPage({
@@ -32,85 +74,280 @@ export function ProductionPage({
   collections: Collection[];
   onOpenCollection: (collectionId: string) => void;
 }) {
-  const rows: ProductionRow[] = collections
-    .flatMap((c) =>
-      c.submissions.map((s) => ({
-        submissionId: s.id,
-        index: s.index,
-        status: s.status,
-        sentAt: s.sentAt,
-        eta: s.eta,
-        conceptCount: s.conceptIds.length,
-        deliveryUrl: s.deliveryUrl,
-        collectionId: c.id,
-        collectionName: c.name,
-        creator: creators.find((cr) => cr.id === c.creatorId),
-      }))
-    )
-    .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+  const [creatorId, setCreatorId] = useState<string | "all">("all");
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const [status, setStatus] = useState<SubmissionStatus | "all">("all");
+  const [suche, setSuche] = useState("");
 
-  const active = rows.filter((r) => r.status !== "Finished" && r.status !== "Cancelled");
-  const finished = rows.filter((r) => r.status === "Finished");
-  const cancelled = rows.filter((r) => r.status === "Cancelled");
+  const alleZeilen: ProductionRow[] = useMemo(
+    () =>
+      collections
+        .flatMap((c) =>
+          c.submissions.map((s) => {
+            const cover = c.concepts[0]?.video;
+            return {
+              submissionId: s.id,
+              index: s.index,
+              status: s.status,
+              sentAt: s.sentAt,
+              eta: s.eta,
+              conceptCount: s.conceptIds.length,
+              deliveryUrl: s.deliveryUrl,
+              collectionId: c.id,
+              collectionName: c.name,
+              creator: creators.find((cr) => cr.id === c.creatorId),
+              thumbnailUrl: cover?.thumbnailUrl,
+              thumbGradient: cover?.thumbGradient,
+            };
+          })
+        )
+        .sort((a, b) => b.sentAt.localeCompare(a.sentAt)),
+    [collections, creators]
+  );
+
+  const gefiltert = useMemo(() => {
+    const begriff = suche.trim().toLowerCase();
+    return alleZeilen.filter((r) => {
+      if (creatorId !== "all" && r.creator?.id !== creatorId) return false;
+      if (!begriff) return true;
+      return (
+        r.collectionName.toLowerCase().includes(begriff) ||
+        (r.creator?.name ?? "").toLowerCase().includes(begriff)
+      );
+    });
+  }, [alleZeilen, creatorId, suche]);
+
+  const zahl = (s: SubmissionStatus) => gefiltert.filter((r) => r.status === s).length;
+
+  const sichtbar = status === "all" ? gefiltert : gefiltert.filter((r) => r.status === status);
+  const aufmerksam = sichtbar.filter((r) => r.status === "Check Inbox");
+  const laufend = sichtbar.filter((r) => r.status === "In Progress" || r.status === "Sent");
+  const fertig = sichtbar.filter((r) => r.status === "Finished");
+  const abgebrochen = sichtbar.filter((r) => r.status === "Cancelled");
+
+  const aktiverCreator = creators.find((c) => c.id === creatorId);
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-[1080px] mx-auto px-8 pt-6 pb-8">
-        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#D39448]/75 font-medium">
-          Production
-        </span>
-        <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">
-          Everything currently in the pipeline
-        </h1>
-        <p className="mt-1 text-[12.5px] text-neutral-500 max-w-lg">
-          Every submission across every creator, in one place — so you never have to ask "how far are you?"
-        </p>
+    <div className="relative h-full overflow-y-auto" style={{ background: "#030404" }}>
+      <style>{`
+        .rf-production-starfield .star-twinkle { opacity: 0.6 !important; box-shadow: 0 0 4px rgba(255,250,240,0.45) !important; transform: scale(0.85); }
+        @media (prefers-reduced-motion: no-preference) {
+          .rf-production-starfield .star-twinkle { animation-name: star-twinkle-boosted !important; }
+        }
+      `}</style>
 
-        {rows.length === 0 && (
-          <div className="mt-6 rounded-xl surface-panel py-16 text-center">
+      <div className="relative pt-[29px] pl-[26px] pr-[22px] pb-[16px]">
+        {/* Kopfband: im Entwurf 190 hoch mit Verlauf nach #030404 (3373:624). */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[190px] overflow-hidden">
+          <div className="dashboard-starfield-boost rf-production-starfield absolute inset-0">
+            <StarfieldBackground starCount={130} />
+          </div>
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, #030404 96%)" }}
+          />
+        </div>
+
+        {/* Kopf — Figma 3373:625 */}
+        <div className="relative h-[130px] px-[10px] py-[3px] flex flex-col gap-[10px]">
+          <span className="block text-[11px] tracking-[2.3px] uppercase text-[#eaa23a]">Production</span>
+          <h1 className="font-serif font-medium text-[48px] leading-[48px] tracking-[-0.7px] text-[#f2f0ef]">
+            Everything in motion.
+          </h1>
+          <p className="pt-px text-[16px] tracking-[0.1px] text-[#bdbdc1]">
+            Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
+          </p>
+
+          {/* Nur Optik: einen neuen Auftrag startet man heute aus einer
+              Collection heraus ("Send to ReelForge"). Deshalb keine erfundene
+              Handlung dahinter. */}
+          <div
+            title="Productions are started from a Collection"
+            className="absolute right-[3px] top-[54px] w-[175px] h-[43px] rounded-[11px] border border-[#e9a03b] flex items-center justify-center gap-[12px] cursor-default select-none"
+            style={{
+              backgroundImage: "linear-gradient(to bottom, #f6b654, #eaa03c)",
+              filter: "drop-shadow(0px 8px 12.5px rgba(231,154,47,0.16))",
+            }}
+          >
+            <Plus size={16} strokeWidth={2.4} className="text-[#17100a]" />
+            <span className="text-[13.3px] font-semibold text-[#17100a]">New Production</span>
+          </div>
+        </div>
+
+        {/* Filterleiste — Figma 3373:636 */}
+        <div
+          className="relative mt-[3px] h-[67px] p-[9px] rounded-[13px] border border-[#27221c] flex items-center gap-[9px]"
+          style={{ background: "rgba(9,9,10,0.88)" }}
+        >
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setCreatorOpen((v) => !v)}
+              className="min-w-[157px] h-[43px] px-[14px] rounded-[22px] bg-[#121315] border border-[#27292c] flex items-center gap-[10px] text-[13px] text-[#dddde0] hover:border-[#3a3c40] transition-colors duration-150"
+            >
+              <span
+                className="w-[24px] h-[24px] rounded-[12px] shrink-0 overflow-hidden"
+                style={
+                  aktiverCreator
+                    ? aktiverCreator.profileImage
+                      ? undefined
+                      : { background: aktiverCreator.avatarColor, boxShadow: `0 0 8px 0 ${aktiverCreator.avatarColor}` }
+                    : {
+                        backgroundImage: "linear-gradient(135deg, rgb(199,101,237) 0%, rgb(214,144,250) 100%)",
+                        boxShadow: "0 0 8px 0 #a94ee8",
+                      }
+                }
+              >
+                {aktiverCreator?.profileImage && (
+                  <img src={aktiverCreator.profileImage} alt="" className="w-full h-full object-cover" />
+                )}
+              </span>
+              <span className="truncate">{aktiverCreator?.name ?? "All Creators"}</span>
+              <ChevronDown size={13} className="ml-auto shrink-0 text-[#939398]" />
+            </button>
+            {creatorOpen && (
+              <div
+                onMouseLeave={() => setCreatorOpen(false)}
+                className="absolute left-0 top-[48px] z-30 w-[210px] rounded-lg surface-panel-strong p-1 animate-fade-in max-h-72 overflow-y-auto"
+              >
+                <button
+                  onClick={() => {
+                    setCreatorId("all");
+                    setCreatorOpen(false);
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                >
+                  All Creators
+                </button>
+                {creators.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      setCreatorId(c.id);
+                      setCreatorOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                  >
+                    <span
+                      className="w-3.5 h-3.5 rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
+                      style={c.profileImage ? undefined : { background: c.avatarColor }}
+                    >
+                      {c.profileImage && <img src={c.profileImage} alt="" className="w-full h-full object-cover" />}
+                    </span>
+                    <span className="truncate">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Nur Optik: eine Quelle je Auftrag gibt es im Bestand nicht. */}
+          <div
+            title="Not available yet"
+            className="min-w-[176px] h-[43px] px-[14px] rounded-[22px] bg-[#121315] border border-[#27292c] flex items-center gap-[10px] text-[13px] text-[#dddde0] shrink-0 cursor-default select-none opacity-70"
+          >
+            <Database size={15} className="text-[#9b9ca1] shrink-0" />
+            All Sources
+            <ChevronDown size={13} className="ml-auto shrink-0 text-[#939398]" />
+          </div>
+
+          <div className="flex items-center gap-[2px] flex-wrap min-w-0">
+            <Chip label="All" count={gefiltert.length} aktiv={status === "all"} onClick={() => setStatus("all")} />
+            {CHIPS.map((c) => (
+              <Chip
+                key={c.status}
+                label={c.label}
+                dot={c.dot}
+                count={zahl(c.status)}
+                aktiv={status === c.status}
+                onClick={() => setStatus(status === c.status ? "all" : c.status)}
+              />
+            ))}
+          </div>
+
+          <div className="ml-auto relative shrink-0">
+            <Search size={14} className="absolute left-[14px] top-1/2 -translate-y-1/2 text-[#a8a9ad]" />
+            <input
+              value={suche}
+              onChange={(e) => setSuche(e.target.value)}
+              placeholder="Search productions..."
+              className="w-[270px] h-[43px] pl-[38px] pr-[14px] rounded-[11px] bg-[#141518] border border-[#303236] text-[12px] text-neutral-100 placeholder:text-[#84858a] outline-none focus-glow"
+            />
+          </div>
+        </div>
+
+        {alleZeilen.length === 0 ? (
+          <div className={`relative mt-[21px] ${PANEL} py-16 text-center`} style={{ backgroundImage: PANEL_BG }}>
             <Clapperboard size={20} className="mx-auto text-neutral-700 mb-2" />
             <p className="text-[13px] text-neutral-400">Nothing sent to ReelForge yet.</p>
             <p className="text-[12px] text-neutral-600 mt-1">
               Send a collection from its workspace and it'll show up here.
             </p>
           </div>
-        )}
+        ) : (
+          <div className="relative mt-[21px] flex items-start gap-[17px]">
+            <div className="flex-1 min-w-0 flex flex-col gap-[15px]">
+              <Panel
+                icon={<AlertTriangle size={17} className="text-[#f2a633]" />}
+                titel="Needs Attention"
+                titelFarbe="#f1a846"
+                unter="Items that need your input to keep production moving."
+                leer="Nothing is waiting on you right now."
+                anzahl={aufmerksam.length}
+              >
+                <div className="grid gap-[11px] [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
+                  {aufmerksam.map((r) => (
+                    <AufmerksamKarte key={r.submissionId} row={r} onOpen={() => onOpenCollection(r.collectionId)} />
+                  ))}
+                </div>
+              </Panel>
 
-        {active.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-[13px] font-medium text-neutral-200 mb-2">In progress</h2>
-            <div className="rounded-xl surface-panel divide-y divide-white/[0.05] [&>*:first-child]:rounded-t-xl [&>*:last-child]:rounded-b-xl">
-              {active.map((r) => (
-                <ProductionRowItem key={r.submissionId} row={r} onOpenCollection={onOpenCollection} />
-              ))}
+              <Panel
+                icon={<Sparkles size={16} className="text-[#f2a633]" />}
+                titel="Production Pipeline"
+                titelFarbe="#f1a846"
+                unter="Active production items, from first cut to final delivery."
+                rechts={<span className="text-[11px] text-[#aaaab0]">Sort: Updated (newest)</span>}
+                leer="Nothing in production right now."
+                anzahl={laufend.length}
+              >
+                <div className="rounded-[8px] border border-[#202226] overflow-hidden">
+                  {laufend.map((r) => (
+                    <PipelineZeile key={r.submissionId} row={r} onOpen={() => onOpenCollection(r.collectionId)} />
+                  ))}
+                </div>
+              </Panel>
             </div>
-          </div>
-        )}
 
-        {finished.length > 0 && (
-          <div className="mt-7">
-            <h2 className="text-[13px] font-medium text-neutral-200 mb-2 flex items-center gap-1.5">
-              <PackageCheck size={13} className="text-[#D39448]" />
-              Finished
-            </h2>
-            <div className="rounded-xl surface-panel divide-y divide-white/[0.05] [&>*:first-child]:rounded-t-xl [&>*:last-child]:rounded-b-xl">
-              {finished.map((r) => (
-                <ProductionRowItem key={r.submissionId} row={r} onOpenCollection={onOpenCollection} />
-              ))}
-            </div>
-          </div>
-        )}
+            <div className="w-[380px] shrink-0 flex flex-col gap-[15px]">
+              <Panel
+                icon={<span className="text-[17px] leading-none text-[#31c98c]">◉</span>}
+                titel="Finished"
+                titelFarbe="#3fd096"
+                unter="Recently completed and delivered content."
+                leer="Nothing delivered yet."
+                anzahl={fertig.length}
+              >
+                <div className="flex flex-col">
+                  {fertig.map((r) => (
+                    <SeitenZeile key={r.submissionId} row={r} onOpen={() => onOpenCollection(r.collectionId)} />
+                  ))}
+                </div>
+              </Panel>
 
-        {cancelled.length > 0 && (
-          <div className="mt-7">
-            <h2 className="text-[13px] font-medium text-neutral-500 mb-2 flex items-center gap-1.5">
-              <Ban size={13} className="text-neutral-500" />
-              Cancelled
-            </h2>
-            <div className="rounded-xl surface-panel divide-y divide-white/[0.05] [&>*:first-child]:rounded-t-xl [&>*:last-child]:rounded-b-xl">
-              {cancelled.map((r) => (
-                <ProductionRowItem key={r.submissionId} row={r} onOpenCollection={onOpenCollection} />
-              ))}
+              <Panel
+                icon={<Ban size={16} className="text-[#ff474d]" />}
+                titel="Cancelled"
+                titelFarbe="#ff5358"
+                unter="Recently cancelled or archived items."
+                leer="Nothing cancelled."
+                anzahl={abgebrochen.length}
+              >
+                <div className="flex flex-col">
+                  {abgebrochen.map((r) => (
+                    <SeitenZeile key={r.submissionId} row={r} onOpen={() => onOpenCollection(r.collectionId)} />
+                  ))}
+                </div>
+              </Panel>
             </div>
           </div>
         )}
@@ -119,61 +356,220 @@ export function ProductionPage({
   );
 }
 
-function ProductionRowItem({
-  row,
-  onOpenCollection,
+// Figma 3373:646 ff. — h 35, px 11, r 18, Zahl in einer Pille #292a2e.
+function Chip({
+  label,
+  count,
+  aktiv,
+  dot,
+  onClick,
 }: {
-  row: ProductionRow;
-  onOpenCollection: (collectionId: string) => void;
+  label: string;
+  count: number;
+  aktiv: boolean;
+  dot?: string;
+  onClick: () => void;
 }) {
   return (
     <button
-      onClick={() => onOpenCollection(row.collectionId)}
-      className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/[0.03] transition-colors duration-150 text-left"
+      onClick={onClick}
+      className={[
+        "h-[35px] px-[11px] rounded-[18px] flex items-center gap-[8px] text-[11px] whitespace-nowrap transition-colors duration-150",
+        aktiv ? "bg-[#D39448]/[0.16] text-[#D39448]" : "text-[#c4c4c8] hover:bg-white/[0.04]",
+      ].join(" ")}
     >
-      {row.creator && (
-        <div
-          className="w-7 h-7 rounded-full shrink-0 ring-1 ring-white/15 overflow-hidden"
-          style={row.creator.profileImage ? undefined : { background: row.creator.avatarColor }}
-        >
-          {row.creator.profileImage && (
-            <img src={row.creator.profileImage} alt={row.creator.name} className="w-full h-full object-cover" />
-          )}
+      {dot && (
+        <span
+          className="w-[10px] h-[10px] rounded-[5px] border-2 shrink-0"
+          style={{ borderColor: dot }}
+        />
+      )}
+      {label}
+      <span className="h-[20px] min-w-[20px] px-[6px] rounded-[10px] bg-[#292a2e] text-[10px] text-[#bfc0c4] flex items-center justify-center">
+        {count}
+      </span>
+    </button>
+  );
+}
+
+// Figma 3373:688 / 3373:931 — Rahmen #26221c, Radius 13, Verlauf 144,8 Grad.
+function Panel({
+  icon,
+  titel,
+  titelFarbe,
+  unter,
+  rechts,
+  leer,
+  anzahl,
+  children,
+}: {
+  icon: React.ReactNode;
+  titel: string;
+  titelFarbe: string;
+  unter: string;
+  rechts?: React.ReactNode;
+  leer: string;
+  anzahl: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`${PANEL} px-[15px] py-[14px]`} style={{ backgroundImage: PANEL_BG }}>
+      <div className="flex items-start gap-[11px] pb-[14px]">
+        <span className="shrink-0 leading-none pt-[1px]">{icon}</span>
+        <div className="min-w-0">
+          <h2 className="text-[13px] tracking-[2px] uppercase" style={{ color: titelFarbe }}>
+            {titel}
+          </h2>
+          <p className="mt-[5px] text-[11px] text-[#818287]">{unter}</p>
         </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] text-neutral-100 truncate">
-          {row.collectionName} <span className="text-neutral-600">· Submission #{row.index}</span>
-        </p>
-        <p className="text-[11px] text-neutral-500">
-          {row.creator?.name ?? "Unknown creator"} · {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"} ·{" "}
-          {row.sentAt}
-          {row.eta && row.status !== "Finished" && row.status !== "Cancelled" && (
-            <> · ETA {row.eta}</>
-          )}
-        </p>
+        {rechts && <span className="ml-auto shrink-0 pt-[4px]">{rechts}</span>}
       </div>
-      {row.status === "Finished" && row.deliveryUrl && (
-        <a
-          href={row.deliveryUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-[#D39448] transition-colors duration-150 shrink-0"
-        >
-          <DriveGlyph size={12} />
-          Drive
-        </a>
+      {anzahl === 0 ? <p className="py-6 text-center text-[12px] text-[#818287]">{leer}</p> : children}
+    </div>
+  );
+}
+
+function Bild({ row, klasse }: { row: ProductionRow; klasse: string }) {
+  return (
+    <span className={`${klasse} shrink-0 overflow-hidden bg-black/30 block`}>
+      {row.thumbnailUrl ? (
+        <img src={row.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+      ) : (
+        <span className="block w-full h-full" style={{ background: row.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
       )}
+    </span>
+  );
+}
+
+function CreatorZeile({ row, grosse }: { row: ProductionRow; grosse: number }) {
+  if (!row.creator) return null;
+  return (
+    <span className="flex items-center gap-[6px] min-w-0">
       <span
-        className={[
-          "shrink-0 flex items-center gap-1 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px]",
-          SUBMISSION_STATUS_STYLES[row.status],
-        ].join(" ")}
+        className="rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
+        style={{
+          width: grosse,
+          height: grosse,
+          ...(row.creator.profileImage ? {} : { background: row.creator.avatarColor }),
+        }}
       >
-        {row.status === "Check Inbox" && <Inbox size={10} />}
-        {row.status === "Cancelled" && <Ban size={10} />}
-        {row.status}
+        {row.creator.profileImage && (
+          <img src={row.creator.profileImage} alt="" className="w-full h-full object-cover" />
+        )}
+      </span>
+      <span className="truncate text-[10px] text-[#9d9ea3]">{row.creator.name}</span>
+    </span>
+  );
+}
+
+// Die Quelle ist im Bestand nicht je Auftrag gespeichert -- aber sie ist auch
+// nicht offen: was hier steht, wurde an ReelForge geschickt (der Weg zu
+// Sydney laeuft ueber eine eigene Tabelle). Das Schild sagt also die
+// Wahrheit, statt eine Quelle zu erfinden.
+function QuellenSchild() {
+  return (
+    <span className="h-[27px] px-[10px] rounded-[8px] bg-[#19191e] flex items-center gap-[6px] text-[10px] text-[#bebec3] shrink-0">
+      <Sparkles size={11} className="text-[#bebec3]" />
+      ReelForge
+    </span>
+  );
+}
+
+// Figma 3373:709 — Bild 68x73, Titel 14 halbfett, Hinweiszeile in #ff484d.
+function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="relative text-left rounded-[10px] border border-[#202226] overflow-hidden hover:border-[#D39448]/35 transition-colors duration-150"
+      style={{ backgroundImage: ROW_BG }}
+    >
+      <span className="flex gap-[12px] p-[11px]">
+        <Bild row={row} klasse="w-[68px] h-[73px] rounded-[6px]" />
+        <span className="flex-1 min-w-0 flex flex-col gap-[6px] pt-[2px]">
+          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="text-[11px] text-[#8c8d91]">
+            {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
+          </span>
+          <span className="flex items-center gap-[7px] pt-[3px] min-w-0">
+            <CreatorZeile row={row} grosse={20} />
+            <span className="ml-auto">
+              <QuellenSchild />
+            </span>
+          </span>
+        </span>
+      </span>
+      <span className="flex items-center gap-[7px] px-[11px] py-[8px] border-t border-[#202226]">
+        <AlertTriangle size={11} className="text-[#ff484d] shrink-0" />
+        <span className="text-[10px] text-[#ff484d] truncate">{NAECHSTER_SCHRITT[row.status]}</span>
+        <span className="ml-auto text-[10px] text-[#838489] shrink-0">{row.sentAt}</span>
+      </span>
+    </button>
+  );
+}
+
+// Figma 3373:796 — Zeilenraster 39/14/14/27/6, Hoehe 60, Bild 77x49.
+function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }) {
+  const st = STATUS_TEXT[row.status];
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full h-[60px] px-[8px] grid items-center gap-[10px] border-b border-[#25262a] last:border-b-0 text-left hover:brightness-125 transition-[filter] duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
+      style={{ backgroundImage: ROW_BG }}
+    >
+      <span className="flex items-center gap-[11px] min-w-0">
+        <Bild row={row} klasse="w-[77px] h-[49px] rounded-[5px]" />
+        <span className="min-w-0 flex flex-col gap-[4px]">
+          <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          <span className="flex items-center gap-[6px] min-w-0">
+            <span className="text-[11px] text-[#8c8d91] shrink-0">{row.conceptCount} concepts</span>
+            <span className="text-[#4f5054]">•</span>
+            <CreatorZeile row={row} grosse={19} />
+          </span>
+        </span>
+      </span>
+
+      <span className="min-w-0">
+        <QuellenSchild />
+      </span>
+
+      <span className="text-[10px] truncate" style={{ color: st.color }}>
+        {st.label}
+      </span>
+
+      <span className="text-[11px] leading-[17px] text-[#a9aaae] min-w-0">
+        <span className="block truncate">{NAECHSTER_SCHRITT[row.status]}</span>
+        <span className="block truncate">{row.eta ? `ETA ${row.eta}` : row.sentAt}</span>
+      </span>
+
+      <span className="text-right text-[14px] tracking-[1px] text-[#6d6e73]">···</span>
+    </button>
+  );
+}
+
+// Figma 3373:944 — Zeile 71 hoch, Bild 50x52, Titel 12, Trennlinie #202226.
+function SeitenZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }) {
+  const st = STATUS_TEXT[row.status];
+  return (
+    <button
+      onClick={onOpen}
+      className="h-[71px] flex items-center gap-[10px] border-b border-[#202226] last:border-b-0 text-left hover:bg-white/[0.02] transition-colors duration-150"
+    >
+      <Bild row={row} klasse="w-[50px] h-[52px] rounded-[5px]" />
+      <span className="flex-1 min-w-0 pl-[2px]">
+        <span className="block text-[12px] text-[#efeff2] truncate">{row.collectionName}</span>
+        <span className="block pt-[5px]">
+          <CreatorZeile row={row} grosse={19} />
+        </span>
+        <span className="block text-[11px] text-[#8c8d91]">
+          {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
+        </span>
+      </span>
+      <span className="shrink-0 flex flex-col items-end gap-[4px] pr-[2px]">
+        <span className="flex items-center gap-[5px] text-[10px]" style={{ color: st.color }}>
+          <span className="w-[6px] h-[6px] rounded-full" style={{ background: st.color }} />
+          {st.label}
+        </span>
+        <span className="text-[10px] text-[#838489]">{row.sentAt}</span>
       </span>
     </button>
   );
