@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Collection, Creator } from "../../types";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { isVersionableCollection, nextCollectionName } from "../../lib/collectionNaming";
@@ -45,6 +45,7 @@ export function CollectionCard({
   onRestore?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [renaming, setRenaming] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
   const [draftName, setDraftName] = useState(current.name);
@@ -58,6 +59,25 @@ export function CollectionCard({
   // 2x2 mosaic — the newest concept is the cover.
   const cover = current.concepts[0]?.video;
   const suggestedName = nextCollectionName(current.name, family.map((f) => f.name));
+
+  // Das Menue schloss sich urspruenglich, sobald die Maus es verliess. Das
+  // ist hier toedlich: die Karte schrumpft beim Druecken minimal
+  // (press-feedback), dadurch rutscht das Menue unter dem Zeiger weg, gilt
+  // als verlassen und verschwindet noch zwischen Maustaste-runter und
+  // Maustaste-hoch. Der Klick landete dann auf dem, was darunter lag --
+  // live nachgestellt: "Maustaste runter" traf den Menuepunkt, der Klick
+  // danach eine fremde Karte.
+  //
+  // Stattdessen schliesst jetzt ein Druck ausserhalb des Menues. Das haelt
+  // auch, wenn sich unter dem Zeiger etwas bewegt.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function beiDruck(e: PointerEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", beiDruck);
+    return () => document.removeEventListener("pointerdown", beiDruck);
+  }, [menuOpen]);
 
   function commitRename() {
     const trimmed = draftName.trim();
@@ -75,7 +95,13 @@ export function CollectionCard({
       onClick={() => {
         if (!renaming) onOpen();
       }}
-      className="press-feedback group relative flex h-[104px] items-stretch p-2.5 rounded-xl border border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613] transition-colors duration-150 cursor-pointer"
+      // Bewusst ohne press-feedback: dessen scale(0.98) beim Druecken
+      // verschiebt die ganze Karte -- und damit auch das Menue, das in ihr
+      // sitzt. Gemessen: Taste-runter traf noch den Menuepunkt, Taste-hoch
+      // schon die Nachbarkarte, und der Klick landete dort. In Research
+      // Accounts haengt press-feedback an Schaltflaechen, nicht an grossen
+      // Flaechen -- ohne ist die Karte also naeher an der DNA, nicht weiter weg.
+      className="group relative flex h-[104px] items-stretch p-2.5 rounded-xl border border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613] transition-colors duration-150 cursor-pointer"
     >
       <div className="w-[54px] shrink-0 mr-3 rounded-[6px] overflow-hidden bg-black/30">
         {cover?.thumbnailUrl && !thumbFailed ? (
@@ -169,7 +195,7 @@ export function CollectionCard({
         →
       </span>
 
-      <div className="absolute right-2.5 top-1.5" onClick={(e) => e.stopPropagation()}>
+      <div ref={menuRef} className="absolute right-2.5 top-1.5" onClick={(e) => e.stopPropagation()}>
         {current.name !== "Quick Saves" && (
           <button
             onClick={() => setMenuOpen((v) => !v)}
@@ -180,10 +206,7 @@ export function CollectionCard({
           </button>
         )}
         {menuOpen && (
-          <div
-            onMouseLeave={() => setMenuOpen(false)}
-            className="absolute right-0 top-6 z-20 w-40 rounded-lg surface-panel-strong p-1 animate-fade-in"
-          >
+          <div className="absolute right-0 top-6 z-20 w-40 rounded-lg surface-panel-strong p-1 animate-fade-in">
             {archived ? (
               <button
                 onClick={() => {
