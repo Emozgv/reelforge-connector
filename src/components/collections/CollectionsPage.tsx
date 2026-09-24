@@ -203,9 +203,17 @@ export function CollectionsPage({
             {viewMode === "active" && (
               <button
                 onClick={() => setCreateOpen(true)}
-                className="flex items-center gap-2 h-9 px-4 rounded-xl bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 press-feedback"
+                // Dieselbe Behandlung wie der Hauptknopf im Dashboard und in
+                // Production: der festgelegte Verlauf mit seinem Schein. Vorher
+                // stand hier nur die flache Flaeche #D39448 -- dadurch wirkte
+                // der Knopf deutlich schwaecher als der gleiche Knopf woanders.
+                className="flex items-center gap-2 h-9 px-4 rounded-lg text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 press-feedback"
+                style={{
+                  backgroundImage: "linear-gradient(90deg, #D39448, #EAC088)",
+                  boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)",
+                }}
               >
-                <Plus size={14} strokeWidth={1.8} />
+                <Plus size={14} strokeWidth={2.4} />
                 New Collection
               </button>
             )}
