@@ -15,11 +15,18 @@ import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 //   - Der Sternenhimmel im Kopf kommt aus der App (Research Accounts), im
 //     Entwurf ist er ein eingebettetes Bild.
 
-const PANEL_BG = "linear-gradient(144.8deg, rgba(13,14,15,0.96) 0%, rgba(6,7,8,0.96) 100%)";
-const PANEL = "rounded-[13px] border border-[#26221c]";
+// Flaechen kommen aus der DNA (Dashboard -> Research Accounts ->
+// Collections), nicht aus dem Entwurf: dasselbe Panel, derselbe Rahmen,
+// derselbe Schatten. Die Akzente -- Abschnittsgold, Statuspillen, Zeichen --
+// bleiben die des Entwurfs.
+const PANEL = "rounded-xl border border-[#1a130b]";
+const PANEL_STYLE = {
+  background: "linear-gradient(180deg, #070707, #020202)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
+} as const;
 
 // Zeilenverlauf der Pipeline (Figma 3373:796).
-const ROW_BG = "linear-gradient(90deg, rgba(16,17,19,0.95) 0%, rgba(10,11,13,0.95) 100%)";
+const ROW = "border border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613]";
 
 // Die Beschriftungen des Entwurfs auf die Zustaende, die es wirklich gibt.
 // "Review" heisst im Bestand "Sent": abgeschickt, noch nicht angefasst.
@@ -163,7 +170,7 @@ export function ProductionPage({
   const aktiverCreator = creators.find((c) => c.id === creatorId);
 
   return (
-    <div className="relative h-full overflow-y-auto" style={{ background: "#030404" }}>
+    <div className="relative h-full overflow-y-auto" style={{ background: "#020203" }}>
       <style>{`
         .rf-chiprolle { scrollbar-width: none; -ms-overflow-style: none; }
         .rf-chiprolle::-webkit-scrollbar { display: none; }
@@ -181,13 +188,13 @@ export function ProductionPage({
           </div>
           <div
             className="absolute inset-0"
-            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, #030404 96%)" }}
+            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, #020203 96%)" }}
           />
         </div>
 
         {/* Kopf — Figma 3373:625 */}
         <div className="relative flex flex-col gap-1.5">
-          <span className="block text-[11px] tracking-[0.22em] uppercase text-[#eaa23a] font-medium">Production</span>
+          <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
           <h1 className="font-serif font-medium text-[40px] leading-[42px] tracking-[-0.6px] text-[#f2f0ef]">
             Everything in motion.
           </h1>
@@ -200,26 +207,26 @@ export function ProductionPage({
               Handlung dahinter. */}
           <div
             title="Productions are started from a Collection"
-            className="absolute right-0 top-1 h-9 px-4 rounded-[10px] border border-[#e9a03b] flex items-center justify-center gap-2 cursor-default select-none"
+            className="absolute right-0 top-1 h-9 px-4 rounded-lg flex items-center justify-center gap-2 cursor-default select-none"
             style={{
-              backgroundImage: "linear-gradient(to bottom, #f6b654, #eaa03c)",
-              filter: "drop-shadow(0px 6px 9px rgba(231,154,47,0.16))",
+              backgroundImage: "linear-gradient(90deg, #D39448, #EAC088)",
+              boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)",
             }}
           >
-            <Plus size={14} strokeWidth={2.4} className="text-[#17100a]" />
-            <span className="text-[12.5px] font-semibold text-[#17100a]">New Production</span>
+            <Plus size={14} strokeWidth={2.4} className="text-[#020508]" />
+            <span className="text-[12.5px] font-medium text-[#020508]">New Production</span>
           </div>
         </div>
 
         {/* Filterleiste — Figma 3373:636 */}
         <div
-          className="relative mt-5 h-[52px] p-[7px] rounded-xl border border-[#27221c] flex flex-nowrap items-center gap-2 overflow-hidden"
-          style={{ background: "rgba(9,9,10,0.88)" }}
+          className="relative mt-5 h-[52px] p-[7px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
+          style={{ background: "linear-gradient(180deg, #070707, #020202)" }}
         >
           <div className="relative shrink-0">
             <button
               onClick={() => setCreatorOpen((v) => !v)}
-              className="min-w-[132px] h-[34px] px-3 rounded-full bg-[#121315] border border-[#27292c] flex items-center gap-2 text-[12.5px] text-[#dddde0] hover:border-[#3a3c40] transition-colors duration-150"
+              className="min-w-[132px] h-[34px] px-3 rounded-full border border-white/[0.08] flex items-center gap-2 text-[12.5px] text-neutral-200 hover:text-neutral-50 hover:border-[#D39448]/35 transition-colors duration-150"
             >
               <span
                 className="w-[18px] h-[18px] rounded-full shrink-0 overflow-hidden"
@@ -280,7 +287,7 @@ export function ProductionPage({
           {/* Nur Optik: eine Quelle je Auftrag gibt es im Bestand nicht. */}
           <div
             title="Not available yet"
-            className="min-w-[142px] h-[34px] px-3 rounded-full bg-[#121315] border border-[#27292c] flex items-center gap-2 text-[12.5px] text-[#dddde0] shrink-0 cursor-default select-none opacity-70"
+            className="min-w-[142px] h-[34px] px-3 rounded-full border border-white/[0.08] flex items-center gap-2 text-[12.5px] text-neutral-200 shrink-0 cursor-default select-none opacity-70"
           >
             <Database size={13} className="text-[#9b9ca1] shrink-0" />
             All Sources
@@ -312,13 +319,13 @@ export function ProductionPage({
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search productions..."
-              className="w-full h-[34px] pl-8 pr-3 rounded-[10px] bg-[#141518] border border-[#303236] text-[12px] text-neutral-100 placeholder:text-[#84858a] outline-none focus-glow"
+              className="w-full h-[34px] pl-8 pr-3 rounded-lg surface-field text-[12px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
             />
           </div>
         </div>
 
         {alleZeilen.length === 0 ? (
-          <div className={`relative mt-4 ${PANEL} py-16 text-center`} style={{ backgroundImage: PANEL_BG }}>
+          <div className={`relative mt-4 ${PANEL} py-16 text-center`} style={PANEL_STYLE}>
             <Clapperboard size={20} className="mx-auto text-neutral-700 mb-2" />
             <p className="text-[13px] text-neutral-400">Nothing sent to ReelForge yet.</p>
             <p className="text-[12px] text-neutral-600 mt-1">
@@ -353,7 +360,7 @@ export function ProductionPage({
                 leer="Nothing in production right now."
                 anzahl={laufend.length}
               >
-                <div className="rounded-[8px] border border-[#202226] overflow-hidden">
+                <div className="rounded-xl border border-white/[0.07] overflow-hidden">
                   {laufend.map((r) => (
                     <PipelineZeile key={r.submissionId} row={r} onOpen={() => onOpenCollection(r.collectionId)} />
                   ))}
@@ -464,7 +471,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${PANEL} px-3 py-3`} style={{ backgroundImage: PANEL_BG }}>
+    <div className={`${PANEL} px-3 py-3`} style={PANEL_STYLE}>
       <div className="flex items-start gap-2.5 pb-3.5">
         <span className="shrink-0 leading-none pt-[1px]">{icon}</span>
         <div className="min-w-0">
@@ -531,8 +538,7 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
   return (
     <button
       onClick={onOpen}
-      className="relative text-left rounded-[10px] border border-[#202226] overflow-hidden hover:border-[#D39448]/35 transition-colors duration-150"
-      style={{ backgroundImage: ROW_BG }}
+      className={`relative text-left rounded-xl overflow-hidden transition-colors duration-150 ${ROW}`}
     >
       <span className="flex gap-2.5 p-2.5">
         <Bild row={row} klasse="w-[54px] h-[58px] rounded-[6px]" />
@@ -549,7 +555,7 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
           </span>
         </span>
       </span>
-      <span className="flex items-center gap-2 px-2.5 py-1.5 border-t border-[#202226]">
+      <span className="flex items-center gap-2 px-2.5 py-1.5 border-t border-white/[0.06]">
         <AlertTriangle size={11} className="text-[#ff484d] shrink-0" />
         <span className="text-[10px] text-[#ff484d] truncate">{NAECHSTER_SCHRITT[row.status]}</span>
         <span className="ml-auto text-[10px] text-[#838489] shrink-0">{row.sentAt}</span>
@@ -564,8 +570,7 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
   return (
     <button
       onClick={onOpen}
-      className="w-full h-[48px] px-2 grid items-center gap-2.5 border-b border-[#25262a] last:border-b-0 text-left hover:brightness-125 transition-[filter] duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
-      style={{ backgroundImage: ROW_BG }}
+      className="w-full h-[48px] px-2 grid items-center gap-2.5 bg-[#111114] border-b border-white/[0.06] last:border-b-0 text-left hover:bg-[#161613] transition-colors duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
     >
       <span className="flex items-center gap-2.5 min-w-0">
         <Bild row={row} klasse="w-[62px] h-[40px] rounded-[5px]" />
@@ -601,7 +606,7 @@ function SeitenZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }
   return (
     <button
       onClick={onOpen}
-      className="h-[58px] flex items-center gap-2.5 border-b border-[#202226] last:border-b-0 text-left hover:bg-white/[0.02] transition-colors duration-150"
+      className="h-[58px] flex items-center gap-2.5 border-b border-white/[0.06] last:border-b-0 text-left hover:bg-white/[0.03] transition-colors duration-150"
     >
       <Bild row={row} klasse="w-[40px] h-[44px] rounded-[5px]" />
       <span className="flex-1 min-w-0 pl-[2px]">
