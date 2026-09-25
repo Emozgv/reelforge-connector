@@ -1,22 +1,170 @@
-import { useState } from "react";
-import { Check, Heart, Library as LibraryIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  Clapperboard,
+  Download,
+  FolderOpen,
+  Heart,
+  Image as ImageIcon,
+  Library as LibraryIcon,
+  MonitorSmartphone,
+  MoreVertical,
+  Play,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import type { Collection, Creator, RegenerationReason } from "../../types";
 import { DriveGlyph } from "../collections/DriveGlyph";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { FinishedBatchView } from "./FinishedBatchView";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 
-interface DeliveredBatch {
+// Umsetzung des Referenzbildes (Figma 3378:3 traegt nur dieses Bild, keine
+// Ebenen -- die Masse sind also am Bild abgelesen und auf den Massstab der
+// uebrigen Seiten gebracht, nicht aus Figma ausgelesen). Flaechen, Rahmen,
+// Schatten und der Sternenhimmel kommen aus der bestehenden DNA
+// (Dashboard -> Research Accounts -> Collections -> Production), damit die
+// Seite nicht aus der App faellt.
+//
+// Wo das Bild etwas zeigt, das es im Bestand nicht gibt, steht es an Ort
+// und Stelle dabei. Nichts davon wurde erfunden.
+
+const PANEL = "rounded-xl border border-[#1a130b]";
+const PANEL_STYLE = {
+  background: "linear-gradient(180deg, #070707, #020202)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
+} as const;
+
+const GOLD_CTA = {
+  backgroundImage: "linear-gradient(90deg, #D39448, #EAC088)",
+  boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)",
+} as const;
+
+type Sortierung = "newest" | "oldest" | "assets";
+
+const SORTIERUNGEN: { wert: Sortierung; label: string }[] = [
+  { wert: "newest", label: "Newest" },
+  { wert: "oldest", label: "Oldest" },
+  { wert: "assets", label: "Most assets" },
+];
+
+interface Vorschau {
+  id: string;
+  thumbnailUrl?: string;
+  thumbGradient?: string;
+  duration: string;
+}
+
+interface Lieferung {
   submissionId: string;
   index: number;
   sentAt: string;
+  datum: string;
+  uhrzeit: string;
   deliveryUrl?: string;
   collectionId: string;
   collectionName: string;
   conceptCount: number;
-  previews: { thumbnailUrl?: string; thumbGradient?: string }[];
+  previews: Vorschau[];
   creator?: Creator;
   favorited: boolean;
   approvedAt?: string;
+  // Woher der Stapel stammt. Der Entwurf zeigt hier drei Quellen; im
+  // Bestand gibt es nur die Herkunft, die beim Speichern eines Konzepts
+  // mitgeschrieben wurde (sourceLabel). Steht dort nichts, bleibt es bei
+  // "ReelForge" -- das stimmt fuer jede ausgelieferte Charge.
+  quelle: string;
+}
+
+function quelleVonStapel(label?: string): string {
+  if (!label) return "ReelForge";
+  if (label.toLowerCase().includes("drive")) return "Drive";
+  return label;
+}
+
+function QuellenZeichen({ quelle, size = 12 }: { quelle: string; size?: number }) {
+  if (quelle === "Drive") return <DriveGlyph size={size} />;
+  if (quelle === "ReelForge") return <Sparkles size={size} />;
+  return <MonitorSmartphone size={size} />;
+}
+
+// Kachel mit echtem Bild, sonst dem gespeicherten Verlauf.
+function Kachel({ v, klasse }: { v?: Vorschau; klasse: string }) {
+  const [fehlt, setFehlt] = useState(false);
+  if (!v) return <span className={`${klasse} block bg-white/[0.03]`} />;
+  if (v.thumbnailUrl && !fehlt) {
+    return (
+      <img
+        src={v.thumbnailUrl}
+        alt=""
+        loading="lazy"
+        onError={() => setFehlt(true)}
+        className={`${klasse} block object-cover`}
+      />
+    );
+  }
+  return <span className={`${klasse} block`} style={{ background: v.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />;
+}
+
+// Auswahlfeld im Stil des Bildes: kleine Beschriftung oben, Wert darunter.
+function Filterfeld({
+  label,
+  wert,
+  breite,
+  aktiv = true,
+  titel,
+  children,
+  offen,
+  setOffen,
+}: {
+  label: string;
+  wert: string;
+  breite: string;
+  aktiv?: boolean;
+  titel?: string;
+  children?: React.ReactNode;
+  offen?: boolean;
+  setOffen?: (v: boolean) => void;
+}) {
+  return (
+    <div className={`relative shrink-0 ${breite}`}>
+      <button
+        onClick={() => aktiv && setOffen?.(!offen)}
+        title={titel}
+        className={[
+          "w-full h-[46px] px-3 rounded-lg border border-white/[0.08] bg-[#0b0b0d] flex items-center gap-2 text-left transition-colors duration-150",
+          aktiv ? "hover:border-[#D39448]/35" : "opacity-70 cursor-default",
+        ].join(" ")}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-[9.5px] text-[#77787d] leading-none">{label}</span>
+          <span className="block mt-[3px] text-[12px] text-neutral-100 leading-none truncate">{wert}</span>
+        </span>
+        <ChevronDown size={13} className="shrink-0 text-[#939398]" />
+      </button>
+      {offen && children && (
+        <div className="absolute left-0 top-[50px] z-30 w-full min-w-[170px] rounded-lg surface-panel-strong p-1 animate-fade-in">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Menuepunkt({ label, gewaehlt, onClick }: { label: string; gewaehlt: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        "w-full text-left px-2.5 py-1.5 rounded-md text-[12px] transition-colors",
+        gewaehlt ? "text-neutral-100 bg-white/[0.06]" : "text-neutral-300 hover:bg-white/[0.06]",
+      ].join(" ")}
+    >
+      {label}
+    </button>
+  );
 }
 
 export function LibraryPage({
@@ -41,37 +189,84 @@ export function LibraryPage({
   onUploadFinishedVideo: (collectionId: string, conceptId: string, file: File) => Promise<{ error: string | null }>;
 }) {
   const [openSubmissionId, setOpenSubmissionId] = useState<string | null>(null);
-  const [failedThumbs, setFailedThumbs] = useState<Record<string, boolean>>({});
+  const [gewaehlt, setGewaehlt] = useState<string | null>(null);
+  const [suche, setSuche] = useState("");
+  const [creatorId, setCreatorId] = useState<string | "all">("all");
+  const [status, setStatus] = useState<"all" | "approved" | "delivered">("all");
+  const [sortierung, setSortierung] = useState<Sortierung>("newest");
+  const [offen, setOffen] = useState<string | null>(null);
+  const [menueId, setMenueId] = useState<string | null>(null);
 
-  const batches: DeliveredBatch[] = collections
-    .flatMap((c) =>
-      c.submissions
-        .filter((s) => s.status === "Finished")
-        .map((s) => ({
-          submissionId: s.id,
-          index: s.index,
-          sentAt: s.sentAt,
-          deliveryUrl: s.deliveryUrl,
-          collectionId: c.id,
-          collectionName: c.name,
-          conceptCount: s.conceptIds.length,
-          previews: c.concepts
-            .filter((concept) => s.conceptIds.includes(concept.video.id))
-            .slice(0, 4)
-            .map((concept) => ({
-              thumbnailUrl: concept.video.thumbnailUrl,
-              thumbGradient: concept.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT,
-            })),
-          creator: creators.find((cr) => cr.id === c.creatorId),
-          favorited: s.favorited,
-          approvedAt: s.approvedAt,
-        }))
-    )
-    .sort((a, b) => Number(b.favorited) - Number(a.favorited) || b.sentAt.localeCompare(a.sentAt));
+  // Ein Druck irgendwo sonst schliesst die offenen Menues.
+  useEffect(() => {
+    if (!offen && !menueId) return;
+    function beiDruck(e: PointerEvent) {
+      if (!(e.target as HTMLElement).closest("[data-menue]")) {
+        setOffen(null);
+        setMenueId(null);
+      }
+    }
+    document.addEventListener("pointerdown", beiDruck);
+    return () => document.removeEventListener("pointerdown", beiDruck);
+  }, [offen, menueId]);
 
-  // The Finished view is a separate, locked read-only page — never the live
-  // Collection editor. It's derived fresh from `collections` on every render
-  // so uploads/regeneration requests made inside it show up immediately.
+  const alle: Lieferung[] = useMemo(
+    () =>
+      collections.flatMap((c) =>
+        c.submissions
+          .filter((s) => s.status === "Finished")
+          .map((s) => {
+            const konzepte = c.concepts.filter((k) => s.conceptIds.includes(k.video.id));
+            const [datum, uhrzeit] = s.sentAt.split(" · ");
+            return {
+              submissionId: s.id,
+              index: s.index,
+              sentAt: s.sentAt,
+              datum: datum ?? s.sentAt,
+              uhrzeit: uhrzeit ?? "",
+              deliveryUrl: s.deliveryUrl,
+              collectionId: c.id,
+              collectionName: c.name,
+              conceptCount: s.conceptIds.length,
+              previews: konzepte.map((k) => ({
+                id: k.video.id,
+                thumbnailUrl: k.video.thumbnailUrl,
+                thumbGradient: k.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT,
+                duration: k.video.duration,
+              })),
+              creator: creators.find((cr) => cr.id === c.creatorId),
+              favorited: s.favorited,
+              approvedAt: s.approvedAt,
+              quelle: quelleVonStapel(konzepte.find((k) => k.sourceLabel)?.sourceLabel),
+            };
+          })
+      ),
+    [collections, creators]
+  );
+
+  const sichtbar = useMemo(() => {
+    const begriff = suche.trim().toLowerCase();
+    const gefiltert = alle.filter((b) => {
+      if (creatorId !== "all" && b.creator?.id !== creatorId) return false;
+      if (status === "approved" && !b.approvedAt) return false;
+      if (status === "delivered" && b.approvedAt) return false;
+      if (!begriff) return true;
+      return (
+        b.collectionName.toLowerCase().includes(begriff) ||
+        (b.creator?.name ?? "").toLowerCase().includes(begriff)
+      );
+    });
+    return [...gefiltert].sort((a, b) => {
+      if (sortierung === "assets") return b.conceptCount - a.conceptCount;
+      const richtung = a.sentAt.localeCompare(b.sentAt);
+      return sortierung === "oldest" ? richtung : -richtung;
+    });
+  }, [alle, creatorId, status, suche, sortierung]);
+
+  const aktiv = sichtbar.find((b) => b.submissionId === gewaehlt) ?? sichtbar[0];
+
+  // Der Finished-View bleibt unveraendert die schreibgeschuetzte Ansicht
+  // einer Charge -- nie der Collection-Editor.
   if (openSubmissionId) {
     const collection = collections.find((c) => c.submissions.some((s) => s.id === openSubmissionId));
     const submission = collection?.submissions.find((s) => s.id === openSubmissionId);
@@ -94,112 +289,446 @@ export function LibraryPage({
     setOpenSubmissionId(null);
   }
 
+  const aktiverCreator = creators.find((c) => c.id === creatorId);
+
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-[1240px] mx-auto px-8 pt-6 pb-8">
-        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#D39448]/75 font-medium">Library</span>
-        <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">Delivered content</h1>
-        <p className="mt-1 text-[12.5px] text-neutral-500 max-w-lg">
-          Every finished batch from ReelForge — locked copies, ready to review.
+    <div className="relative h-full overflow-y-auto" style={{ background: "#020203" }}>
+      <style>{`
+        .rf-library-starfield .star-twinkle { opacity: 0.6 !important; box-shadow: 0 0 4px rgba(255,250,240,0.45) !important; transform: scale(0.85); }
+        @media (prefers-reduced-motion: no-preference) {
+          .rf-library-starfield .star-twinkle { animation-name: star-twinkle-boosted !important; }
+        }
+      `}</style>
+
+      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+        <div className="dashboard-starfield-boost rf-library-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
+          <StarfieldBackground starCount={110} />
+        </div>
+
+        {/* Kopf — wie Collections und Production: 34px Ueberschrift,
+            13px Unterzeile, Hauptknopf rechts im festgelegten Gold. */}
+        <div className="relative flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Library</span>
+            <h1 className="mt-1 font-serif font-medium text-[34px] tracking-[-0.6px] text-[#f2f0ef]">
+              Your content, organized.
+            </h1>
+            <p className="mt-1.5 text-[13px] text-[#bdbdc1]">
+              Every delivered batch, searchable, grouped, and ready to review.
+            </p>
+          </div>
+
+          {/* Oeffnet den Drive-Ordner der neuesten Lieferung -- das ist die
+              einzige Drive-Adresse, die es im Bestand gibt. Ohne Lieferung
+              bleibt der Knopf sichtbar, aber ohne Ziel. */}
+          <a
+            href={sichtbar.find((b) => b.deliveryUrl)?.deliveryUrl ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={sichtbar.some((b) => b.deliveryUrl) ? "Open the newest delivery folder in Drive" : "No delivery folder yet"}
+            className="shrink-0 h-9 px-4 rounded-lg flex items-center gap-2 text-[12.5px] font-medium text-[#020508] hover:brightness-110 transition-[filter] duration-150 press-feedback"
+            style={GOLD_CTA}
+          >
+            <FolderOpen size={14} strokeWidth={2.2} />
+            Open Drive
+          </a>
+        </div>
+
+        {/* Steuerleiste — Umschalter, Suche, Filter, Sortierung. */}
+        <div className={`relative mt-6 ${PANEL} p-3 flex items-center gap-2.5`} style={PANEL_STYLE}>
+          {/* Der Entwurf zeigt einen zweiten Reiter "Assets". Eine
+              Einzelbild-Ansicht gibt es im Bestand nicht; sie zu erfinden
+              waere eine neue Seite. Der Umschalter bleibt deshalb sichtbar
+              und sagt das beim Darueberfahren. */}
+          <div className="shrink-0 h-[46px] p-1 rounded-lg border border-white/[0.08] bg-[#0b0b0d] flex items-center gap-1">
+            <span
+              className="h-[38px] px-4 rounded-md flex items-center text-[12.5px] text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.16]"
+            >
+              Deliveries
+            </span>
+            <span
+              title="Single-asset view isn't built yet"
+              className="h-[38px] px-4 rounded-md flex items-center text-[12.5px] text-neutral-500 cursor-default select-none"
+            >
+              Assets
+            </span>
+          </div>
+
+          <div className="relative flex-1 min-w-[120px]">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#a8a9ad]" />
+            <input
+              value={suche}
+              onChange={(e) => setSuche(e.target.value)}
+              placeholder="Search deliveries, creators, or content..."
+              className="w-full h-[46px] pl-10 pr-3 rounded-lg border border-white/[0.08] bg-[#0b0b0d] text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+            />
+          </div>
+
+          <div data-menue>
+            <Filterfeld
+              label="Creator"
+              wert={aktiverCreator?.name ?? "All"}
+              breite="w-[128px]"
+              offen={offen === "creator"}
+              setOffen={(v) => setOffen(v ? "creator" : null)}
+            >
+              <Menuepunkt label="All" gewaehlt={creatorId === "all"} onClick={() => { setCreatorId("all"); setOffen(null); }} />
+              {creators.map((c) => (
+                <Menuepunkt
+                  key={c.id}
+                  label={c.name}
+                  gewaehlt={creatorId === c.id}
+                  onClick={() => { setCreatorId(c.id); setOffen(null); }}
+                />
+              ))}
+            </Filterfeld>
+          </div>
+
+          {/* Content Type und Source: im Bestand gibt es weder Asset-Typen
+              noch eine gespeicherte Quelle je Charge, nach der sich filtern
+              liesse. Beide bleiben sichtbar, ohne etwas vorzutaeuschen. */}
+          <Filterfeld label="Content Type" wert="All" breite="w-[132px]" aktiv={false} titel="Asset types aren't tracked yet" />
+          <Filterfeld label="Source" wert="All" breite="w-[116px]" aktiv={false} titel="Per-delivery source isn't tracked yet" />
+
+          <div data-menue>
+            <Filterfeld
+              label="Status"
+              wert={status === "all" ? "All" : status === "approved" ? "Approved" : "Delivered"}
+              breite="w-[116px]"
+              offen={offen === "status"}
+              setOffen={(v) => setOffen(v ? "status" : null)}
+            >
+              <Menuepunkt label="All" gewaehlt={status === "all"} onClick={() => { setStatus("all"); setOffen(null); }} />
+              <Menuepunkt label="Approved" gewaehlt={status === "approved"} onClick={() => { setStatus("approved"); setOffen(null); }} />
+              <Menuepunkt label="Delivered" gewaehlt={status === "delivered"} onClick={() => { setStatus("delivered"); setOffen(null); }} />
+            </Filterfeld>
+          </div>
+
+          <div data-menue>
+            <Filterfeld
+              label="Sort by"
+              wert={SORTIERUNGEN.find((s) => s.wert === sortierung)?.label ?? "Newest"}
+              breite="w-[134px]"
+              offen={offen === "sort"}
+              setOffen={(v) => setOffen(v ? "sort" : null)}
+            >
+              {SORTIERUNGEN.map((s) => (
+                <Menuepunkt
+                  key={s.wert}
+                  label={s.label}
+                  gewaehlt={sortierung === s.wert}
+                  onClick={() => { setSortierung(s.wert); setOffen(null); }}
+                />
+              ))}
+            </Filterfeld>
+          </div>
+        </div>
+
+        <p className="relative mt-5 text-[12px] text-[#9a9ba0]">
+          {sichtbar.length} deliver{sichtbar.length === 1 ? "y" : "ies"}
         </p>
 
-        {batches.length === 0 && (
-          <div className="mt-6 rounded-xl surface-panel py-20 text-center">
+        {sichtbar.length === 0 ? (
+          <div className={`relative mt-3 ${PANEL} py-16 text-center`} style={PANEL_STYLE}>
             <LibraryIcon size={20} className="mx-auto text-neutral-700 mb-2" />
             <p className="text-[13px] text-neutral-400">Nothing delivered yet.</p>
-            <p className="text-[12px] text-neutral-600 mt-1">Finished submissions will show up here automatically.</p>
+            <p className="text-[12px] text-neutral-600 mt-1">Finished submissions show up here automatically.</p>
           </div>
-        )}
+        ) : (
+          <div className="relative mt-3 flex flex-col min-[1440px]:flex-row items-stretch min-[1440px]:items-start gap-4">
+            {/* Linke Spalte: die Lieferungen */}
+            <div className={`flex-1 min-w-0 ${PANEL} p-2.5 flex flex-col gap-2`} style={PANEL_STYLE}>
+              {sichtbar.map((b) => {
+                const ausgewaehlt = aktiv?.submissionId === b.submissionId;
+                return (
+                  <div
+                    key={b.submissionId}
+                    onClick={() => setGewaehlt(b.submissionId)}
+                    className={[
+                      "relative flex items-center gap-2.5 h-[96px] px-2.5 rounded-xl border transition-colors duration-150 cursor-pointer",
+                      ausgewaehlt
+                        ? "border-[#D39448]/70 bg-[#161613]"
+                        : "border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613]",
+                    ].join(" ")}
+                    style={ausgewaehlt ? { boxShadow: "0 0 0 1px rgba(211,148,72,0.18), 0 10px 26px -18px rgba(211,148,72,0.5)" } : undefined}
+                  >
+                    <span className="shrink-0 flex gap-[2px] rounded-[7px] overflow-hidden bg-black/30">
+                      <Kachel v={b.previews[0]} klasse="w-[78px] h-[76px]" />
+                      <Kachel v={b.previews[1]} klasse="w-[78px] h-[76px]" />
+                    </span>
 
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {batches.map((b) => (
-            <div
-              key={b.submissionId}
-              className="group rounded-xl border border-white/[0.07] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.025] transition-colors duration-150 overflow-hidden"
-            >
-              <div className="relative">
-                <button onClick={() => setOpenSubmissionId(b.submissionId)} className="block w-full text-left">
-                  <div className="grid grid-cols-2 grid-rows-2 gap-[1.5px] bg-black/30 aspect-video">
-                    {Array.from({ length: 4 }).map((_, i) =>
-                      b.previews[i] ? (
-                        b.previews[i].thumbnailUrl && !failedThumbs[`${b.submissionId}-${i}`] ? (
-                          <img
-                            key={i}
-                            src={b.previews[i].thumbnailUrl}
-                            alt=""
-                            loading="lazy"
-                            onError={() => setFailedThumbs((prev) => ({ ...prev, [`${b.submissionId}-${i}`]: true }))}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div key={i} style={{ background: b.previews[i].thumbGradient }} />
-                        )
-                      ) : (
-                        <div key={i} className="bg-white/[0.03]" />
-                      )
-                    )}
-                  </div>
-                </button>
-                <button
-                  onClick={() => onToggleFavorite(b.collectionId, b.submissionId, !b.favorited)}
-                  title={b.favorited ? "Unfavorite" : "Favorite"}
-                  className={[
-                    "absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all duration-150",
-                    b.favorited ? "text-rose-400 opacity-100" : "text-white opacity-0 group-hover:opacity-100",
-                  ].join(" ")}
-                >
-                  <Heart size={13} fill={b.favorited ? "currentColor" : "none"} />
-                </button>
-              </div>
-              <div className="p-3.5">
-                <button onClick={() => setOpenSubmissionId(b.submissionId)} className="block w-full text-left">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {b.creator && (
-                      <div
-                        className="rounded-full shrink-0 ring-1 ring-white/15 overflow-hidden"
-                        style={{ width: 18, height: 18, ...(b.creator.profileImage ? {} : { background: b.creator.avatarColor }) }}
-                      >
-                        {b.creator.profileImage && (
-                          <img src={b.creator.profileImage} alt={b.creator.name} className="w-full h-full object-cover" />
+                    <span className="flex-1 min-w-0 flex flex-col gap-1.5">
+                      <span className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="font-serif font-medium text-[15px] text-[#f2f0ef] truncate">
+                          {b.collectionName}
+                        </span>
+                        <span className="text-[13px] text-[#6d6e73] shrink-0">·</span>
+                        <span className="text-[13px] text-[#a9aaae] shrink-0">Batch #{b.index}</span>
+                      </span>
+
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        {b.creator && (
+                          <span
+                            className="w-[18px] h-[18px] rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
+                            style={b.creator.profileImage ? undefined : { background: b.creator.avatarColor }}
+                          >
+                            {b.creator.profileImage && (
+                              <img src={b.creator.profileImage} alt={b.creator.name} className="w-full h-full object-cover" />
+                            )}
+                          </span>
                         )}
-                      </div>
-                    )}
-                    <span className="text-[11.5px] text-neutral-400 truncate">{b.creator?.name ?? "Unknown creator"}</span>
-                  </div>
-                  <h3 className="text-[13.5px] font-medium text-neutral-100 truncate">
-                    {b.collectionName} <span className="text-neutral-600 font-normal">· #{b.index}</span>
-                  </h3>
-                  <p className="mt-0.5 text-[11px] text-neutral-500">
-                    {b.conceptCount} concept{b.conceptCount === 1 ? "" : "s"} · {b.sentAt}
-                  </p>
-                </button>
+                        <span className="text-[11.5px] text-[#a9aaae] truncate">{b.creator?.name ?? "Unknown creator"}</span>
+                      </span>
 
-                <div className="mt-2.5 flex items-center justify-between gap-2">
-                  {b.deliveryUrl ? (
-                    <a
-                      href={b.deliveryUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1.5 text-[11.5px] text-neutral-300 hover:text-[#D39448] transition-colors duration-150"
+                      <span className="text-[11px] text-[#8c8d91] truncate">
+                        {b.conceptCount} asset{b.conceptCount === 1 ? "" : "s"}
+                        <span className="px-1.5 text-[#4f5054]">·</span>
+                        {b.sentAt}
+                      </span>
+                    </span>
+
+                    <span className="shrink-0 h-[26px] px-2.5 rounded-[13px] flex items-center gap-1.5 border border-white/[0.09] bg-[#15161a] text-[10.5px] text-[#c8c9ce]">
+                      <QuellenZeichen quelle={b.quelle} />
+                      {b.quelle}
+                    </span>
+
+                    <span
+                      className="shrink-0 h-[26px] min-w-[86px] px-2.5 rounded-[13px] flex items-center justify-center gap-1.5 text-[10.5px]"
+                      style={
+                        b.approvedAt
+                          ? { background: "radial-gradient(circle at 50% 50%, rgba(18,56,42,1) 0%, rgba(11,28,22,1) 100%)", color: "#3fd096", filter: "drop-shadow(0 0 8px rgba(35,208,150,0.14))" }
+                          : { background: "radial-gradient(circle at 50% 50%, rgba(20,40,63,1) 0%, rgba(13,23,33,1) 100%)", color: "#5eb1ff", filter: "drop-shadow(0 0 8px rgba(35,132,231,0.14))" }
+                      }
                     >
-                      <DriveGlyph size={13} />
-                      Open in Drive
-                    </a>
-                  ) : (
-                    <span />
-                  )}
-                  {b.approvedAt && (
-                    <span className="flex items-center gap-1 text-[11px] text-emerald-300/80">
-                      <Check size={11} />
-                      Approved
+                      <span className="w-[6px] h-[6px] rounded-full" style={{ background: b.approvedAt ? "#3fd096" : "#5eb1ff" }} />
+                      {b.approvedAt ? "Approved" : "Delivered"}
+                    </span>
+
+                    <span className="shrink-0 flex items-center gap-1 pl-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setOpenSubmissionId(b.submissionId); }}
+                        title="Open this delivery"
+                        className="w-[52px] h-[50px] rounded-lg flex flex-col items-center justify-center gap-1 text-[#c8c9ce] hover:text-neutral-50 hover:bg-white/[0.05] transition-colors duration-150"
+                      >
+                        <Play size={14} />
+                        <span className="text-[9.5px]">Open</span>
+                      </button>
+                      <a
+                        href={b.deliveryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => { e.stopPropagation(); if (!b.deliveryUrl) e.preventDefault(); }}
+                        title={b.deliveryUrl ? "Open in Drive" : "No Drive folder for this delivery"}
+                        className={[
+                          "w-[52px] h-[50px] rounded-lg flex flex-col items-center justify-center gap-1 transition-colors duration-150",
+                          b.deliveryUrl ? "text-[#c8c9ce] hover:text-neutral-50 hover:bg-white/[0.05]" : "text-[#5a5b60] cursor-default",
+                        ].join(" ")}
+                      >
+                        <DriveGlyph size={14} />
+                        <span className="text-[9.5px]">Drive</span>
+                      </a>
+                      {/* Ein eigener Download aus dem Client OS heraus gibt
+                          es noch nicht -- die Dateien liegen in Drive. */}
+                      <span
+                        title="Download runs through the Drive folder for now"
+                        className="w-[52px] h-[50px] rounded-lg flex flex-col items-center justify-center gap-1 text-[#5a5b60] cursor-default select-none"
+                      >
+                        <Download size={14} />
+                        <span className="text-[9.5px]">Download</span>
+                      </span>
+                    </span>
+
+                    <span className="relative shrink-0" data-menue onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setMenueId(menueId === b.submissionId ? null : b.submissionId)}
+                        aria-label="Delivery actions"
+                        className="w-6 h-7 rounded-md flex items-center justify-center text-[#6d6e73] hover:text-neutral-100 transition-colors duration-150"
+                      >
+                        <MoreVertical size={15} />
+                      </button>
+                      {menueId === b.submissionId && (
+                        <span className="absolute right-0 top-8 z-30 w-44 block rounded-lg surface-panel-strong p-1 animate-fade-in">
+                          <button
+                            onClick={() => { setMenueId(null); onToggleFavorite(b.collectionId, b.submissionId, !b.favorited); }}
+                            className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                          >
+                            <Heart size={12} fill={b.favorited ? "currentColor" : "none"} className={b.favorited ? "text-rose-400" : ""} />
+                            {b.favorited ? "Remove favorite" : "Favorite"}
+                          </button>
+                          {!b.approvedAt && (
+                            <button
+                              onClick={() => { setMenueId(null); onApprove(b.collectionId, b.submissionId); }}
+                              className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                            >
+                              <CheckCircle2 size={12} />
+                              Approve delivery
+                            </button>
+                          )}
+                          <button
+                            onClick={() => { setMenueId(null); setOpenSubmissionId(b.submissionId); }}
+                            className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+                          >
+                            <Play size={12} />
+                            Open delivery
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Rechte Spalte: die gewaehlte Lieferung im Detail */}
+            {aktiv && (
+              <div className={`w-full min-[1440px]:w-[470px] xl:w-[520px] shrink-0 ${PANEL} p-3`} style={PANEL_STYLE}>
+                <div className="grid grid-cols-2 gap-[3px] rounded-[10px] overflow-hidden bg-black/30">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Kachel key={i} v={aktiv.previews[i]} klasse="w-full h-[104px]" />
+                  ))}
+                </div>
+
+                <div className="mt-3.5 flex items-center gap-2">
+                  <h2 className="min-w-0 flex items-baseline gap-1.5">
+                    <span className="font-serif font-medium text-[17px] text-[#f2f0ef] truncate">{aktiv.collectionName}</span>
+                    <span className="text-[14px] text-[#6d6e73] shrink-0">·</span>
+                    <span className="text-[14px] text-[#a9aaae] shrink-0">Batch #{aktiv.index}</span>
+                  </h2>
+                  <span
+                    className="ml-auto shrink-0 h-[24px] px-2.5 rounded-[12px] flex items-center gap-1.5 text-[10.5px]"
+                    style={
+                      aktiv.approvedAt
+                        ? { background: "radial-gradient(circle at 50% 50%, rgba(18,56,42,1) 0%, rgba(11,28,22,1) 100%)", color: "#3fd096" }
+                        : { background: "radial-gradient(circle at 50% 50%, rgba(20,40,63,1) 0%, rgba(13,23,33,1) 100%)", color: "#5eb1ff" }
+                    }
+                  >
+                    <span className="w-[6px] h-[6px] rounded-full" style={{ background: aktiv.approvedAt ? "#3fd096" : "#5eb1ff" }} />
+                    {aktiv.approvedAt ? "Approved" : "Delivered"}
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex items-center gap-2">
+                  {aktiv.creator && (
+                    <span
+                      className="w-[26px] h-[26px] rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
+                      style={aktiv.creator.profileImage ? undefined : { background: aktiv.creator.avatarColor }}
+                    >
+                      {aktiv.creator.profileImage && (
+                        <img src={aktiv.creator.profileImage} alt={aktiv.creator.name} className="w-full h-full object-cover" />
+                      )}
                     </span>
                   )}
+                  <span className="min-w-0">
+                    <span className="block text-[12.5px] text-[#efeff2] truncate">{aktiv.creator?.name ?? "Unknown creator"}</span>
+                    {aktiv.creator?.handle && (
+                      <span className="block text-[11px] text-[#8c8d91] truncate">{aktiv.creator.handle}</span>
+                    )}
+                  </span>
+                </div>
+
+                {/* Kennzahlen — vier Felder mit Trennlinien, wie im Bild. */}
+                <div className="mt-3.5 pt-3.5 border-t border-white/[0.06] grid grid-cols-4">
+                  {[
+                    { Zeichen: Clapperboard, wert: String(aktiv.conceptCount), label: "Assets" },
+                    { Zeichen: CalendarDays, wert: aktiv.datum, label: aktiv.uhrzeit || "Delivered" },
+                    { Zeichen: () => <QuellenZeichen quelle={aktiv.quelle} size={13} />, wert: aktiv.quelle, label: "Source" },
+                    { Zeichen: CheckCircle2, wert: aktiv.approvedAt ? "Approved" : "Delivered", label: "Status" },
+                  ].map((z, i) => (
+                    <div key={i} className={`flex items-center gap-2 min-w-0 ${i > 0 ? "pl-2.5 border-l border-white/[0.06]" : ""}`}>
+                      <span className="shrink-0 text-[#8c8d91]">
+                        <z.Zeichen size={13} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[11.5px] text-[#efeff2] truncate">{z.wert}</span>
+                        <span className="block text-[10px] text-[#818287] truncate">{z.label}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3.5 flex items-center gap-2">
+                  <button
+                    onClick={() => setOpenSubmissionId(aktiv.submissionId)}
+                    className="flex-1 h-9 rounded-lg flex items-center justify-center gap-2 text-[12.5px] font-medium text-[#020508] hover:brightness-110 transition-[filter] duration-150 press-feedback"
+                    style={GOLD_CTA}
+                  >
+                    <Play size={13} strokeWidth={2.4} />
+                    Open Delivery
+                  </button>
+                  <a
+                    href={aktiv.deliveryUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { if (!aktiv.deliveryUrl) e.preventDefault(); }}
+                    title={aktiv.deliveryUrl ? "Open in Drive" : "No Drive folder for this delivery"}
+                    className={[
+                      "flex-1 h-9 rounded-lg flex items-center justify-center gap-2 border border-white/[0.08] bg-[#111114] text-[12.5px] transition-colors duration-150",
+                      aktiv.deliveryUrl ? "text-neutral-50 hover:border-[#D39448]/35 hover:bg-[#D39448]/[0.05] press-feedback" : "text-[#5a5b60] cursor-default",
+                    ].join(" ")}
+                  >
+                    <DriveGlyph size={13} />
+                    Open in Drive
+                  </a>
+                  <span
+                    title="Download runs through the Drive folder for now"
+                    className="flex-1 h-9 rounded-lg flex items-center justify-center gap-2 border border-white/[0.08] bg-[#111114] text-[12.5px] text-[#5a5b60] cursor-default select-none"
+                  >
+                    <Download size={13} />
+                    Download ZIP
+                  </span>
+                </div>
+
+                <div className="mt-4 pt-3.5 border-t border-white/[0.06] flex items-center">
+                  <h3 className="text-[11px] tracking-[1.6px] uppercase text-[#a9aaae]">Included Assets</h3>
+                  <button
+                    onClick={() => setOpenSubmissionId(aktiv.submissionId)}
+                    className="ml-auto text-[11px] text-[#9a9ba0] hover:text-neutral-100 transition-colors duration-150"
+                  >
+                    View all {aktiv.conceptCount} ›
+                  </button>
+                </div>
+
+                {/* Der Entwurf teilt in Reels und Stills. Im Bestand ist jede
+                    Lieferung ein Reel -- Standbilder gibt es als Typ nicht,
+                    deshalb steht dort ehrlich 0 statt einer erfundenen Zahl. */}
+                <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                  <div className="h-[52px] px-3 rounded-lg border border-white/[0.07] bg-[#111114] flex items-center gap-2.5">
+                    <Clapperboard size={15} className="shrink-0 text-[#8c8d91]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] text-[#efeff2]">Reels</span>
+                      <span className="block text-[10px] text-[#818287] truncate">Vertical videos (9:16)</span>
+                    </span>
+                    <span className="shrink-0 text-[13px] text-[#efeff2]">{aktiv.conceptCount}</span>
+                  </div>
+                  <div className="h-[52px] px-3 rounded-lg border border-white/[0.07] bg-[#111114] flex items-center gap-2.5">
+                    <ImageIcon size={15} className="shrink-0 text-[#8c8d91]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] text-[#efeff2]">Stills</span>
+                      <span className="block text-[10px] text-[#818287] truncate">Images &amp; thumbnails</span>
+                    </span>
+                    <span className="shrink-0 text-[13px] text-[#efeff2]">0</span>
+                  </div>
+                </div>
+
+                <h3 className="mt-4 text-[11px] tracking-[1.6px] uppercase text-[#a9aaae]">Recent Assets</h3>
+                <div className="mt-2.5 grid grid-cols-5 gap-2">
+                  {aktiv.previews.slice(0, 5).map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setOpenSubmissionId(aktiv.submissionId)}
+                      className="relative h-[68px] rounded-[7px] overflow-hidden border border-white/[0.07] hover:border-[#D39448]/35 transition-colors duration-150"
+                    >
+                      <Kachel v={v} klasse="w-full h-full" />
+                      <span className="absolute right-1 bottom-1 px-1 rounded-[3px] bg-black/70 text-[9px] text-neutral-200">
+                        {v.duration}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
