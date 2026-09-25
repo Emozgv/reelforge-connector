@@ -569,7 +569,6 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
 
 // Figma 3373:796 — Zeilenraster 39/14/14/27/6, Hoehe 60, Bild 77x49.
 function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }) {
-  const st = STATUS_TEXT[row.status];
   return (
     <button
       onClick={onOpen}
