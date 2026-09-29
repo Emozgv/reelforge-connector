@@ -22,7 +22,7 @@
 // das eine Wort festnagelt -- sonst haelt es den Vergleich weiter unten fuer
 // sinnlos und bricht beim Umschalten ab.
 export type GoldVariante = "neu" | "alt";
-export const GOLD_VARIANTE = "neu" as GoldVariante;
+export const GOLD_VARIANTE = "alt" as GoldVariante;
 // ---------------------------------------------------------------------------
 
 const NEU = {
