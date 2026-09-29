@@ -75,7 +75,7 @@ export function CreatorCard({
         )}
       </span>
 
-      <span className="flex-1 min-w-0 flex flex-col pl-[22px] pr-7">
+      <span className="flex-1 min-w-0 flex flex-col pl-[22px] pr-7 pt-[15px]">
         <span className="flex items-center gap-2.5 min-w-0">
           <span
             className="w-[44px] h-[44px] rounded-full shrink-0 flex items-center justify-center text-[13px] font-medium text-[#020508] overflow-hidden"
@@ -113,20 +113,20 @@ export function CreatorCard({
           </span>
         </span>
 
-        <span className="mt-2.5">
+        <span className="mt-[9px]">
           <span className="inline-flex items-center h-[21px] px-2.5 rounded-[6px] border border-[#242424] bg-[#191919] text-[10.5px] text-[#dedfe1]">
             {planBadgeLabel(plan)}
           </span>
         </span>
 
-        <span className="mt-3 grid grid-cols-4 gap-2">
+        <span className="mt-2 grid grid-cols-4 gap-2">
           <Kennzahl Zeichen={FolderOpen} wert={stats.collectionsCount} label="Collections" />
           <Kennzahl Zeichen={Layers} wert={stats.totalConcepts} label="Concepts" />
           <Kennzahl Zeichen={Send} wert={stats.delivered} label="Delivered" />
           <Kennzahl Zeichen={Clapperboard} wert={stats.activeSubmissions} label="In production" />
         </span>
 
-        <span className="mt-auto flex items-center gap-2 min-w-0">
+        <span className="mt-[13px] flex items-center gap-2 min-w-0">
           {marken.map((t) => (
             <span
               key={t}
