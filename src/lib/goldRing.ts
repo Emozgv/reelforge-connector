@@ -17,6 +17,8 @@
 //   "alt"  Der Stand davor: das helle #D39448 in halbdurchsichtigen
 //          Raendern, und kein Ring.
 //
+// Der Creativity Hub haengt NICHT am Schalter -- siehe HUB_RING weiter unten.
+//
 // Umschalten heisst: hier ein Wort aendern. Alles andere folgt.
 // Die Angabe "as GoldVariante" ist noetig, damit TypeScript den Wert nicht auf
 // das eine Wort festnagelt -- sonst haelt es den Vergleich weiter unten fuer
@@ -24,6 +26,12 @@
 export type GoldVariante = "neu" | "alt";
 export const GOLD_VARIANTE = "alt" as GoldVariante;
 // ---------------------------------------------------------------------------
+
+// Der Creativity Hub bleibt, wie er ist. Der Ring stammt von dort, er war
+// dort Absicht, und Emre hat ihn dort ausdruecklich behalten wollen -- der
+// Schalter unten gilt also fuer die uebrigen Seiten, nicht fuer den Hub.
+export const HUB_RING = "0 0 0 0.5px rgba(211,148,72,0.32), 0 0 10px rgba(211,148,72,0.08)";
+export const HUB_RING_SOFT = "0 0 0 0.5px rgba(211,148,72,0.22), 0 0 8px rgba(211,148,72,0.06)";
 
 const NEU = {
   // Zwei Staerken, und der Unterschied ist Absicht:
@@ -33,8 +41,8 @@ const NEU = {
   //   ringWeich  fuer die Werkzeugleiste -- Suchfelder, Chips, Pillen,
   //              Knoepfe. Die sitzen dicht beieinander und wirken bei der
   //              vollen Staerke wie umrandet statt umrissen.
-  ring: "0 0 0 0.5px rgba(211,148,72,0.32), 0 0 10px rgba(211,148,72,0.08)",
-  ringWeich: "0 0 0 0.5px rgba(211,148,72,0.22), 0 0 8px rgba(211,148,72,0.06)",
+  ring: HUB_RING,
+  ringWeich: HUB_RING_SOFT,
   // Aktive Schaltflaechen -- am Entwurf gemessen.
   akzentRand: "#5a3b1b",
   akzentFuellung: "#2f2113",
