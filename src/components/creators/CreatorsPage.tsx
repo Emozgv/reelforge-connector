@@ -37,7 +37,7 @@ import { GOLD_AKZENT_FUELLUNG, GOLD_AKZENT_RAND, GOLD_AKZENT_SCHRIFT, GOLD_RING_
 // und ein weicher Schatten darunter. Bewusst NUR die Tiefe -- die
 // Flaechenfarben bleiben auf den am Entwurf gemessenen Werten.
 const TIEFE = {
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING_SOFT}`,
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING_SOFT}`,
 } as const;
 
 const GOLD_CTA = {
@@ -75,7 +75,7 @@ function Kennzahlkasten({
   label: string;
 }) {
   return (
-    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-2.5 shrink-0" style={TIEFE}>
+    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-2.5 shrink-0" style={TIEFE}>
       {Zeichen ? (
         <Zeichen size={15} className="shrink-0 text-[#8c8d91]" />
       ) : (
@@ -108,7 +108,7 @@ function Auswahlfeld({
     <div className={`relative shrink-0 ${breite}`} data-menue>
       <button
         onClick={() => setOffen(!offen)}
-        className="press-feedback w-full h-[48px] px-3 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-2 text-left hover:border-[#5a3b1b] transition-colors duration-150"
+        className="press-feedback w-full h-[48px] px-3 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-2 text-left hover:border-[#5a3b1b] transition-colors duration-150"
       >
         <span className="min-w-0 flex-1">
           <span className="block text-[9.5px] text-[#9a9ba0] leading-none">{label}</span>
@@ -294,7 +294,7 @@ export function CreatorsPage({
 
         {/* Reiter, Planfilter, Sortierung, Ansicht -- Leiste 54 hoch. */}
         <div className="relative mt-3 flex items-center gap-2.5">
-          <div className="h-[48px] p-1 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-1 shrink-0" style={TIEFE}>
+          <div className="h-[48px] p-1 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-1 shrink-0" style={TIEFE}>
             {REITER.map((r) => (
               <button
                 key={r.wert}
@@ -343,7 +343,7 @@ export function CreatorsPage({
               Eine Listenansicht ist darin nicht gezeichnet; sie zu erfinden
               waere eine zweite Seite. Der Umschalter bleibt deshalb sichtbar
               und sagt das beim Darueberfahren. */}
-          <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-1" style={TIEFE}>
+          <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-1" style={TIEFE}>
             <span
               title="Grid view"
               style={{ color: GOLD_AKZENT_SCHRIFT, borderColor: GOLD_AKZENT_RAND, background: GOLD_AKZENT_FUELLUNG }}
@@ -367,7 +367,7 @@ export function CreatorsPage({
         )}
 
         {!creatorsStore.error && sichtbar.length === 0 && (
-          <div className="relative mt-4 rounded-xl border border-[#0f0c06] bg-[#050505] py-16 text-center">
+          <div className="relative mt-4 rounded-xl border border-[#1a130b] bg-[#050505] py-16 text-center">
             {creators.length === 0 ? (
               <>
                 <Users size={20} className="mx-auto text-neutral-700 mb-2.5" />
