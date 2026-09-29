@@ -53,10 +53,10 @@ import { GOLD_AUSWAHL_RAND, GOLD_AUSWAHL_SCHATTEN, GOLD_RING, GOLD_RING_SOFT } f
 // Tiefe kommt aus duennen Linien auf fast schwarzem Grund, nicht aus grauen
 // Flaechen. Vorher lagen die Zeilen auf #111114 und schwammen als graue
 // Bloecke; jetzt traegt sie der Rand.
-const PANEL = "rounded-xl border border-[#16120c]";
+const PANEL = "rounded-xl border border-[#1a130b]";
 const PANEL_STYLE = {
   background: "#060606",
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}`,
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}`,
 } as const;
 
 const GOLD_CTA = {
@@ -620,8 +620,11 @@ export function LibraryPage({
             {/* Rechte Spalte: die gewaehlte Lieferung im Detail */}
             {aktiv && (
               <div
-                className="w-full min-[1440px]:w-[460px] shrink-0 rounded-xl border border-[#0f1112] p-3"
-                style={{ background: "#060809", boxShadow: GOLD_RING }}
+                className="w-full min-[1440px]:w-[460px] shrink-0 rounded-xl border border-[#1a130b] p-3"
+                style={{
+                  background: "#060809",
+                  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), ${GOLD_RING}`,
+                }}
               >
                 <div className="grid grid-cols-2 gap-[3px] rounded-[10px] overflow-hidden bg-black/30">
                   {Array.from({ length: 4 }).map((_, i) => (
