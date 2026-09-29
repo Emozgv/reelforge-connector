@@ -63,7 +63,7 @@ function Kennzahlkasten({
   label: string;
 }) {
   return (
-    <div className="h-[53px] min-w-[132px] px-3 rounded-lg border border-[#18191b] bg-[#050607] flex items-center gap-2.5 shrink-0">
+    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#18191b] bg-[#050607] flex items-center gap-2.5 shrink-0">
       {Zeichen ? (
         <Zeichen size={15} className="shrink-0 text-[#8c8d91]" />
       ) : (
@@ -246,7 +246,7 @@ export function CreatorsPage({
             <h1 className="mt-1 font-serif font-medium text-[30px] tracking-[-0.4px] text-[#f2f0ef]">
               Your creator roster.
             </h1>
-            <p className="mt-1.5 text-[12.5px] text-[#bdbdc1]">
+            <p className="mt-1.5 text-[12px] text-[#bdbdc1]">
               Manage all your creators, their content, and creative profiles — in one place.
             </p>
           </div>
@@ -262,7 +262,7 @@ export function CreatorsPage({
         </div>
 
         {/* Kennzahlen und Suche -- im Entwurf eine Reihe, Kaesten 60 hoch. */}
-        <div className="relative mt-6 flex items-center gap-2.5">
+        <div className="relative mt-6 flex items-center gap-[14px]">
           <Kennzahlkasten Zeichen={Users} wert={zahlen.gesamt} label="Total creators" />
           <Kennzahlkasten punkt="#3fd096" wert={zahlen.fertig} label="Setup complete" />
           <Kennzahlkasten punkt="#f2b552" wert={zahlen.offen} label="Setup incomplete" />
@@ -288,7 +288,7 @@ export function CreatorsPage({
                 key={r.wert}
                 onClick={() => setReiter(r.wert)}
                 className={[
-                  "h-[38px] px-3.5 rounded-md text-[12.5px] whitespace-nowrap transition-colors duration-150",
+                  "h-[38px] px-[22px] rounded-md text-[12.5px] whitespace-nowrap transition-colors duration-150",
                   reiter === r.wert
                     ? "text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.12]"
                     : "text-neutral-400 hover:text-neutral-100",
@@ -302,7 +302,7 @@ export function CreatorsPage({
           <Auswahlfeld
             label="Plan"
             wert={planFilter === "alle" ? "All plans" : planFilter}
-            breite="w-[132px]"
+            breite="w-[136px]"
             offen={offen === "plan"}
             setOffen={(v) => setOffen(v ? "plan" : null)}
           >
@@ -315,7 +315,7 @@ export function CreatorsPage({
           <Auswahlfeld
             label="Sort by"
             wert={SORTIERUNGEN.find((s) => s.wert === sortierung)?.label ?? "Newest"}
-            breite="w-[132px]"
+            breite="w-[138px]"
             offen={offen === "sort"}
             setOffen={(v) => setOffen(v ? "sort" : null)}
           >
@@ -331,13 +331,13 @@ export function CreatorsPage({
           <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-1">
             <span
               title="Grid view"
-              className="w-[38px] h-[38px] rounded-md flex items-center justify-center text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.12]"
+              className="w-[42px] h-[38px] rounded-md flex items-center justify-center text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.12]"
             >
               <LayoutGrid size={15} />
             </span>
             <span
               title="List view isn't built yet"
-              className="w-[38px] h-[38px] rounded-md flex items-center justify-center text-[#5a5b60] cursor-default select-none"
+              className="w-[42px] h-[38px] rounded-md flex items-center justify-center text-[#5a5b60] cursor-default select-none"
             >
               <List size={15} />
             </span>
@@ -373,7 +373,7 @@ export function CreatorsPage({
           </div>
         )}
 
-        <div className="relative mt-4 grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(560px,1fr))]">
+        <div className="relative mt-4 grid gap-x-[18px] gap-y-[11px] [grid-template-columns:repeat(auto-fill,minmax(560px,1fr))]">
           {sichtbar.map((creator) => (
             <CreatorCard
               key={creator.id}

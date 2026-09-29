@@ -63,7 +63,7 @@ export function CreatorCard({
   return (
     <div
       onClick={onOpen}
-      className="group relative flex h-[187px] p-[9px] rounded-xl border border-[#18191b] bg-[#050607] hover:border-[#2b2419] transition-colors duration-150 cursor-pointer"
+      className="group relative flex h-[187px] p-[7px] rounded-xl border border-[#18191b] bg-[#050607] hover:border-[#2b2419] transition-colors duration-150 cursor-pointer"
     >
       <span className="w-[132px] h-full shrink-0 rounded-[9px] overflow-hidden bg-black/40 block">
         {bild ? (
@@ -73,10 +73,10 @@ export function CreatorCard({
         )}
       </span>
 
-      <span className="flex-1 min-w-0 flex flex-col pl-3.5 pr-7">
+      <span className="flex-1 min-w-0 flex flex-col pl-[22px] pr-7">
         <span className="flex items-center gap-2.5 min-w-0">
           <span
-            className="w-[40px] h-[40px] rounded-full shrink-0 flex items-center justify-center text-[12.5px] font-medium text-[#020508] overflow-hidden"
+            className="w-[44px] h-[44px] rounded-full shrink-0 flex items-center justify-center text-[13px] font-medium text-[#020508] overflow-hidden"
             style={creator.profileImage ? undefined : { background: creator.avatarColor }}
           >
             {creator.profileImage ? (
@@ -86,14 +86,14 @@ export function CreatorCard({
             )}
           </span>
           <span className="min-w-0">
-            <span className="block font-serif font-medium text-[18px] leading-[22px] text-[#f2f0ef] truncate">
+            <span className="block font-serif font-medium text-[19px] leading-[23px] text-[#f2f0ef] truncate">
               {creator.name}
             </span>
             <span className="block text-[12px] text-[#8c8d91] truncate">{creator.handle}</span>
           </span>
 
           <span
-            className="shrink-0 h-[22px] px-2 rounded-[11px] flex items-center gap-1.5 text-[10.5px] whitespace-nowrap"
+            className="shrink-0 h-[24px] px-2.5 rounded-[12px] flex items-center gap-1.5 text-[10.5px] whitespace-nowrap"
             style={{ background: zustand.fuellung, color: zustand.farbe, boxShadow: `inset 0 0 0 1px ${zustand.rand}` }}
           >
             <span className="w-[5px] h-[5px] rounded-full" style={{ background: zustand.farbe }} />
@@ -124,7 +124,7 @@ export function CreatorCard({
           <Kennzahl Zeichen={Clapperboard} wert={stats.activeSubmissions} label="In production" />
         </span>
 
-        <span className="mt-auto flex items-center gap-1.5 min-w-0">
+        <span className="mt-auto flex items-center gap-2 min-w-0">
           {marken.map((t) => (
             <span
               key={t}
