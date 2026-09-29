@@ -20,7 +20,7 @@ import { DriveGlyph } from "../collections/DriveGlyph";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { FinishedBatchView } from "./FinishedBatchView";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
-import { GOLD_RING, GOLD_RING_SOFT } from "../../lib/goldRing";
+import { GOLD_AUSWAHL_RAND, GOLD_AUSWAHL_SCHATTEN, GOLD_RING, GOLD_RING_SOFT } from "../../lib/goldRing";
 
 // Umsetzung des Referenzbildes (Figma 3378:3 traegt nur dieses Bild, keine
 // Ebenen -- die Masse sind also am Bild abgelesen und auf den Massstab der
@@ -479,14 +479,14 @@ export function LibraryPage({
                     className={[
                       "relative flex items-center gap-2 h-[88px] pl-3 pr-2 rounded-xl border transition-colors duration-150 cursor-pointer",
                       ausgewaehlt
-                        ? "border-[#77582f] bg-[#080809]"
+                        ? "bg-[#080809]"
                         : "border-[#0f1112] bg-[#040608] hover:border-[#2b2419] hover:bg-[#090a0c]",
                     ].join(" ")}
-                    style={{
-                      boxShadow: ausgewaehlt
-                        ? "0 0 0 1px rgba(119,88,47,0.35), 0 10px 26px -18px rgba(211,148,72,0.35)"
-                        : GOLD_RING_SOFT,
-                    }}
+                    style={
+                      ausgewaehlt
+                        ? { borderColor: GOLD_AUSWAHL_RAND, boxShadow: GOLD_AUSWAHL_SCHATTEN }
+                        : { boxShadow: GOLD_RING_SOFT }
+                    }
                   >
                     <span className="shrink-0 mr-2 flex gap-[2px] rounded-[7px] overflow-hidden bg-black/30">
                       <Kachel v={b.previews[0]} klasse="w-[71px] h-[69px]" />

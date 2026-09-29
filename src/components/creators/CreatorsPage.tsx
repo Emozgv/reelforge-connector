@@ -18,7 +18,7 @@ import { CreatorCard, einrichtungsZustand } from "./CreatorCard";
 import { computeCreatorStats } from "./creatorStats";
 import { CreatorProfilePage } from "./CreatorProfilePage";
 import { CreatorSetupWizard } from "./CreatorSetupWizard";
-import { GOLD_RING_SOFT } from "../../lib/goldRing";
+import { GOLD_AKZENT_FUELLUNG, GOLD_AKZENT_RAND, GOLD_AKZENT_SCHRIFT, GOLD_RING_SOFT } from "../../lib/goldRing";
 
 // Umsetzung des Referenzbildes (1695x928). Die Masse sind daran gemessen und
 // mit 0,89 auf 1509 gebracht -- die Breite, auf der wirklich gearbeitet wird.
@@ -299,11 +299,14 @@ export function CreatorsPage({
               <button
                 key={r.wert}
                 onClick={() => setReiter(r.wert)}
+                style={
+                  reiter === r.wert
+                    ? { color: GOLD_AKZENT_SCHRIFT, borderColor: GOLD_AKZENT_RAND, background: GOLD_AKZENT_FUELLUNG }
+                    : undefined
+                }
                 className={[
                   "press-feedback h-[38px] px-[22px] rounded-md text-[12.5px] whitespace-nowrap transition-colors duration-150",
-                  reiter === r.wert
-                    ? "text-[#EAC088] border border-[#5a3b1b] bg-[#2f2113]"
-                    : "text-[#dcdcde] hover:text-white",
+                  reiter === r.wert ? "border" : "text-[#dcdcde] hover:text-white",
                 ].join(" ")}
               >
                 {r.label}
@@ -343,7 +346,8 @@ export function CreatorsPage({
           <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-1" style={TIEFE}>
             <span
               title="Grid view"
-              className="w-[42px] h-[38px] rounded-md flex items-center justify-center text-[#EAC088] border border-[#5a3b1b] bg-[#20190d]"
+              style={{ color: GOLD_AKZENT_SCHRIFT, borderColor: GOLD_AKZENT_RAND, background: GOLD_AKZENT_FUELLUNG }}
+              className="w-[42px] h-[38px] rounded-md flex items-center justify-center border"
             >
               <LayoutGrid size={15} />
             </span>
