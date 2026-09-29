@@ -56,6 +56,10 @@ export interface Creator {
   clientNotes: string;
   // Opt-in only — has no effect until AI Creator Fit / scoring actually ships.
   aiBrainEnabled: boolean;
+  // Wann zuletzt an diesem Creator etwas geaendert wurde. Die Spalte gibt es
+  // in der Datenbank laengst; sie war nur nie durchgereicht. Optional, damit
+  // Stellen, die einen Creator von Hand zusammenbauen, unveraendert bleiben.
+  updatedAt?: string;
 }
 
 // Rule-based (no AI involved) read on how ready a Creator's setup is —

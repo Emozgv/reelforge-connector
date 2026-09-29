@@ -55,6 +55,7 @@ export function creatorFromRow(row: CreatorRow): Creator {
     brandDirection: row.brand_direction ?? "",
     clientNotes: row.client_notes ?? "",
     aiBrainEnabled: row.ai_brain_enabled ?? false,
+    updatedAt: row.updated_at,
   };
 }
 

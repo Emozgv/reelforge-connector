@@ -6,6 +6,8 @@ export interface CreatorStats {
   used: number;
   unused: number;
   activeSubmissions: number;
+  // Fertig ausgelieferte Chargen -- die Karte zeigt sie als "Delivered".
+  delivered: number;
 }
 
 // Collections/Submissions are never stored on the Creator itself — they're derived
@@ -15,9 +17,9 @@ export function computeCreatorStats(creatorId: string, collections: Collection[]
   const allConcepts = own.flatMap((c) => c.concepts);
   const used = allConcepts.filter((c) => c.status === "Used").length;
   const unused = allConcepts.filter((c) => c.status === "Unused").length;
-  const activeSubmissions = own
-    .flatMap((c) => c.submissions)
-    .filter((s) => s.status !== "Finished" && s.status !== "Cancelled").length;
+  const alle = own.flatMap((c) => c.submissions);
+  const activeSubmissions = alle.filter((s) => s.status !== "Finished" && s.status !== "Cancelled").length;
+  const delivered = alle.filter((s) => s.status === "Finished").length;
 
   return {
     collectionsCount: own.length,
@@ -25,5 +27,6 @@ export function computeCreatorStats(creatorId: string, collections: Collection[]
     used,
     unused,
     activeSubmissions,
+    delivered,
   };
 }
