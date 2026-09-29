@@ -31,10 +31,23 @@ import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 // Wo das Bild etwas zeigt, das es im Bestand nicht gibt, steht es an Ort
 // und Stelle dabei. Nichts davon wurde erfunden.
 
-const PANEL = "rounded-xl border border-[#1a130b]";
+// Alle Flaechen- und Randwerte hier sind am Referenzbild gemessen (1672x941,
+// also fast Bildpunkt fuer Bildpunkt dieselbe Breite wie die App bei 1671):
+//
+//   Seitenhintergrund      #010304
+//   Filterleiste           Fuellung #060606, Rand #16120c (warm), 76 hoch
+//   Zeile                  Fuellung #040608, Rand #0f1112
+//   Zeile ausgewaehlt      Rand #77582f, Fuellung #080809
+//   rechtes Panel          Fuellung #060809, Rand #0f1112, 510 breit
+//
+// Der Punkt, den das Bild macht und den die erste Fassung verfehlt hat: die
+// Tiefe kommt aus duennen Linien auf fast schwarzem Grund, nicht aus grauen
+// Flaechen. Vorher lagen die Zeilen auf #111114 und schwammen als graue
+// Bloecke; jetzt traegt sie der Rand.
+const PANEL = "rounded-xl border border-[#16120c]";
 const PANEL_STYLE = {
-  background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
+  background: "#060606",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8)",
 } as const;
 
 const GOLD_CTA = {
@@ -134,7 +147,7 @@ function Filterfeld({
         onClick={() => aktiv && setOffen?.(!offen)}
         title={titel}
         className={[
-          "w-full h-[46px] px-3 rounded-lg border border-white/[0.08] bg-[#0b0b0d] flex items-center gap-2 text-left transition-colors duration-150",
+          "w-full h-[49px] px-3 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-2 text-left transition-colors duration-150",
           aktiv ? "hover:border-[#D39448]/35" : "opacity-70 cursor-default",
         ].join(" ")}
       >
@@ -300,7 +313,13 @@ export function LibraryPage({
         }
       `}</style>
 
-      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+      {/* Im Entwurf laeuft der Inhalt von 252 bis 1648, also mit rund 14
+          Punkten Abstand zur Seitenleiste statt der 40, die Collections und
+          Production benutzen. Mit dem engeren Container blieb fuer die Titel
+          zu wenig Platz und sie wurden abgeschnitten -- gemessen: 127 statt
+          der noetigen 165. Deshalb hier die Geometrie des Entwurfs. Die
+          Seite steht damit etwas weiter links als ihre Nachbarn. */}
+      <div className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
         <div className="dashboard-starfield-boost rf-library-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
           <StarfieldBackground starCount={110} />
         </div>
@@ -309,8 +328,8 @@ export function LibraryPage({
             13px Unterzeile, Hauptknopf rechts im festgelegten Gold. */}
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Library</span>
-            <h1 className="mt-1 font-serif font-medium text-[34px] tracking-[-0.6px] text-[#f2f0ef]">
+            <span className="block text-[12.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Library</span>
+            <h1 className="mt-1 font-serif font-medium text-[40px] tracking-[-0.6px] text-[#f2f0ef]">
               Your content, organized.
             </h1>
             <p className="mt-1.5 text-[13px] text-[#bdbdc1]">
@@ -335,12 +354,13 @@ export function LibraryPage({
         </div>
 
         {/* Steuerleiste — Umschalter, Suche, Filter, Sortierung. */}
-        <div className={`relative mt-6 ${PANEL} p-3 flex items-center gap-2.5`} style={PANEL_STYLE}>
+        {/* Leiste 76 hoch, innen 13 Luft, Kaesten 49 -- am Bild abgelesen. */}
+        <div className={`relative mt-6 ${PANEL} px-3.5 py-[13px] flex items-center gap-3`} style={PANEL_STYLE}>
           {/* Der Entwurf zeigt einen zweiten Reiter "Assets". Eine
               Einzelbild-Ansicht gibt es im Bestand nicht; sie zu erfinden
               waere eine neue Seite. Der Umschalter bleibt deshalb sichtbar
               und sagt das beim Darueberfahren. */}
-          <div className="shrink-0 h-[46px] p-1 rounded-lg border border-white/[0.08] bg-[#0b0b0d] flex items-center gap-1">
+          <div className="shrink-0 h-[49px] p-1 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-1">
             <span
               className="h-[38px] px-4 rounded-md flex items-center text-[12.5px] text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.16]"
             >
@@ -360,7 +380,7 @@ export function LibraryPage({
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search deliveries, creators, or content..."
-              className="w-full h-[46px] pl-10 pr-3 rounded-lg border border-white/[0.08] bg-[#0b0b0d] text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+              className="w-full h-[49px] pl-10 pr-3 rounded-lg border border-[#1b1d1f] bg-[#08090a] text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
             />
           </div>
 
@@ -368,7 +388,7 @@ export function LibraryPage({
             <Filterfeld
               label="Creator"
               wert={aktiverCreator?.name ?? "All"}
-              breite="w-[128px]"
+              breite="w-[126px]"
               offen={offen === "creator"}
               setOffen={(v) => setOffen(v ? "creator" : null)}
             >
@@ -387,14 +407,14 @@ export function LibraryPage({
           {/* Content Type und Source: im Bestand gibt es weder Asset-Typen
               noch eine gespeicherte Quelle je Charge, nach der sich filtern
               liesse. Beide bleiben sichtbar, ohne etwas vorzutaeuschen. */}
-          <Filterfeld label="Content Type" wert="All" breite="w-[132px]" aktiv={false} titel="Asset types aren't tracked yet" />
-          <Filterfeld label="Source" wert="All" breite="w-[116px]" aktiv={false} titel="Per-delivery source isn't tracked yet" />
+          <Filterfeld label="Content Type" wert="All" breite="w-[126px]" aktiv={false} titel="Asset types aren't tracked yet" />
+          <Filterfeld label="Source" wert="All" breite="w-[128px]" aktiv={false} titel="Per-delivery source isn't tracked yet" />
 
           <div data-menue>
             <Filterfeld
               label="Status"
               wert={status === "all" ? "All" : status === "approved" ? "Approved" : "Delivered"}
-              breite="w-[116px]"
+              breite="w-[127px]"
               offen={offen === "status"}
               setOffen={(v) => setOffen(v ? "status" : null)}
             >
@@ -408,7 +428,7 @@ export function LibraryPage({
             <Filterfeld
               label="Sort by"
               wert={SORTIERUNGEN.find((s) => s.wert === sortierung)?.label ?? "Newest"}
-              breite="w-[134px]"
+              breite="w-[194px]"
               offen={offen === "sort"}
               setOffen={(v) => setOffen(v ? "sort" : null)}
             >
@@ -424,7 +444,7 @@ export function LibraryPage({
           </div>
         </div>
 
-        <p className="relative mt-5 text-[12px] text-[#9a9ba0]">
+        <p className="relative mt-5 text-[14px] text-[#9a9ba0]">
           {sichtbar.length} deliver{sichtbar.length === 1 ? "y" : "ies"}
         </p>
 
@@ -437,7 +457,10 @@ export function LibraryPage({
         ) : (
           <div className="relative mt-3 flex flex-col min-[1440px]:flex-row items-stretch min-[1440px]:items-start gap-4">
             {/* Linke Spalte: die Lieferungen */}
-            <div className={`flex-1 min-w-0 ${PANEL} p-2.5 flex flex-col gap-2`} style={PANEL_STYLE}>
+            {/* Im Bild gibt es KEINEN Kasten um die Liste -- die Zeilen stehen
+                einzeln auf dem Seitenhintergrund, jede mit eigenem Rand.
+                Abstand von Zeilenoberkante zu Zeilenoberkante: 106. */}
+            <div className="flex-1 min-w-0 flex flex-col gap-[9px]">
               {sichtbar.map((b) => {
                 const ausgewaehlt = aktiv?.submissionId === b.submissionId;
                 return (
@@ -445,25 +468,25 @@ export function LibraryPage({
                     key={b.submissionId}
                     onClick={() => setGewaehlt(b.submissionId)}
                     className={[
-                      "relative flex items-center gap-2.5 h-[96px] px-2.5 rounded-xl border transition-colors duration-150 cursor-pointer",
+                      "relative flex items-center gap-3 h-[97px] pl-3.5 pr-2.5 rounded-xl border transition-colors duration-150 cursor-pointer",
                       ausgewaehlt
-                        ? "border-[#D39448]/70 bg-[#161613]"
-                        : "border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613]",
+                        ? "border-[#77582f] bg-[#080809]"
+                        : "border-[#0f1112] bg-[#040608] hover:border-[#2b2419] hover:bg-[#090a0c]",
                     ].join(" ")}
-                    style={ausgewaehlt ? { boxShadow: "0 0 0 1px rgba(211,148,72,0.18), 0 10px 26px -18px rgba(211,148,72,0.5)" } : undefined}
+                    style={ausgewaehlt ? { boxShadow: "0 0 0 1px rgba(119,88,47,0.35), 0 10px 26px -18px rgba(211,148,72,0.35)" } : undefined}
                   >
-                    <span className="shrink-0 flex gap-[2px] rounded-[7px] overflow-hidden bg-black/30">
+                    <span className="shrink-0 mr-2 flex gap-[2px] rounded-[7px] overflow-hidden bg-black/30">
                       <Kachel v={b.previews[0]} klasse="w-[78px] h-[76px]" />
                       <Kachel v={b.previews[1]} klasse="w-[78px] h-[76px]" />
                     </span>
 
                     <span className="flex-1 min-w-0 flex flex-col gap-1.5">
                       <span className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="font-serif font-medium text-[15px] text-[#f2f0ef] truncate">
+                        <span className="font-serif font-medium text-[17px] text-[#f2f0ef] truncate">
                           {b.collectionName}
                         </span>
-                        <span className="text-[13px] text-[#6d6e73] shrink-0">·</span>
-                        <span className="text-[13px] text-[#a9aaae] shrink-0">Batch #{b.index}</span>
+                        <span className="text-[14px] text-[#6d6e73] shrink-0">·</span>
+                        <span className="text-[14px] text-[#a9aaae] shrink-0">Batch #{b.index}</span>
                       </span>
 
                       <span className="flex items-center gap-1.5 min-w-0">
@@ -504,6 +527,7 @@ export function LibraryPage({
                       {b.approvedAt ? "Approved" : "Delivered"}
                     </span>
 
+                    <span aria-hidden className="shrink-0 self-stretch w-px my-3.5 bg-[#161819]" />
                     <span className="shrink-0 flex items-center gap-1 pl-1">
                       <button
                         onClick={(e) => { e.stopPropagation(); setOpenSubmissionId(b.submissionId); }}
@@ -538,6 +562,7 @@ export function LibraryPage({
                       </span>
                     </span>
 
+                    <span aria-hidden className="shrink-0 self-stretch w-px my-3.5 bg-[#161819]" />
                     <span className="relative shrink-0" data-menue onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => setMenueId(menueId === b.submissionId ? null : b.submissionId)}
@@ -581,7 +606,10 @@ export function LibraryPage({
 
             {/* Rechte Spalte: die gewaehlte Lieferung im Detail */}
             {aktiv && (
-              <div className={`w-full min-[1440px]:w-[470px] xl:w-[520px] shrink-0 ${PANEL} p-3`} style={PANEL_STYLE}>
+              <div
+                className="w-full min-[1440px]:w-[510px] shrink-0 rounded-xl border border-[#0f1112] p-3"
+                style={{ background: "#060809" }}
+              >
                 <div className="grid grid-cols-2 gap-[3px] rounded-[10px] overflow-hidden bg-black/30">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <Kachel key={i} v={aktiv.previews[i]} klasse="w-full h-[104px]" />
@@ -627,14 +655,14 @@ export function LibraryPage({
                 </div>
 
                 {/* Kennzahlen — vier Felder mit Trennlinien, wie im Bild. */}
-                <div className="mt-3.5 pt-3.5 border-t border-white/[0.06] grid grid-cols-4">
+                <div className="mt-3.5 pt-3.5 border-t border-[#131516] flex items-center">
                   {[
                     { Zeichen: Clapperboard, wert: String(aktiv.conceptCount), label: "Assets" },
                     { Zeichen: CalendarDays, wert: aktiv.datum, label: aktiv.uhrzeit || "Delivered" },
                     { Zeichen: () => <QuellenZeichen quelle={aktiv.quelle} size={13} />, wert: aktiv.quelle, label: "Source" },
                     { Zeichen: CheckCircle2, wert: aktiv.approvedAt ? "Approved" : "Delivered", label: "Status" },
                   ].map((z, i) => (
-                    <div key={i} className={`flex items-center gap-2 min-w-0 ${i > 0 ? "pl-2.5 border-l border-white/[0.06]" : ""}`}>
+                    <div key={i} className={`flex items-center gap-2 min-w-0 ${i > 0 ? "pl-3 ml-3 border-l border-[#1a1d1e]" : ""}`}>
                       <span className="shrink-0 text-[#8c8d91]">
                         <z.Zeichen size={13} />
                       </span>
@@ -719,7 +747,12 @@ export function LibraryPage({
                       className="relative h-[68px] rounded-[7px] overflow-hidden border border-white/[0.07] hover:border-[#D39448]/35 transition-colors duration-150"
                     >
                       <Kachel v={v} klasse="w-full h-full" />
-                      <span className="absolute right-1 bottom-1 px-1 rounded-[3px] bg-black/70 text-[9px] text-neutral-200">
+                      {/* Im Entwurf sitzt rechts oben ein kleines Zeichen und
+                          die Laufzeit unten links -- nicht umgekehrt. */}
+                      <span className="absolute right-1 top-1 w-[15px] h-[15px] rounded-[4px] bg-black/60 flex items-center justify-center text-[#dcdde1]">
+                        <Clapperboard size={9} />
+                      </span>
+                      <span className="absolute left-1 bottom-1 px-1 rounded-[3px] bg-black/70 text-[9px] text-neutral-200">
                         {v.duration}
                       </span>
                     </button>
