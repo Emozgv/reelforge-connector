@@ -19,17 +19,19 @@ export function einrichtungsZustand(creator: Creator): "fertig" | "offen" {
 }
 
 const ZUSTAND = {
-  fertig: { label: "Setup complete", farbe: "#3fd096", fuellung: "rgba(18,56,42,0.55)", rand: "rgba(63,208,150,0.25)" },
-  offen: { label: "Setup incomplete", farbe: "#f2b552", fuellung: "rgba(63,48,20,0.55)", rand: "rgba(242,181,82,0.25)" },
+  // Fuellungen am Entwurf gemessen (#092113 und #251908); die Schrift ist
+  // dort heller und weicher als ein volles Signalgruen bzw. -gelb.
+  fertig: { label: "Setup complete", farbe: "#a4e8be", fuellung: "#092113", rand: "rgba(164,232,190,0.18)" },
+  offen: { label: "Setup incomplete", farbe: "#f0c987", fuellung: "#251908", rand: "rgba(240,201,135,0.18)" },
 } as const;
 
 function Kennzahl({ Zeichen, wert, label }: { Zeichen: typeof Layers; wert: number; label: string }) {
   return (
     <span className="flex items-start gap-1.5 min-w-0">
-      <Zeichen size={12} className="shrink-0 mt-[3px] text-[#6f7075]" />
+      <Zeichen size={12} className="shrink-0 mt-[3px] text-[#9a9ba0]" />
       <span className="min-w-0">
-        <span className="block text-[12.5px] leading-[15px] text-[#efeff2]">{wert}</span>
-        <span className="block text-[10px] leading-[13px] text-[#77787d] truncate">{label}</span>
+        <span className="block text-[12.5px] leading-[15px] text-[#fbfbfc]">{wert}</span>
+        <span className="block text-[10px] leading-[13px] text-[#c2c3c6] truncate">{label}</span>
       </span>
     </span>
   );
@@ -63,7 +65,7 @@ export function CreatorCard({
   return (
     <div
       onClick={onOpen}
-      className="group relative flex h-[187px] p-[7px] rounded-xl border border-[#18191b] bg-[#050607] hover:border-[#2b2419] transition-colors duration-150 cursor-pointer"
+      className="group relative flex h-[187px] p-[7px] rounded-xl border border-[#100d07] bg-[#050505] hover:border-[#2f2113] transition-colors duration-150 cursor-pointer"
     >
       <span className="w-[132px] h-full shrink-0 rounded-[9px] overflow-hidden bg-black/40 block">
         {bild ? (
@@ -86,10 +88,10 @@ export function CreatorCard({
             )}
           </span>
           <span className="min-w-0">
-            <span className="block font-serif font-medium text-[19px] leading-[23px] text-[#f2f0ef] truncate">
+            <span className="block font-serif font-medium text-[19px] leading-[23px] text-white truncate">
               {creator.name}
             </span>
-            <span className="block text-[12px] text-[#8c8d91] truncate">{creator.handle}</span>
+            <span className="block text-[12px] text-[#cfd0d3] truncate">{creator.handle}</span>
           </span>
 
           <span
@@ -105,14 +107,14 @@ export function CreatorCard({
               und das tut schon die ganze Flaeche. */}
           <span
             aria-hidden
-            className="ml-auto shrink-0 text-[#5a5b60] group-hover:text-[#8c8d91] transition-colors duration-150"
+            className="ml-auto shrink-0 text-[#8c8d91] group-hover:text-[#dcdcde] transition-colors duration-150"
           >
             <MoreHorizontal size={16} />
           </span>
         </span>
 
         <span className="mt-2.5">
-          <span className="inline-flex items-center h-[21px] px-2 rounded-[6px] border border-[#24262a] bg-[#0c0d0f] text-[10.5px] text-[#c8c9ce]">
+          <span className="inline-flex items-center h-[21px] px-2.5 rounded-[6px] border border-[#242424] bg-[#191919] text-[10.5px] text-[#dedfe1]">
             {planBadgeLabel(plan)}
           </span>
         </span>
@@ -128,18 +130,18 @@ export function CreatorCard({
           {marken.map((t) => (
             <span
               key={t}
-              className="shrink-0 h-[22px] px-2 rounded-[6px] border border-[#1e2023] bg-[#0b0c0e] text-[10.5px] text-[#a9aaae] flex items-center whitespace-nowrap"
+              className="shrink-0 h-[22px] px-2.5 rounded-[6px] border border-[#1c1c1c] bg-[#121212] text-[10.5px] text-[#d6d7d4] flex items-center whitespace-nowrap"
             >
               {t}
             </span>
           ))}
           {mehr > 0 && (
-            <span className="shrink-0 h-[22px] px-2 rounded-[6px] border border-[#1e2023] bg-[#0b0c0e] text-[10.5px] text-[#77787d] flex items-center">
+            <span className="shrink-0 h-[22px] px-2.5 rounded-[6px] border border-[#1c1c1c] bg-[#121212] text-[10.5px] text-[#a8a9ad] flex items-center">
               +{mehr}
             </span>
           )}
           {creator.updatedAt && (
-            <span className="ml-auto shrink-0 text-[10.5px] text-[#6f7075] whitespace-nowrap">
+            <span className="ml-auto shrink-0 text-[10.5px] text-[#9a9ba0] whitespace-nowrap">
               Updated {formatRelativeTime(creator.updatedAt).toLowerCase()}
             </span>
           )}
@@ -148,7 +150,7 @@ export function CreatorCard({
 
       <span
         aria-hidden
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-[26px] h-[26px] rounded-full border border-[#1e2023] bg-[#0b0c0e] flex items-center justify-center text-[#77787d] group-hover:text-[#D39448] group-hover:border-[#D39448]/35 transition-colors duration-150"
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-[26px] h-[26px] rounded-full border border-[#1a1710] bg-[#0d0c09] flex items-center justify-center text-[#9a9ba0] group-hover:text-[#EAC088] group-hover:border-[#5a3b1b] transition-colors duration-150"
       >
         <ChevronRight size={14} />
       </span>

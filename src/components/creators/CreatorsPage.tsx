@@ -63,7 +63,7 @@ function Kennzahlkasten({
   label: string;
 }) {
   return (
-    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#18191b] bg-[#050607] flex items-center gap-2.5 shrink-0">
+    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-2.5 shrink-0">
       {Zeichen ? (
         <Zeichen size={15} className="shrink-0 text-[#8c8d91]" />
       ) : (
@@ -71,7 +71,7 @@ function Kennzahlkasten({
       )}
       <span className="min-w-0">
         <span className="block text-[13px] leading-[16px] text-[#efeff2]">{wert}</span>
-        <span className="block text-[10.5px] leading-[13px] text-[#8c8d91] whitespace-nowrap">{label}</span>
+        <span className="block text-[10.5px] leading-[13px] text-[#a8a9ad] whitespace-nowrap">{label}</span>
       </span>
     </div>
   );
@@ -96,10 +96,10 @@ function Auswahlfeld({
     <div className={`relative shrink-0 ${breite}`} data-menue>
       <button
         onClick={() => setOffen(!offen)}
-        className="w-full h-[48px] px-3 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-2 text-left hover:border-[#D39448]/35 transition-colors duration-150"
+        className="w-full h-[48px] px-3 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-2 text-left hover:border-[#5a3b1b] transition-colors duration-150"
       >
         <span className="min-w-0 flex-1">
-          <span className="block text-[9.5px] text-[#77787d] leading-none">{label}</span>
+          <span className="block text-[9.5px] text-[#9a9ba0] leading-none">{label}</span>
           <span className="block mt-[3px] text-[12px] text-neutral-100 leading-none truncate">{wert}</span>
         </span>
         <ChevronDown size={13} className="shrink-0 text-[#939398]" />
@@ -275,14 +275,14 @@ export function CreatorsPage({
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search creators, @handles, or tags..."
-              className="w-full h-[53px] pl-10 pr-3 rounded-lg border border-[#18191b] bg-[#050607] text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+              className="w-full h-[53px] pl-10 pr-3 rounded-lg border border-[#111111] bg-[#090909] text-[12.5px] text-neutral-100 placeholder:text-neutral-500 outline-none focus-glow"
             />
           </div>
         </div>
 
         {/* Reiter, Planfilter, Sortierung, Ansicht -- Leiste 54 hoch. */}
         <div className="relative mt-3 flex items-center gap-2.5">
-          <div className="h-[48px] p-1 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-1 shrink-0">
+          <div className="h-[48px] p-1 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-1 shrink-0">
             {REITER.map((r) => (
               <button
                 key={r.wert}
@@ -290,8 +290,8 @@ export function CreatorsPage({
                 className={[
                   "h-[38px] px-[22px] rounded-md text-[12.5px] whitespace-nowrap transition-colors duration-150",
                   reiter === r.wert
-                    ? "text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.12]"
-                    : "text-neutral-400 hover:text-neutral-100",
+                    ? "text-[#EAC088] border border-[#5a3b1b] bg-[#2f2113]"
+                    : "text-[#dcdcde] hover:text-white",
                 ].join(" ")}
               >
                 {r.label}
@@ -328,16 +328,16 @@ export function CreatorsPage({
               Eine Listenansicht ist darin nicht gezeichnet; sie zu erfinden
               waere eine zweite Seite. Der Umschalter bleibt deshalb sichtbar
               und sagt das beim Darueberfahren. */}
-          <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-1">
+          <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#0a0c0d] bg-[#030506] flex items-center gap-1">
             <span
               title="Grid view"
-              className="w-[42px] h-[38px] rounded-md flex items-center justify-center text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.12]"
+              className="w-[42px] h-[38px] rounded-md flex items-center justify-center text-[#EAC088] border border-[#5a3b1b] bg-[#20190d]"
             >
               <LayoutGrid size={15} />
             </span>
             <span
               title="List view isn't built yet"
-              className="w-[42px] h-[38px] rounded-md flex items-center justify-center text-[#5a5b60] cursor-default select-none"
+              className="w-[42px] h-[38px] rounded-md flex items-center justify-center text-[#6f7075] cursor-default select-none"
             >
               <List size={15} />
             </span>
@@ -351,7 +351,7 @@ export function CreatorsPage({
         )}
 
         {!creatorsStore.error && sichtbar.length === 0 && (
-          <div className="relative mt-4 rounded-xl border border-[#18191b] bg-[#050607] py-16 text-center">
+          <div className="relative mt-4 rounded-xl border border-[#0f0c06] bg-[#050505] py-16 text-center">
             {creators.length === 0 ? (
               <>
                 <Users size={20} className="mx-auto text-neutral-700 mb-2.5" />
