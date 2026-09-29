@@ -24,9 +24,12 @@ import { CreatorSetupWizard } from "./CreatorSetupWizard";
 // Gemessen: Seitenleiste 242 von 1695 (14,3 %, genau wie in der App), Karten
 // 670x210 mit 20 Abstand, Kennzahlenkaesten 60 hoch, Reiterleiste 54 hoch.
 //
-// Der Container ist derselbe wie in Library, Collections und Production, damit
-// der Inhalt auf jeder Seite an derselben Stelle beginnt. Der Entwurf laesst
-// hier etwas mehr Rand; die Gleichheit zwischen den Seiten wiegt schwerer.
+// Container und Kopfzeile sind dieselben wie in Library, Collections und
+// Production -- Ueberschrift 36, Rubrik 11,5, Unterzeile 12,5 -- damit alle
+// vier Seiten gleich beginnen. Der Creators-Entwurf traegt an der Stelle eine
+// kleinere Ueberschrift (33 gegen 40 im Library-Entwurf); die Gleichheit
+// zwischen den Seiten wiegt schwerer als der Unterschied zwischen zwei
+// Entwuerfen.
 
 const GOLD_CTA = {
   backgroundImage: "linear-gradient(90deg, #D39448, #EAC088)",
@@ -242,11 +245,11 @@ export function CreatorsPage({
 
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="block text-[10.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Creators</span>
-            <h1 className="mt-1 font-serif font-medium text-[30px] tracking-[-0.4px] text-[#f2f0ef]">
+            <span className="block text-[11.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Creators</span>
+            <h1 className="mt-1 font-serif font-medium text-[36px] tracking-[-0.6px] text-[#f2f0ef]">
               Your creator roster.
             </h1>
-            <p className="mt-1.5 text-[12px] text-[#bdbdc1]">
+            <p className="mt-1.5 text-[12.5px] text-[#bdbdc1]">
               Manage all your creators, their content, and creative profiles — in one place.
             </p>
           </div>
@@ -373,7 +376,16 @@ export function CreatorsPage({
           </div>
         )}
 
-        <div className="relative mt-4 grid gap-x-[18px] gap-y-[11px] [grid-template-columns:repeat(auto-fill,minmax(560px,1fr))]">
+        {/* Zwei Spalten wie im Entwurf, und zwar so lange wie irgend moeglich.
+            Vorher brauchte eine Spalte 560 Punkte, dadurch kippte das Raster
+            schon unter rund 1420 Fensterbreite auf eine einzige Karte, die
+            sich dann ueber die volle Breite zog -- das sah aus wie
+            hereingezoomt. Jetzt halten zwei Spalten bis 1380 durch --
+            gemessen: darunter faellt die Karte unter 500 Punkte und Name,
+            Handle und Beschriftungen fangen an abzuschneiden. Unterhalb
+            bleibt die einzelne Karte auf Kartenbreite stehen statt sich
+            ueber die ganze Breite zu strecken. */}
+        <div className="relative mt-4 grid gap-x-[18px] gap-y-[11px] grid-cols-1 max-w-[640px] min-[1380px]:grid-cols-2 min-[1380px]:max-w-none">
           {sichtbar.map((creator) => (
             <CreatorCard
               key={creator.id}
