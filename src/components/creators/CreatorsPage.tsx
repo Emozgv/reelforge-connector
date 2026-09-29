@@ -242,8 +242,8 @@ export function CreatorsPage({
 
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="block text-[11.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Creators</span>
-            <h1 className="mt-1 font-serif font-medium text-[36px] tracking-[-0.6px] text-[#f2f0ef]">
+            <span className="block text-[10.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Creators</span>
+            <h1 className="mt-1 font-serif font-medium text-[30px] tracking-[-0.4px] text-[#f2f0ef]">
               Your creator roster.
             </h1>
             <p className="mt-1.5 text-[12.5px] text-[#bdbdc1]">
