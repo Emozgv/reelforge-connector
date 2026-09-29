@@ -180,7 +180,12 @@ export function ProductionPage({
         }
       `}</style>
 
-      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+      {/* Derselbe Container wie in Library: bei 1509 Punkten Fensterbreite --
+          der Breite, auf der wirklich gearbeitet wird -- liess der alte
+          Container (1400 breit, 40 Rand) nur 1214 Punkte fuer den Inhalt und
+          die Seite wirkte herangezoomt. Jetzt starten alle drei Seiten an
+          derselben Stelle. */}
+      <div className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
         {/* Wortgleich der Sternenhimmel aus Collections: 160 hoch, 110
             Sterne, kein Verlauf darueber. Vorher 190 mit 130 Sternen und
             einem Verlauf aus dem Entwurf -- damit sah er anders aus als auf
@@ -197,7 +202,7 @@ export function ProductionPage({
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
             <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
-            <h1 className="mt-1 font-serif font-medium text-[34px] tracking-[-0.6px] text-[#f2f0ef]">
+            <h1 className="mt-1 font-serif font-medium text-[36px] tracking-[-0.6px] text-[#f2f0ef]">
               Everything in motion.
             </h1>
             <p className="mt-1.5 text-[13px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">

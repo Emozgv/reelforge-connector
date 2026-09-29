@@ -158,7 +158,12 @@ export function CollectionsPage({
       {/* Container and spacing taken from ResearchAccountsPage so both pages
           sit at the same scale — the Figma frame was drawn at a much larger
           zoom than the rest of the app. */}
-      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+      {/* Derselbe Container wie in Library: bei 1509 Punkten Fensterbreite --
+          der Breite, auf der wirklich gearbeitet wird -- liess der alte
+          Container (1400 breit, 40 Rand) nur 1214 Punkte fuer den Inhalt und
+          die Seite wirkte herangezoomt. Jetzt starten alle drei Seiten an
+          derselben Stelle. */}
+      <div className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
         {/* Confined to the header band only, never the whole scrollable page —
             same scoping as Research Accounts / Dashboard / Creativity Hub. */}
         <div className="dashboard-starfield-boost rf-collections-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
@@ -170,7 +175,7 @@ export function CollectionsPage({
             <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">
               Collections
             </span>
-            <h1 className="mt-1 font-serif font-medium text-[34px] text-neutral-50">
+            <h1 className="mt-1 font-serif font-medium text-[36px] text-neutral-50">
               {viewMode === "archived" ? "Archived collections" : "Creative collections"}
             </h1>
             <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
