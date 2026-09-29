@@ -31,6 +31,14 @@ import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 // Wo das Bild etwas zeigt, das es im Bestand nicht gibt, steht es an Ort
 // und Stelle dabei. Nichts davon wurde erfunden.
 
+// MASSSTAB: Der Entwurf ist fuer 1672 Punkte Fensterbreite gezeichnet,
+// gearbeitet wird bei rund 1509 -- aus Emres Screenshot zurueckgerechnet
+// (die Seitenleiste ist 215 Punkte breit und misst dort 285 von 2000).
+// Sein Inhaltsbereich hat damit 1294 statt 1434 Punkte. Feste Masse aus dem
+// Entwurf fuellen dort 10 Prozent mehr Flaeche und wirken herangezoomt;
+// deshalb sind Schriften, Zeilenhoehen, Kaesten und Panelbreite hier mit
+// 0,9 auf diese Breite gebracht. Die Verhaeltnisse des Entwurfs bleiben.
+//
 // Alle Flaechen- und Randwerte hier sind am Referenzbild gemessen (1672x941,
 // also fast Bildpunkt fuer Bildpunkt dieselbe Breite wie die App bei 1671):
 //
@@ -147,7 +155,7 @@ function Filterfeld({
         onClick={() => aktiv && setOffen?.(!offen)}
         title={titel}
         className={[
-          "w-full h-[49px] px-3 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-2 text-left transition-colors duration-150",
+          "w-full h-[44px] px-3 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-2 text-left transition-colors duration-150",
           aktiv ? "hover:border-[#D39448]/35" : "opacity-70 cursor-default",
         ].join(" ")}
       >
@@ -328,8 +336,8 @@ export function LibraryPage({
             13px Unterzeile, Hauptknopf rechts im festgelegten Gold. */}
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="block text-[12.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Library</span>
-            <h1 className="mt-1 font-serif font-medium text-[40px] tracking-[-0.6px] text-[#f2f0ef]">
+            <span className="block text-[11.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Library</span>
+            <h1 className="mt-1 font-serif font-medium text-[36px] tracking-[-0.6px] text-[#f2f0ef]">
               Your content, organized.
             </h1>
             <p className="mt-1.5 text-[13px] text-[#bdbdc1]">
@@ -355,20 +363,20 @@ export function LibraryPage({
 
         {/* Steuerleiste — Umschalter, Suche, Filter, Sortierung. */}
         {/* Leiste 76 hoch, innen 13 Luft, Kaesten 49 -- am Bild abgelesen. */}
-        <div className={`relative mt-6 ${PANEL} px-3.5 py-[13px] flex items-center gap-3`} style={PANEL_STYLE}>
+        <div className={`relative mt-6 ${PANEL} px-3 py-[11px] flex items-center gap-2.5`} style={PANEL_STYLE}>
           {/* Der Entwurf zeigt einen zweiten Reiter "Assets". Eine
               Einzelbild-Ansicht gibt es im Bestand nicht; sie zu erfinden
               waere eine neue Seite. Der Umschalter bleibt deshalb sichtbar
               und sagt das beim Darueberfahren. */}
-          <div className="shrink-0 h-[49px] p-1 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-1">
+          <div className="shrink-0 h-[44px] p-1 rounded-lg border border-[#1b1d1f] bg-[#08090a] flex items-center gap-1">
             <span
-              className="h-[38px] px-4 rounded-md flex items-center text-[12.5px] text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.16]"
+              className="h-[34px] px-4 rounded-md flex items-center text-[12.5px] text-[#D39448] border border-[#D39448]/60 bg-[#D39448]/[0.16]"
             >
               Deliveries
             </span>
             <span
               title="Single-asset view isn't built yet"
-              className="h-[38px] px-4 rounded-md flex items-center text-[12.5px] text-neutral-500 cursor-default select-none"
+              className="h-[34px] px-4 rounded-md flex items-center text-[12.5px] text-neutral-500 cursor-default select-none"
             >
               Assets
             </span>
@@ -380,7 +388,7 @@ export function LibraryPage({
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search deliveries, creators, or content..."
-              className="w-full h-[49px] pl-10 pr-3 rounded-lg border border-[#1b1d1f] bg-[#08090a] text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
+              className="w-full h-[44px] pl-10 pr-3 rounded-lg border border-[#1b1d1f] bg-[#08090a] text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
             />
           </div>
 
@@ -388,7 +396,7 @@ export function LibraryPage({
             <Filterfeld
               label="Creator"
               wert={aktiverCreator?.name ?? "All"}
-              breite="w-[126px]"
+              breite="w-[114px]"
               offen={offen === "creator"}
               setOffen={(v) => setOffen(v ? "creator" : null)}
             >
@@ -407,14 +415,14 @@ export function LibraryPage({
           {/* Content Type und Source: im Bestand gibt es weder Asset-Typen
               noch eine gespeicherte Quelle je Charge, nach der sich filtern
               liesse. Beide bleiben sichtbar, ohne etwas vorzutaeuschen. */}
-          <Filterfeld label="Content Type" wert="All" breite="w-[126px]" aktiv={false} titel="Asset types aren't tracked yet" />
-          <Filterfeld label="Source" wert="All" breite="w-[128px]" aktiv={false} titel="Per-delivery source isn't tracked yet" />
+          <Filterfeld label="Content Type" wert="All" breite="w-[114px]" aktiv={false} titel="Asset types aren't tracked yet" />
+          <Filterfeld label="Source" wert="All" breite="w-[115px]" aktiv={false} titel="Per-delivery source isn't tracked yet" />
 
           <div data-menue>
             <Filterfeld
               label="Status"
               wert={status === "all" ? "All" : status === "approved" ? "Approved" : "Delivered"}
-              breite="w-[127px]"
+              breite="w-[115px]"
               offen={offen === "status"}
               setOffen={(v) => setOffen(v ? "status" : null)}
             >
@@ -428,7 +436,7 @@ export function LibraryPage({
             <Filterfeld
               label="Sort by"
               wert={SORTIERUNGEN.find((s) => s.wert === sortierung)?.label ?? "Newest"}
-              breite="w-[194px]"
+              breite="w-[175px]"
               offen={offen === "sort"}
               setOffen={(v) => setOffen(v ? "sort" : null)}
             >
@@ -444,7 +452,7 @@ export function LibraryPage({
           </div>
         </div>
 
-        <p className="relative mt-5 text-[14px] text-[#9a9ba0]">
+        <p className="relative mt-5 text-[12.5px] text-[#9a9ba0]">
           {sichtbar.length} deliver{sichtbar.length === 1 ? "y" : "ies"}
         </p>
 
@@ -460,7 +468,7 @@ export function LibraryPage({
             {/* Im Bild gibt es KEINEN Kasten um die Liste -- die Zeilen stehen
                 einzeln auf dem Seitenhintergrund, jede mit eigenem Rand.
                 Abstand von Zeilenoberkante zu Zeilenoberkante: 106. */}
-            <div className="flex-1 min-w-0 flex flex-col gap-[9px]">
+            <div className="flex-1 min-w-0 flex flex-col gap-2">
               {sichtbar.map((b) => {
                 const ausgewaehlt = aktiv?.submissionId === b.submissionId;
                 return (
@@ -468,7 +476,7 @@ export function LibraryPage({
                     key={b.submissionId}
                     onClick={() => setGewaehlt(b.submissionId)}
                     className={[
-                      "relative flex items-center gap-3 h-[97px] pl-3.5 pr-2.5 rounded-xl border transition-colors duration-150 cursor-pointer",
+                      "relative flex items-center gap-2 h-[88px] pl-3 pr-2 rounded-xl border transition-colors duration-150 cursor-pointer",
                       ausgewaehlt
                         ? "border-[#77582f] bg-[#080809]"
                         : "border-[#0f1112] bg-[#040608] hover:border-[#2b2419] hover:bg-[#090a0c]",
@@ -476,17 +484,17 @@ export function LibraryPage({
                     style={ausgewaehlt ? { boxShadow: "0 0 0 1px rgba(119,88,47,0.35), 0 10px 26px -18px rgba(211,148,72,0.35)" } : undefined}
                   >
                     <span className="shrink-0 mr-2 flex gap-[2px] rounded-[7px] overflow-hidden bg-black/30">
-                      <Kachel v={b.previews[0]} klasse="w-[78px] h-[76px]" />
-                      <Kachel v={b.previews[1]} klasse="w-[78px] h-[76px]" />
+                      <Kachel v={b.previews[0]} klasse="w-[71px] h-[69px]" />
+                      <Kachel v={b.previews[1]} klasse="w-[71px] h-[69px]" />
                     </span>
 
                     <span className="flex-1 min-w-0 flex flex-col gap-1.5">
                       <span className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="font-serif font-medium text-[17px] text-[#f2f0ef] truncate">
+                        <span className="font-serif font-medium text-[15.5px] text-[#f2f0ef] truncate">
                           {b.collectionName}
                         </span>
-                        <span className="text-[14px] text-[#6d6e73] shrink-0">·</span>
-                        <span className="text-[14px] text-[#a9aaae] shrink-0">Batch #{b.index}</span>
+                        <span className="text-[12.5px] text-[#6d6e73] shrink-0">·</span>
+                        <span className="text-[12.5px] text-[#a9aaae] shrink-0">Batch #{b.index}</span>
                       </span>
 
                       <span className="flex items-center gap-1.5 min-w-0">
@@ -510,13 +518,13 @@ export function LibraryPage({
                       </span>
                     </span>
 
-                    <span className="shrink-0 h-[26px] px-2.5 rounded-[13px] flex items-center gap-1.5 border border-white/[0.09] bg-[#15161a] text-[10.5px] text-[#c8c9ce]">
+                    <span className="shrink-0 h-[26px] px-2 rounded-[13px] flex items-center gap-1.5 border border-[#1e2023] bg-[#0b0c0e] text-[10.5px] text-[#c8c9ce]">
                       <QuellenZeichen quelle={b.quelle} />
                       {b.quelle}
                     </span>
 
                     <span
-                      className="shrink-0 h-[26px] min-w-[86px] px-2.5 rounded-[13px] flex items-center justify-center gap-1.5 text-[10.5px]"
+                      className="shrink-0 h-[26px] min-w-[76px] px-2 rounded-[13px] flex items-center justify-center gap-1.5 text-[10.5px]"
                       style={
                         b.approvedAt
                           ? { background: "radial-gradient(circle at 50% 50%, rgba(18,56,42,1) 0%, rgba(11,28,22,1) 100%)", color: "#3fd096", filter: "drop-shadow(0 0 8px rgba(35,208,150,0.14))" }
@@ -528,11 +536,11 @@ export function LibraryPage({
                     </span>
 
                     <span aria-hidden className="shrink-0 self-stretch w-px my-3.5 bg-[#161819]" />
-                    <span className="shrink-0 flex items-center gap-1 pl-1">
+                    <span className="shrink-0 flex items-center gap-0.5">
                       <button
                         onClick={(e) => { e.stopPropagation(); setOpenSubmissionId(b.submissionId); }}
                         title="Open this delivery"
-                        className="w-[52px] h-[50px] rounded-lg flex flex-col items-center justify-center gap-1 text-[#c8c9ce] hover:text-neutral-50 hover:bg-white/[0.05] transition-colors duration-150"
+                        className="w-[48px] h-[46px] rounded-lg flex flex-col items-center justify-center gap-1 text-[#c8c9ce] hover:text-neutral-50 hover:bg-white/[0.05] transition-colors duration-150"
                       >
                         <Play size={14} />
                         <span className="text-[9.5px]">Open</span>
@@ -544,7 +552,7 @@ export function LibraryPage({
                         onClick={(e) => { e.stopPropagation(); if (!b.deliveryUrl) e.preventDefault(); }}
                         title={b.deliveryUrl ? "Open in Drive" : "No Drive folder for this delivery"}
                         className={[
-                          "w-[52px] h-[50px] rounded-lg flex flex-col items-center justify-center gap-1 transition-colors duration-150",
+                          "w-[48px] h-[46px] rounded-lg flex flex-col items-center justify-center gap-1 transition-colors duration-150",
                           b.deliveryUrl ? "text-[#c8c9ce] hover:text-neutral-50 hover:bg-white/[0.05]" : "text-[#5a5b60] cursor-default",
                         ].join(" ")}
                       >
@@ -555,7 +563,7 @@ export function LibraryPage({
                           es noch nicht -- die Dateien liegen in Drive. */}
                       <span
                         title="Download runs through the Drive folder for now"
-                        className="w-[52px] h-[50px] rounded-lg flex flex-col items-center justify-center gap-1 text-[#5a5b60] cursor-default select-none"
+                        className="w-[48px] h-[46px] rounded-lg flex flex-col items-center justify-center gap-1 text-[#5a5b60] cursor-default select-none"
                       >
                         <Download size={14} />
                         <span className="text-[9.5px]">Download</span>
@@ -607,7 +615,7 @@ export function LibraryPage({
             {/* Rechte Spalte: die gewaehlte Lieferung im Detail */}
             {aktiv && (
               <div
-                className="w-full min-[1440px]:w-[510px] shrink-0 rounded-xl border border-[#0f1112] p-3"
+                className="w-full min-[1440px]:w-[460px] shrink-0 rounded-xl border border-[#0f1112] p-3"
                 style={{ background: "#060809" }}
               >
                 <div className="grid grid-cols-2 gap-[3px] rounded-[10px] overflow-hidden bg-black/30">
@@ -618,7 +626,7 @@ export function LibraryPage({
 
                 <div className="mt-3.5 flex items-center gap-2">
                   <h2 className="min-w-0 flex items-baseline gap-1.5">
-                    <span className="font-serif font-medium text-[17px] text-[#f2f0ef] truncate">{aktiv.collectionName}</span>
+                    <span className="font-serif font-medium text-[15.5px] text-[#f2f0ef] truncate">{aktiv.collectionName}</span>
                     <span className="text-[14px] text-[#6d6e73] shrink-0">·</span>
                     <span className="text-[14px] text-[#a9aaae] shrink-0">Batch #{aktiv.index}</span>
                   </h2>
