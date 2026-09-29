@@ -18,6 +18,7 @@ import { CreatorCard, einrichtungsZustand } from "./CreatorCard";
 import { computeCreatorStats } from "./creatorStats";
 import { CreatorProfilePage } from "./CreatorProfilePage";
 import { CreatorSetupWizard } from "./CreatorSetupWizard";
+import { GOLD_RING_SOFT } from "../../lib/goldRing";
 
 // Umsetzung des Referenzbildes (1695x928). Die Masse sind daran gemessen und
 // mit 0,89 auf 1509 gebracht -- die Breite, auf der wirklich gearbeitet wird.
@@ -36,7 +37,7 @@ import { CreatorSetupWizard } from "./CreatorSetupWizard";
 // und ein weicher Schatten darunter. Bewusst NUR die Tiefe -- die
 // Flaechenfarben bleiben auf den am Entwurf gemessenen Werten.
 const TIEFE = {
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8)",
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING_SOFT}`,
 } as const;
 
 const GOLD_CTA = {

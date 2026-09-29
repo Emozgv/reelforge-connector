@@ -5,6 +5,7 @@ import { isVersionableCollection, nextCollectionName } from "../../lib/collectio
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { CollectionVersionMenu } from "./CollectionVersionMenu";
 import { COLLECTION_STATUS_STYLES, effectiveCollectionStatus } from "./CollectionRow";
+import { GOLD_RING_SOFT } from "../../lib/goldRing";
 
 // Figma's Collections Overview draws each Collection as a card, not as a row
 // (node 3368:69 and its siblings). CollectionRow stays exactly as it is —
@@ -101,6 +102,7 @@ export function CollectionCard({
       // schon die Nachbarkarte, und der Klick landete dort. In Research
       // Accounts haengt press-feedback an Schaltflaechen, nicht an grossen
       // Flaechen -- ohne ist die Karte also naeher an der DNA, nicht weiter weg.
+      style={{ boxShadow: GOLD_RING_SOFT }}
       className="group relative flex h-[104px] items-stretch p-2.5 rounded-xl border border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613] transition-colors duration-150 cursor-pointer"
     >
       <div className="w-[54px] shrink-0 mr-3 rounded-[6px] overflow-hidden bg-black/30">

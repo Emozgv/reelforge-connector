@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, Ban, CheckCircle2, ChevronDown, Circle, Clappe
 import type { Collection, Creator, SubmissionStatus } from "../../types";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
+import { GOLD_RING } from "../../lib/goldRing";
 
 // Alle Zahlen und Farben hier stammen aus dem Figma-Knoten 3373:623 (dem
 // Durchlauf, bei dem die Umwandlung echte Ebenen erzeugt hat) -- nicht
@@ -22,7 +23,7 @@ import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 const PANEL = "rounded-xl border border-[#1a130b]";
 const PANEL_STYLE = {
   background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}`,
 } as const;
 
 // Zeilenverlauf der Pipeline (Figma 3373:796).

@@ -16,6 +16,7 @@ import { ProfilePlatformDropdown } from "./ProfilePlatformDropdown";
 import { ProfileHeader } from "./ProfileHeader";
 import { ReelDetailModal } from "./ReelDetailModal";
 import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTypes";
+import { GOLD_RING, GOLD_RING_SOFT } from "../../lib/goldRing";
 
 // Local, page-scoped copies of the Dashboard's now-frozen surface language
 // (see DashboardPage.tsx's PANEL/CARD) — duplicated rather than imported so
@@ -27,11 +28,11 @@ import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTy
 // here; that was just their OS accent color on a keyboard-focused element,
 // not anything from our CSS, so this recreates the same feeling as an
 // intentional, always-on accent rather than relying on browser focus state.
-const HUB_GOLD_RING = "0 0 0 0.5px rgba(211,148,72,0.32), 0 0 10px rgba(211,148,72,0.08)";
+const HUB_GOLD_RING = GOLD_RING;
 // Softer variant for the toolbar tier (search bar, chips, pills, buttons) —
 // those sit much closer together and read as "outlined" at the panel-tier
 // ring's strength; this keeps just a whisper of the same warmth.
-const HUB_GOLD_RING_SOFT = "0 0 0 0.5px rgba(211,148,72,0.22), 0 0 8px rgba(211,148,72,0.06)";
+const HUB_GOLD_RING_SOFT = GOLD_RING_SOFT;
 const HUB_PANEL_STYLE: React.CSSProperties = {
   background: "linear-gradient(180deg, #070707, #020202)",
   boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${HUB_GOLD_RING}`,

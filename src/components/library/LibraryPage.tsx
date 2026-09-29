@@ -20,6 +20,7 @@ import { DriveGlyph } from "../collections/DriveGlyph";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { FinishedBatchView } from "./FinishedBatchView";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
+import { GOLD_RING, GOLD_RING_SOFT } from "../../lib/goldRing";
 
 // Umsetzung des Referenzbildes (Figma 3378:3 traegt nur dieses Bild, keine
 // Ebenen -- die Masse sind also am Bild abgelesen und auf den Massstab der
@@ -55,7 +56,7 @@ import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 const PANEL = "rounded-xl border border-[#16120c]";
 const PANEL_STYLE = {
   background: "#060606",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8)",
+  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}`,
 } as const;
 
 const GOLD_CTA = {
@@ -481,7 +482,11 @@ export function LibraryPage({
                         ? "border-[#77582f] bg-[#080809]"
                         : "border-[#0f1112] bg-[#040608] hover:border-[#2b2419] hover:bg-[#090a0c]",
                     ].join(" ")}
-                    style={ausgewaehlt ? { boxShadow: "0 0 0 1px rgba(119,88,47,0.35), 0 10px 26px -18px rgba(211,148,72,0.35)" } : undefined}
+                    style={{
+                      boxShadow: ausgewaehlt
+                        ? "0 0 0 1px rgba(119,88,47,0.35), 0 10px 26px -18px rgba(211,148,72,0.35)"
+                        : GOLD_RING_SOFT,
+                    }}
                   >
                     <span className="shrink-0 mr-2 flex gap-[2px] rounded-[7px] overflow-hidden bg-black/30">
                       <Kachel v={b.previews[0]} klasse="w-[71px] h-[69px]" />
@@ -616,7 +621,7 @@ export function LibraryPage({
             {aktiv && (
               <div
                 className="w-full min-[1440px]:w-[460px] shrink-0 rounded-xl border border-[#0f1112] p-3"
-                style={{ background: "#060809" }}
+                style={{ background: "#060809", boxShadow: GOLD_RING }}
               >
                 <div className="grid grid-cols-2 gap-[3px] rounded-[10px] overflow-hidden bg-black/30">
                   {Array.from({ length: 4 }).map((_, i) => (

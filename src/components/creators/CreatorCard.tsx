@@ -4,6 +4,7 @@ import { creatorSetupStatus } from "../../lib/creatorMapping";
 import { planBadgeLabel } from "../../lib/planDisplay";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import type { CreatorStats } from "./creatorStats";
+import { GOLD_RING } from "../../lib/goldRing";
 
 // Die Karte aus dem Referenzbild (1695x928). Alle Masse sind daran gemessen
 // und mit 0,89 auf die Breite gebracht, auf der wirklich gearbeitet wird
@@ -68,7 +69,7 @@ export function CreatorCard({
       // Tiefe aus der DNA, Flaechen aus dem Entwurf. Bewusst OHNE
       // press-feedback: dessen Schrumpfen beim Druecken hat in Collections
       // dazu gefuehrt, dass Klicks auf der grossen Flaeche danebengingen.
-      style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8)" }}
+      style={{ boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}` }}
       className="group relative flex h-[200px] p-[7px] rounded-xl border border-[#100d07] bg-[#050505] hover:border-[#2f2113] transition-colors duration-150 cursor-pointer"
     >
       <span className="w-[132px] h-full shrink-0 rounded-[9px] overflow-hidden bg-black/40 block">
