@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Activity, AlertTriangle, Ban, CheckCircle2, ChevronDown, Circle, Clapperboard, Database, Plus, Search, Sparkles } from "lucide-react";
 import type { Collection, Creator, SubmissionStatus } from "../../types";
-import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
-import { GOLD_RING } from "../../lib/goldRing";
+import { panelStil, PANEL_FUELLUNG, PANEL_RAND, KARTE_FUELLUNG } from "../../lib/panelLook";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 // Alle Zahlen und Farben hier stammen aus dem Figma-Knoten 3373:623 (dem
 // Durchlauf, bei dem die Umwandlung echte Ebenen erzeugt hat) -- nicht
@@ -21,13 +21,10 @@ import { GOLD_RING } from "../../lib/goldRing";
 // derselbe Schatten. Die Akzente -- Abschnittsgold, Statuspillen, Zeichen --
 // bleiben die des Entwurfs.
 const PANEL = "rounded-xl border border-[#1a130b]";
-const PANEL_STYLE = {
-  background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}`,
-} as const;
+const PANEL_STYLE = panelStil(true);
 
 // Zeilenverlauf der Pipeline (Figma 3373:796).
-const ROW = "border border-white/[0.07] bg-[#111114] hover:border-[#D39448]/35 hover:bg-[#161613]";
+const ROW = "border border-white/[0.07] hover:border-[#D39448]/35 hover:bg-[#161613]";
 
 // Die Beschriftungen des Entwurfs auf die Zustaende, die es wirklich gibt.
 // "Review" heisst im Bestand "Sent": abgeschickt, noch nicht angefasst.
@@ -227,12 +224,18 @@ export function ProductionPage({
           </div>
         </div>
 
-        {/* Filterleiste — Figma 3373:636 */}
+        {/* Filterleiste — Figma 3373:636.
+            Die Leiste selbst bleibt auf overflow-hidden: die Chiprolle und das
+            schrumpfende Suchfeld brauchen das. Das Creator-Menue haengt deshalb
+            eine Ebene hoeher, ausserhalb der beschnittenen Flaeche -- darin
+            wurde es an der Leistenkante abgeschnitten und verschwand hinter den
+            Panels darunter. */}
+        <div className="relative mt-7">
         <div
-          className="relative mt-7 h-[52px] p-[7px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
-          style={{ background: "linear-gradient(180deg, #070707, #020202)" }}
+          className="h-[52px] p-[7px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
+          style={{ background: PANEL_FUELLUNG, borderColor: PANEL_RAND }}
         >
-          <div className="relative shrink-0">
+          <div className="shrink-0">
             <button
               onClick={() => setCreatorOpen((v) => !v)}
               className="min-w-[132px] h-[34px] px-3 rounded-full border border-white/[0.08] flex items-center gap-2 text-[12.5px] text-neutral-200 hover:text-neutral-50 hover:border-[#D39448]/35 transition-colors duration-150"
@@ -257,40 +260,6 @@ export function ProductionPage({
               <span className="truncate">{aktiverCreator?.name ?? "All Creators"}</span>
               <ChevronDown size={13} className="ml-auto shrink-0 text-[#939398]" />
             </button>
-            {creatorOpen && (
-              <div
-                onMouseLeave={() => setCreatorOpen(false)}
-                className="absolute left-0 top-10 z-30 w-[200px] rounded-lg surface-panel-strong p-1 animate-fade-in max-h-72 overflow-y-auto"
-              >
-                <button
-                  onClick={() => {
-                    setCreatorId("all");
-                    setCreatorOpen(false);
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
-                >
-                  All Creators
-                </button>
-                {creators.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      setCreatorId(c.id);
-                      setCreatorOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
-                  >
-                    <span
-                      className="w-3.5 h-3.5 rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
-                      style={c.profileImage ? undefined : { background: c.avatarColor }}
-                    >
-                      {c.profileImage && <img src={c.profileImage} alt="" className="w-full h-full object-cover" />}
-                    </span>
-                    <span className="truncate">{c.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Nur Optik: eine Quelle je Auftrag gibt es im Bestand nicht. */}
@@ -331,6 +300,42 @@ export function ProductionPage({
               className="w-full h-[34px] pl-8 pr-3 rounded-lg surface-field text-[12px] text-neutral-100 placeholder:text-neutral-600 outline-none focus-glow"
             />
           </div>
+        </div>
+
+        {creatorOpen && (
+          <div
+            onMouseLeave={() => setCreatorOpen(false)}
+            className="absolute left-[7px] top-[54px] z-30 w-[200px] rounded-lg surface-panel-strong p-1 animate-fade-in max-h-72 overflow-y-auto"
+          >
+            <button
+              onClick={() => {
+                setCreatorId("all");
+                setCreatorOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+            >
+              All Creators
+            </button>
+            {creators.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => {
+                  setCreatorId(c.id);
+                  setCreatorOpen(false);
+                }}
+                className="w-full flex items-center gap-2 text-left px-2.5 py-1.5 rounded-md text-[12px] text-neutral-300 hover:bg-white/[0.06] transition-colors"
+              >
+                <span
+                  className="w-3.5 h-3.5 rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
+                  style={c.profileImage ? undefined : { background: c.avatarColor }}
+                >
+                  {c.profileImage && <img src={c.profileImage} alt="" className="w-full h-full object-cover" />}
+                </span>
+                <span className="truncate">{c.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         </div>
 
         {alleZeilen.length === 0 ? (
@@ -547,6 +552,7 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
   return (
     <button
       onClick={onOpen}
+      style={{ background: KARTE_FUELLUNG }}
       className={`relative text-left rounded-xl overflow-hidden transition-colors duration-150 ${ROW}`}
     >
       <span className="flex gap-2.5 p-2.5">
@@ -578,7 +584,8 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
   return (
     <button
       onClick={onOpen}
-      className="w-full h-[48px] px-2 grid items-center gap-2.5 bg-[#111114] border-b border-white/[0.06] last:border-b-0 text-left hover:bg-[#161613] transition-colors duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
+      style={{ background: KARTE_FUELLUNG }}
+      className="w-full h-[48px] px-2 grid items-center gap-2.5 border-b border-white/[0.06] last:border-b-0 text-left hover:bg-[#161613] transition-colors duration-150 [grid-template-columns:39fr_14fr_14fr_27fr_6fr]"
     >
       <span className="flex items-center gap-2.5 min-w-0">
         <Bild row={row} klasse="w-[62px] h-[40px] rounded-[5px]" />

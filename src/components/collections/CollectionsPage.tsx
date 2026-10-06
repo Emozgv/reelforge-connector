@@ -5,21 +5,18 @@ import type { CollectionsStore } from "../../state/useCollectionsStore";
 import { groupCollectionsByFamily } from "../../lib/collectionNaming";
 import { supabase } from "../../lib/supabase";
 import { CreatorFilterBar } from "./CreatorFilterBar";
-import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { CollectionCard } from "./CollectionCard";
 import { CollectionWorkspace } from "./CollectionWorkspace";
 import { NewCollectionPanel } from "./NewCollectionPanel";
-import { GOLD_RING } from "../../lib/goldRing";
+import { panelStil } from "../../lib/panelLook";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 // Dasselbe Panel wie in ResearchAccountsPage (und dort wiederum aus dem
 // Dashboard uebernommen). Der Nutzer war dort ausdruecklich: das Panel des
 // Dashboards IST die DNA, keine Annaeherung daran -- also wortgleich, kein
 // eigener Verlauf, kein eigener Rand.
 const PANEL = "rounded-xl border border-[#1a130b]";
-const PANEL_STYLE = {
-  background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}`,
-} as const;
+const PANEL_STYLE = panelStil(true);
 
 export function CollectionsPage({
   creators,

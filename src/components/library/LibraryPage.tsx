@@ -17,10 +17,11 @@ import {
 } from "lucide-react";
 import type { Collection, Creator, RegenerationReason } from "../../types";
 import { DriveGlyph } from "../collections/DriveGlyph";
-import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { FinishedBatchView } from "./FinishedBatchView";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
-import { GOLD_AUSWAHL_RAND, GOLD_AUSWAHL_SCHATTEN, GOLD_RING, GOLD_RING_SOFT } from "../../lib/goldRing";
+import { GOLD_AUSWAHL_RAND, GOLD_AUSWAHL_SCHATTEN } from "../../lib/goldRing";
+import { panelStil, KARTE_FUELLUNG, PANEL_RAND } from "../../lib/panelLook";
+import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 // Umsetzung des Referenzbildes (Figma 3378:3 traegt nur dieses Bild, keine
 // Ebenen -- die Masse sind also am Bild abgelesen und auf den Massstab der
@@ -54,10 +55,7 @@ import { GOLD_AUSWAHL_RAND, GOLD_AUSWAHL_SCHATTEN, GOLD_RING, GOLD_RING_SOFT } f
 // Flaechen. Vorher lagen die Zeilen auf #111114 und schwammen als graue
 // Bloecke; jetzt traegt sie der Rand.
 const PANEL = "rounded-xl border border-[#1a130b]";
-const PANEL_STYLE = {
-  background: "#060606",
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}`,
-} as const;
+const PANEL_STYLE = panelStil(true);
 
 const GOLD_CTA = {
   backgroundImage: "linear-gradient(90deg, #D39448, #EAC088)",
@@ -478,14 +476,15 @@ export function LibraryPage({
                     onClick={() => setGewaehlt(b.submissionId)}
                     className={[
                       "relative flex items-center gap-2 h-[88px] pl-3 pr-2 rounded-xl border transition-colors duration-150 cursor-pointer",
-                      ausgewaehlt
-                        ? "bg-[#080809]"
-                        : "border-[#0f1112] bg-[#040608] hover:border-[#2b2419] hover:bg-[#090a0c]",
+                      ausgewaehlt ? "" : "hover:border-[#2b2419]",
                     ].join(" ")}
+                    // Die Zeile ist hier die eigentliche Flaeche der Seite, also
+                    // spricht sie dieselbe Sprache wie die Panels und folgt dem
+                    // Schalter. Nur die ausgewaehlte Zeile behaelt ihr Gold.
                     style={
                       ausgewaehlt
-                        ? { borderColor: GOLD_AUSWAHL_RAND, boxShadow: GOLD_AUSWAHL_SCHATTEN }
-                        : { boxShadow: GOLD_RING_SOFT }
+                        ? { background: KARTE_FUELLUNG, borderColor: GOLD_AUSWAHL_RAND, boxShadow: GOLD_AUSWAHL_SCHATTEN }
+                        : { background: KARTE_FUELLUNG, borderColor: PANEL_RAND }
                     }
                   >
                     <span className="shrink-0 mr-2 flex gap-[2px] rounded-[7px] overflow-hidden bg-black/30">
@@ -620,11 +619,8 @@ export function LibraryPage({
             {/* Rechte Spalte: die gewaehlte Lieferung im Detail */}
             {aktiv && (
               <div
-                className="w-full min-[1440px]:w-[460px] shrink-0 rounded-xl border border-[#1a130b] p-3"
-                style={{
-                  background: "#060809",
-                  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), ${GOLD_RING}`,
-                }}
+                className="w-full min-[1440px]:w-[460px] shrink-0 rounded-xl border p-3"
+                style={PANEL_STYLE}
               >
                 <div className="grid grid-cols-2 gap-[3px] rounded-[10px] overflow-hidden bg-black/30">
                   {Array.from({ length: 4 }).map((_, i) => (

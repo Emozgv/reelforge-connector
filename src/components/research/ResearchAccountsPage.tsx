@@ -33,6 +33,7 @@ import { ReelDetailModal } from "../hub/ReelDetailModal";
 import { SwipeResearchPlayer, type LikeStatus, type FollowStatus } from "./SwipeResearchPlayer";
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
 import { CommentsPanel } from "./CommentsPanel";
+import { panelStil } from "../../lib/panelLook";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 
 // Local, page-scoped copy of DashboardPage.tsx's PANEL/PANEL_STYLE —
@@ -41,10 +42,7 @@ import { StarfieldBackground } from "../shared/StarfieldBackground";
 // brand DNA, not a close approximation of it — no gold ring, no extra
 // depth tuning, just the same panel.
 const PANEL = "rounded-xl border border-[#1a130b]";
-const PANEL_STYLE = {
-  background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
-} as const;
+const PANEL_STYLE = panelStil();
 
 function SessionRow({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) {
   return (

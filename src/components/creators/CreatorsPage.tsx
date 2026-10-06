@@ -19,6 +19,7 @@ import { computeCreatorStats } from "./creatorStats";
 import { CreatorProfilePage } from "./CreatorProfilePage";
 import { CreatorSetupWizard } from "./CreatorSetupWizard";
 import { GOLD_AKZENT_FUELLUNG, GOLD_AKZENT_RAND, GOLD_AKZENT_SCHRIFT, GOLD_RING_SOFT } from "../../lib/goldRing";
+import { KARTE_FUELLUNG } from "../../lib/panelLook";
 
 // Umsetzung des Referenzbildes (1695x928). Die Masse sind daran gemessen und
 // mit 0,89 auf 1509 gebracht -- die Breite, auf der wirklich gearbeitet wird.
@@ -75,7 +76,7 @@ function Kennzahlkasten({
   label: string;
 }) {
   return (
-    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-2.5 shrink-0" style={TIEFE}>
+    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#1a130b] flex items-center gap-2.5 shrink-0" style={{ ...TIEFE, background: KARTE_FUELLUNG }}>
       {Zeichen ? (
         <Zeichen size={15} className="shrink-0 text-[#8c8d91]" />
       ) : (
@@ -108,7 +109,8 @@ function Auswahlfeld({
     <div className={`relative shrink-0 ${breite}`} data-menue>
       <button
         onClick={() => setOffen(!offen)}
-        className="press-feedback w-full h-[48px] px-3 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-2 text-left hover:border-[#5a3b1b] transition-colors duration-150"
+        style={{ background: KARTE_FUELLUNG }}
+        className="press-feedback w-full h-[48px] px-3 rounded-lg border border-[#1a130b] flex items-center gap-2 text-left hover:border-[#5a3b1b] transition-colors duration-150"
       >
         <span className="min-w-0 flex-1">
           <span className="block text-[9.5px] text-[#9a9ba0] leading-none">{label}</span>
@@ -287,14 +289,14 @@ export function CreatorsPage({
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
               placeholder="Search creators, @handles, or tags..."
-              className="w-full h-[53px] pl-10 pr-3 rounded-lg border border-[#111111] bg-[#090909] text-[12.5px] text-neutral-100 placeholder:text-neutral-500 outline-none focus-glow"
+              style={{ background: KARTE_FUELLUNG }} className="w-full h-[53px] pl-10 pr-3 rounded-lg border border-[#111111] text-[12.5px] text-neutral-100 placeholder:text-neutral-500 outline-none focus-glow"
             />
           </div>
         </div>
 
         {/* Reiter, Planfilter, Sortierung, Ansicht -- Leiste 54 hoch. */}
         <div className="relative mt-3 flex items-center gap-2.5">
-          <div className="h-[48px] p-1 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-1 shrink-0" style={TIEFE}>
+          <div className="h-[48px] p-1 rounded-lg border border-[#1a130b] flex items-center gap-1 shrink-0" style={{ ...TIEFE, background: KARTE_FUELLUNG }}>
             {REITER.map((r) => (
               <button
                 key={r.wert}
@@ -343,7 +345,7 @@ export function CreatorsPage({
               Eine Listenansicht ist darin nicht gezeichnet; sie zu erfinden
               waere eine zweite Seite. Der Umschalter bleibt deshalb sichtbar
               und sagt das beim Darueberfahren. */}
-          <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#1a130b] bg-[#030506] flex items-center gap-1" style={TIEFE}>
+          <div className="ml-auto shrink-0 h-[48px] p-1 rounded-lg border border-[#1a130b] flex items-center gap-1" style={{ ...TIEFE, background: KARTE_FUELLUNG }}>
             <span
               title="Grid view"
               style={{ color: GOLD_AKZENT_SCHRIFT, borderColor: GOLD_AKZENT_RAND, background: GOLD_AKZENT_FUELLUNG }}
@@ -367,7 +369,7 @@ export function CreatorsPage({
         )}
 
         {!creatorsStore.error && sichtbar.length === 0 && (
-          <div className="relative mt-4 rounded-xl border border-[#1a130b] bg-[#050505] py-16 text-center">
+          <div style={{ background: KARTE_FUELLUNG }} className="relative mt-4 rounded-xl border border-[#1a130b] py-16 text-center">
             {creators.length === 0 ? (
               <>
                 <Users size={20} className="mx-auto text-neutral-700 mb-2.5" />

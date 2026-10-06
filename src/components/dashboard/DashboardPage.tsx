@@ -15,6 +15,7 @@ import type { ActivityFeedItem } from "../../state/useActivityFeed";
 import { formatRelativeTime } from "../../lib/relativeTime";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
+import { panelStil, KARTE_FUELLUNG } from "../../lib/panelLook";
 
 // Panel surface — deep, warm-black (not neutral/cool-black). Deliberately
 // close to the page background so the panel nearly disappears into the
@@ -22,10 +23,7 @@ import { StarfieldBackground } from "../shared/StarfieldBackground";
 // channels) is what reads as "premium bronze-black" rather than flat
 // gray-black.
 const PANEL = "rounded-[12px] border border-[#1a130b]";
-const PANEL_STYLE: React.CSSProperties = {
-  background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8)",
-};
+const PANEL_STYLE: React.CSSProperties = panelStil();
 
 // Nested "card within a panel" surface — Needs Attention rows, Content
 // Momentum stat rows, Production Pulse's legend box. A real, deliberate
@@ -34,7 +32,7 @@ const PANEL_STYLE: React.CSSProperties = {
 // read as distinct raised surfaces instead of blending into the panel.
 const CARD = "rounded-[10px] border border-[#202024]";
 const CARD_STYLE: React.CSSProperties = {
-  background: "#111114",
+  background: KARTE_FUELLUNG,
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6)",
 };
 const CARD_HOVER = "hover:border-[#2c2c32]";

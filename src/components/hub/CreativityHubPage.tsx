@@ -17,6 +17,7 @@ import { ProfileHeader } from "./ProfileHeader";
 import { ReelDetailModal } from "./ReelDetailModal";
 import { DEFAULT_FILTERS, countActiveFilters, type HubFilters } from "./filterTypes";
 import { HUB_RING, HUB_RING_SOFT } from "../../lib/goldRing";
+import { panelStil, PANEL_SCHATTEN, KARTE_FUELLUNG } from "../../lib/panelLook";
 
 // Local, page-scoped copies of the Dashboard's now-frozen surface language
 // (see DashboardPage.tsx's PANEL/CARD) — duplicated rather than imported so
@@ -33,13 +34,15 @@ const HUB_GOLD_RING = HUB_RING;
 // those sit much closer together and read as "outlined" at the panel-tier
 // ring's strength; this keeps just a whisper of the same warmth.
 const HUB_GOLD_RING_SOFT = HUB_RING_SOFT;
+// Der Hub fuehrt zusaetzlich seinen eigenen Ring -- der bleibt, der Rest
+// folgt dem Panel-Schalter in lib/panelLook.ts.
 const HUB_PANEL_STYLE: React.CSSProperties = {
-  background: "linear-gradient(180deg, #070707, #020202)",
-  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${HUB_GOLD_RING}`,
+  ...panelStil(),
+  boxShadow: [PANEL_SCHATTEN, HUB_GOLD_RING].filter((t) => t && t !== "none").join(", "),
 };
 const HUB_CARD_BORDER = "rgba(255,255,255,0.06)";
 const HUB_CARD_STYLE: React.CSSProperties = {
-  background: "#111114",
+  background: KARTE_FUELLUNG,
   boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6), ${HUB_GOLD_RING_SOFT}`,
 };
 
