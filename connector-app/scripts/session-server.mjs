@@ -90,6 +90,36 @@ const AUTOMATION_CONTEXT_OPTIONS = {
 // Windows keeps the bundled Chromium exactly as before.
 const IS_MAC = process.platform === "darwin";
 
+// Startet den Browser fuer alles, was eine echte Seite laden oder abspielen
+// muss -- immer das vom Nutzer installierte Google Chrome.
+//
+// Warum nicht Playwrights mitgeliefertes Chromium: dem fehlen die
+// proprietaeren Codecs. Nachgemessen (06.10.2026):
+//
+//   Google Chrome        H.264 "probably"  AAC "probably"
+//   gebuendeltes Chromium  H.264 ---         AAC ---
+//
+// Instagram-Reels sind H.264/AAC. Auf Windows lief deshalb im Hintergrund
+// nie ein Reel ab, waehrend es auf macOS lief -- nicht weil Windows anders
+// gebaut werden sollte, sondern weil die macOS-Umstellung (Apple konnte
+// Chromium nicht notarisieren) den Codec-Unterschied unbemerkt mitgebracht
+// hat. Beide Plattformen laufen jetzt auf demselben Weg.
+//
+// Der Rueckfall gilt nur fuer Windows und nur, wenn dort gar kein Chrome
+// installiert ist: dann laeuft es exakt so weiter wie bisher. Schlechter
+// als heute kann es dadurch nicht werden. Auf macOS bleibt es beim harten
+// Fehler, denn dort gibt es kein mitgeliefertes Chromium, auf das man
+// zurueckfallen koennte.
+async function starteBrowser(optionen = {}) {
+  try {
+    return await chromium.launch({ ...optionen, channel: "chrome" });
+  } catch (err) {
+    if (IS_MAC) throw err;
+    console.log("[browser] Kein Google Chrome gefunden -- faellt auf das mitgelieferte Chromium zurueck (ohne H.264/AAC laeuft dort kein Reel-Video).");
+    return await chromium.launch(optionen);
+  }
+}
+
 function looksLikeInstagramMedia(node) {
   return (
     node &&
@@ -1029,7 +1059,7 @@ async function startSession(accountId, token, lockSecret) {
   const t1 = Date.now();
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, ...(IS_MAC ? { channel: "chrome" } : {}) });
+    browser = await starteBrowser({ headless: true });
   } catch (err) {
     if (IS_MAC) {
       throw new Error("Research needs Google Chrome installed on this Mac. Install Chrome, then try again.");
