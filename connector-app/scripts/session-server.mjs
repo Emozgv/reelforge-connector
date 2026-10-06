@@ -120,6 +120,154 @@ async function starteBrowser(optionen = {}) {
   }
 }
 
+// ===========================================================================
+// DIE BUEHNE (V2)
+//
+// V1 reichte dem Kunden die Adresse der Videodatei durch, und ReelForge
+// spielte eine eigene Kopie ab. Instagram sah davon nichts -- gemessen am
+// 06.10.2026: 2 Minuten Sitzung, 9 Reels beim Kunden, und Instagram sah
+// einen Account, der ein einziges Reel 13 Mal in Schleife ansieht.
+//
+// V2 reicht stattdessen Instagrams eigenes Video durch: Bild und Ton kommen
+// als EIN Strom beim Kunden an, und seine Wische gehen in denselben Tab
+// zurueck. Was der Mitarbeiter sieht, IST Instagram -- also zaehlt Instagram
+// auch, was er tut.
+//
+// Der Weg ist captureStream() direkt am <video>, nicht das Abfilmen des Tabs.
+// Beides wurde gemessen (06.10.2026), und der Unterschied ist deutlich:
+//
+//   Tab abfilmen        420x746 Fenster -> 420x458 Bild (schneidet ab),
+//                       Ton gar nicht dabei (ein unsichtbarer Browser hat
+//                       kein Tonausgabegeraet), und macOS verlangt die
+//                       Berechtigung "Bildschirmaufnahme" mit Systemdialog
+//                       und Neustart.
+//   captureStream()     720x1280 in Originalgroesse, resizeMode "none",
+//                       Ton direkt dabei (Pegel 0,50), keine Berechtigung,
+//                       kein Dialog.
+//
+// Ohne --autoplay-policy spielt Instagram nur stumm; der Schalter hebt die
+// Sperre auf, damit das Reel mit Ton laeuft.
+// ===========================================================================
+const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required"];
+const BUEHNE_FENSTER = { width: 420, height: 746 };
+
+// Laeuft IN der Instagram-Seite.
+const BUEHNE_SKRIPT = () => {
+  const B = (window.__buehne = { pc: null, protokoll: [] });
+  const sag = (t) => B.protokoll.push(t);
+
+  B.videoImBild = () => {
+    const alle = [...document.querySelectorAll("video")];
+    const sichtbar = alle.filter((v) => {
+      const r = v.getBoundingClientRect();
+      return r.height > 100 && r.top < innerHeight && r.bottom > 0;
+    });
+    return sichtbar.find((v) => !v.paused) ?? sichtbar[0] ?? null;
+  };
+
+  B.spurenVon = (v) => {
+    if (!v.captureStream) throw new Error("captureStream gibt es in diesem Browser nicht");
+    v.muted = false;
+    const strom = v.captureStream();
+    return { bild: strom.getVideoTracks()[0] ?? null, ton: strom.getAudioTracks()[0] ?? null, strom };
+  };
+
+  B.starte = async () => {
+    const v = B.videoImBild();
+    if (!v) return { fehler: "Es laeuft gerade kein Reel im Hintergrund." };
+    let spuren;
+    try { spuren = B.spurenVon(v); }
+    catch (e) { return { fehler: String(e?.message ?? e) }; }
+    if (!spuren.bild) return { fehler: "Das Reel liefert keine Bildspur." };
+    sag(`Quelle ${v.videoWidth}x${v.videoHeight}, Ton ${spuren.ton ? "dabei" : "FEHLT"}`);
+
+    B.strom = spuren.strom;
+    B.pc = new RTCPeerConnection();
+    B.pc.addTrack(spuren.bild, spuren.strom);
+    if (spuren.ton) B.pc.addTrack(spuren.ton, spuren.strom);
+
+    // Ohne das regelt WebRTC die Aufloesung herunter, sobald es eng wird --
+    // gemessen: 180x320 statt 720x1280. Beide Enden sitzen auf demselben
+    // Rechner, eng wird es nie, und ein koerniges Reel kann der Mitarbeiter
+    // nicht beurteilen.
+    const sender = B.pc.getSenders().find((x) => x.track?.kind === "video");
+    if (sender) {
+      const par = sender.getParameters();
+      par.degradationPreference = "maintain-resolution";
+      par.encodings = [{ maxBitrate: 6000000, scaleResolutionDownBy: 1 }];
+      try { await sender.setParameters(par); } catch { /* aeltere Chrome-Fassungen */ }
+    }
+
+    await B.pc.setLocalDescription(await B.pc.createOffer());
+    // Ohne Trickle: beide Enden sitzen auf demselben Rechner, das Sammeln
+    // dauert Millisekunden und spart eine zweite Leitung fuer Kandidaten.
+    await new Promise((ok) => {
+      if (B.pc.iceGatheringState === "complete") return ok();
+      B.pc.addEventListener("icegatheringstatechange", () => B.pc.iceGatheringState === "complete" && ok());
+      setTimeout(ok, 3000);
+    });
+    sag("Angebot fertig");
+    return { ok: true, angebot: B.pc.localDescription.sdp, protokoll: B.protokoll };
+  };
+
+  B.antwort = async (sdp) => {
+    if (!B.pc) return { fehler: "keine Buehne" };
+    await B.pc.setRemoteDescription({ type: "answer", sdp });
+    return { ok: true };
+  };
+
+  // Nach einem Wisch haengt Instagram ein anderes <video> ins Bild. Beide
+  // Spuren werden auf das neue umgelegt -- ohne die Verbindung neu
+  // aufzubauen, sonst gaebe es bei jedem Wisch ein schwarzes Loch.
+  B.nachfuehren = async () => {
+    if (!B.pc) return { fehler: "keine Buehne" };
+    const v = B.videoImBild();
+    if (!v) return { fehler: "kein Video im Bild" };
+    let spuren;
+    try { spuren = B.spurenVon(v); } catch (e) { return { fehler: String(e?.message ?? e) }; }
+    B.strom = spuren.strom;
+    for (const s of B.pc.getSenders()) {
+      if (s.track?.kind === "video" && spuren.bild) await s.replaceTrack(spuren.bild);
+      if (s.track?.kind === "audio" && spuren.ton) await s.replaceTrack(spuren.ton);
+    }
+    return { ok: true, groesse: `${v.videoWidth}x${v.videoHeight}` };
+  };
+
+  // Welches Reel ist gerade zu sehen? In V1 war das trivial -- der Server
+  // gab aus, was er aus dem Puffer gereicht hatte. In V2 wischt der
+  // Mitarbeiter in Instagram, also muss Instagram selbst befragt werden.
+  // Drei Wege, vom verlaesslichsten zum letzten Strohhalm; welcher traegt,
+  // ist an Instagram zu messen und steht hier bewusst nicht als Annahme.
+  B.aktuellesReel = () => {
+    const v = B.videoImBild();
+    const wege = [];
+    // 1. Der Link, der am sichtbaren Reel selbst haengt
+    if (v) {
+      const kasten = v.closest("article, [role=\'presentation\']") ?? v.parentElement?.parentElement;
+      const a = kasten?.querySelector?.("a[href*='/reel/']");
+      const m = a?.getAttribute("href")?.match(/\/reel\/([^/?#]+)/);
+      if (m) wege.push({ weg: "Link am Reel", code: m[1] });
+    }
+    // 2. Die Adresszeile -- Instagram schreibt sie beim Scrollen mit
+    const mu = location.pathname.match(/\/reels?\/([^/?#]+)/);
+    if (mu && mu[1] !== "") wege.push({ weg: "Adresszeile", code: mu[1] });
+    // 3. Irgendein Reel-Link im sichtbaren Bereich
+    for (const a of document.querySelectorAll("a[href*='/reel/']")) {
+      const r = a.getBoundingClientRect();
+      if (r.top >= 0 && r.top < innerHeight) {
+        const m = a.getAttribute("href").match(/\/reel\/([^/?#]+)/);
+        if (m) { wege.push({ weg: "sichtbarer Link", code: m[1] }); break; }
+      }
+    }
+    return { code: wege[0]?.code ?? null, wege };
+  };
+
+  B.zustand = () => ({
+    verbindung: B.pc?.connectionState ?? "-",
+    spuren: B.strom ? `${B.strom.getVideoTracks().length}/${B.strom.getAudioTracks().length}` : "-",
+  });
+};
+
 function looksLikeInstagramMedia(node) {
   return (
     node &&
@@ -767,6 +915,66 @@ class Session {
     });
   }
 
+
+  // --- Buehne (V2) ---------------------------------------------------
+  async buehneStarten() {
+    await this.page.evaluate(BUEHNE_SKRIPT);
+    const erg = await this.page.evaluate(() => window.__buehne.starte());
+    console.log(`[buehne] session ${this.id}: ${erg.ok ? "steht -- " + (erg.protokoll ?? []).join(", ") : "FEHLER " + erg.fehler}`);
+    this.buehneSteht = !!erg.ok;
+    return erg;
+  }
+
+  async buehneAntwort(sdp) {
+    return await this.page.evaluate((x) => window.__buehne.antwort(x), sdp);
+  }
+
+  async buehneNachfuehren() {
+    if (!this.buehneSteht) return { ok: false, fehler: "keine Buehne" };
+    return await this.page.evaluate(() => window.__buehne.nachfuehren()).catch((e) => ({ fehler: e.message }));
+  }
+
+  // Liefert zu dem, was gerade auf der Buehne laeuft, die Metadaten -- aus
+  // dem, was beim Mitlesen der Antworten ohnehin eingesammelt wurde. Findet
+  // sich nichts, wird das ehrlich gesagt statt geraten.
+  async buehneAktuell() {
+    const sicht = await this.page.evaluate(() => window.__buehne.aktuellesReel()).catch(() => ({ code: null, wege: [] }));
+    if (!sicht.code) return { reel: null, code: null, wege: sicht.wege ?? [] };
+    const id = `instagram:${sicht.code}`;
+    const bekannt =
+      this.history.find((r) => r.id === id) ??
+      this.pending.find((r) => r.id === id) ??
+      null;
+    return { reel: bekannt, code: sicht.code, wege: sicht.wege };
+  }
+
+  async buehneZustand() {
+    if (!this.buehneSteht) return { verbindung: "-", spuren: "-" };
+    return await this.page.evaluate(() => window.__buehne.zustand()).catch(() => ({ verbindung: "?", spuren: "?" }));
+  }
+
+  // Eine Eingabe des Mitarbeiters geht in GENAU DEN Tab, den er sieht.
+  // Das ist der ganze Unterschied zu V1: dort wischte er in unserem eigenen
+  // Player, hier wischt er in Instagram.
+  async eingabe(art) {
+    if (art === "weiter") {
+      await this.page.keyboard.press("ArrowDown");
+    } else if (art === "zurueck") {
+      await this.page.keyboard.press("ArrowUp");
+    } else if (art === "tippen") {
+      // Mitte des Fensters -- Instagram haelt damit an bzw. spielt weiter.
+      await this.page.mouse.click(Math.round(BUEHNE_FENSTER.width / 2), Math.round(BUEHNE_FENSTER.height / 2));
+    } else {
+      return { ok: false, fehler: "unbekannte Eingabe" };
+    }
+    // Nach jedem Wechsel haengt der Ton am alten Element -- nachziehen.
+    if (art === "weiter" || art === "zurueck") {
+      await sleep(700);
+      await this.buehneNachfuehren();
+    }
+    return { ok: true };
+  }
+
   current() {
     return this.cursor >= 0 && this.cursor < this.history.length ? this.history[this.cursor] : null;
   }
@@ -897,8 +1105,29 @@ class Session {
     return this.current();
   }
 
+  // Auf welches Reel wirkt eine Handlung? In V1 ist das der Pufferstand, den
+  // der Kunde gerade sieht. In V2 sieht er Instagrams eigenen Tab, und der
+  // Puffer steht noch ganz woanders -- ein Like wuerde dann das falsche Reel
+  // treffen. Deshalb entscheidet bei laufender Buehne Instagram selbst.
+  //
+  // Laesst sich nicht sicher sagen, was im Bild ist, wird abgebrochen. Lieber
+  // keine Handlung als die falsche auf einem echten Account.
+  async handlungsZiel() {
+    if (!this.buehneSteht) return { reel: this.current(), fehler: null };
+    const { reel, code } = await this.buehneAktuell();
+    if (reel) return { reel, fehler: null };
+    if (code) {
+      return {
+        reel: { id: `instagram:${code}`, sourceUrl: `https://www.instagram.com/reel/${code}/`, username: null },
+        fehler: null,
+      };
+    }
+    return { reel: null, fehler: "Instagram verraet gerade nicht, welches Reel zu sehen ist. Einmal weiterwischen und erneut versuchen." };
+  }
+
   async like() {
-    const reel = this.current();
+    const { reel, fehler } = await this.handlungsZiel();
+    if (fehler) return { liked: false, error: fehler };
     if (!reel) return { liked: false, error: "No reel is currently in view." };
 
     // A real, separate page in the SAME authenticated context — this
@@ -921,7 +1150,8 @@ class Session {
   }
 
   async follow() {
-    const reel = this.current();
+    const { reel, fehler } = await this.handlungsZiel();
+    if (fehler) return { following: false, error: fehler };
     if (!reel) return { following: false, error: "No reel is currently in view." };
 
     const followPage = await this.context.newPage();
@@ -940,7 +1170,10 @@ class Session {
   }
 
   async block() {
-    const reel = this.current();
+    const { reel, fehler } = await this.handlungsZiel();
+    if (fehler) return { blocked: false, error: fehler };
+    // Blocken braucht den Namen, nicht nur den Reel-Code -- ohne Namen gibt
+    // es kein Profil, das man blocken koennte.
     if (!reel || !reel.username) return { blocked: false, error: "No reel is currently in view." };
 
     const profileUrl = this.platform === "instagram"
@@ -1059,14 +1292,23 @@ async function startSession(accountId, token, lockSecret) {
   const t1 = Date.now();
   let browser;
   try {
-    browser = await starteBrowser({ headless: true });
+    // Die zwei Schalter sind das, was V2 ueberhaupt erst moeglich macht:
+    // ohne den ersten startet Instagram sein Video nur stumm, ohne den
+    // zweiten fragt Chrome bei der Tab-Aufnahme nach einem Dialog, den in
+    // einem unsichtbaren Browser niemand wegklicken kann.
+    browser = await starteBrowser({ headless: true, args: BUEHNE_ARGS });
   } catch (err) {
     if (IS_MAC) {
       throw new Error("Research needs Google Chrome installed on this Mac. Install Chrome, then try again.");
     }
     throw err;
   }
-  const context = await browser.newContext({ storageState, ...AUTOMATION_CONTEXT_OPTIONS });
+  // Fenster in Reel-Form statt Schreibtischbreite: was aufgenommen wird, ist
+  // genau dieses Fenster. Bei 1280x720 sass das Reel als Briefmarke in der
+  // Mitte -- gemessen kam das Bild dann als 1280x520 heraus.
+  const context = await browser.newContext({
+    storageState, ...AUTOMATION_CONTEXT_OPTIONS, viewport: { ...BUEHNE_FENSTER },
+  });
   console.log(`[timing] chromium launch + context: ${Date.now() - t1}ms`);
 
   // TikTok specifically: storageState is a frozen snapshot (captured at
@@ -1211,12 +1453,36 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret, reelId, sourceUrl } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl, sdp, art } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
+
+      // --- Buehne (V2) ---
+      if (action === "buehne") {
+        const erg = await session.buehneStarten();
+        return erg.ok ? json(res, 200, { angebot: erg.angebot }) : json(res, 502, { error: erg.fehler });
+      }
+      if (action === "buehne-antwort") {
+        if (!sdp) return json(res, 400, { error: "Missing sdp." });
+        const erg = await session.buehneAntwort(sdp);
+        return erg.fehler ? json(res, 502, { error: erg.fehler }) : json(res, 200, { ok: true });
+      }
+      if (action === "eingabe") {
+        const erg = await session.eingabe(art);
+        if (!erg.ok) return json(res, 400, { error: erg.fehler });
+        // Gleich mitliefern, was jetzt zu sehen ist -- sonst muesste der
+        // Kunde sofort ein zweites Mal fragen.
+        return json(res, 200, { ok: true, ...(await session.buehneAktuell()) });
+      }
+      if (action === "buehne-zustand") {
+        return json(res, 200, await session.buehneZustand());
+      }
+      if (action === "buehne-aktuell") {
+        return json(res, 200, await session.buehneAktuell());
+      }
 
       if (action === "next") {
         const { reel } = await session.next();

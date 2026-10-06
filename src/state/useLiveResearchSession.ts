@@ -280,6 +280,10 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // status === "in_use".
   const [lockedByLabel, setLockedByLabel] = useState<string | null>(null);
   const sessionRef = useRef<ActiveSession | null>(null);
+  // Dieselbe Sitzung noch einmal als State, damit die Live-Buehne (V2) auf
+  // ihr Entstehen und Enden reagieren kann -- ein ref loest keine neue
+  // Darstellung aus. Der ref bleibt die Wahrheit fuer alles Bestehende.
+  const [sitzung, setSitzung] = useState<ActiveSession | null>(null);
   const platformRef = useRef<Platform>("instagram");
   const heartbeatRef = useRef<number | null>(null);
   const busyRef = useRef(false);
@@ -364,6 +368,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     const session = sessionRef.current;
     if (session) lastIdleAccountRef.current = { accountId: session.accountId, platform: platformRef.current };
     sessionRef.current = null;
+    setSitzung(null);
     stopHeartbeat();
     setCurrentReel(null);
     setHasPrev(false);
@@ -463,6 +468,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   const fallBackToNeedsConnector = useCallback(
     (accountId: string, platform: Platform) => {
       sessionRef.current = null;
+    setSitzung(null);
       stopHeartbeat();
       pendingRef.current = { accountId, platform };
       setCurrentReel(null);
@@ -564,6 +570,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         }
 
         sessionRef.current = { accountId, sessionId: body.sessionId, sessionSecret: body.sessionSecret };
+        setSitzung(sessionRef.current);
         setCurrentReel(body.reel ? liveReelToVideo(body.reel, platform) : null);
         setHasPrev(false);
         setStatus("active");
@@ -617,6 +624,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
                 body: JSON.stringify({ sessionSecret: s.sessionSecret }),
               }).catch(() => {});
               sessionRef.current = null;
+    setSitzung(null);
               lockedAccountIdRef.current = null; // someone else holds it now, nothing left to release
               stopHeartbeat();
               setCurrentReel(null);
@@ -1105,7 +1113,16 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
 
   useEffect(() => () => void endSession(), [endSession]);
 
+  function uebernehmeLiveReel(roh: RawLiveReel | null) {
+    setCurrentReel(roh ? liveReelToVideo(roh, platformRef.current) : null);
+  }
+
   return {
+    sitzung,
+    // V2: nach einem Wisch in Instagrams eigenem Tab sagt der Connector, was
+    // jetzt zu sehen ist. Ohne das zeigte die Karte weiter das Reel von
+    // vorhin -- und ein Like traefe das falsche.
+    uebernehmeLiveReel,
     currentReel,
     hasPrev,
     status,

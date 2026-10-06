@@ -964,6 +964,8 @@ export function ResearchAccountsPage({
                   Logged in as <span className="text-neutral-50 font-medium">@{currentAccount.username || currentAccount.label}</span>
                 </div>
                 <SwipeResearchPlayer
+                  sitzung={liveSession.sitzung}
+                  onLiveReel={(r) => liveSession.uebernehmeLiveReel(r as never)}
                 account={currentAccount}
                 currentReel={currentSwipeVideo}
                 hasPrev={liveSession.hasPrev}

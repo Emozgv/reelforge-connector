@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle, Send } from "lucide-react";
+import { ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle, Send, Volume2, VolumeX } from "lucide-react";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
@@ -7,6 +7,8 @@ import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { formatDuration } from "../../lib/researchFeedMapping";
 import { formatCompactNumber } from "../../lib/formatCount";
 import { DownloadConnectorLink } from "./DownloadConnectorButton";
+import { LiveBuehne, buehneEingabe } from "./LiveBuehne";
+import { RESEARCH_MODUS } from "../../lib/researchModus";
 
 export type LikeStatus = "pending" | "liked" | "failed";
 export type FollowStatus = "pending" | "following" | "failed";
@@ -33,6 +35,7 @@ function SwipeSlide({
   onBlockCreator,
   blockStatus,
   canLike,
+  nurBedienelemente = false,
 }: {
   video: ReelVideo;
   active: boolean;
@@ -44,6 +47,9 @@ function SwipeSlide({
   onBlockCreator: () => void;
   blockStatus?: BlockStatus;
   canLike: boolean;
+  // V2: das Bild kommt von der Live-Buehne darunter, diese Karte steuert nur
+  // noch bei, was man mit dem Reel tun kann.
+  nurBedienelemente?: boolean;
 }) {
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -104,8 +110,8 @@ function SwipeSlide({
   const platformLabel = video.platform === "tiktok" ? "TikTok" : "Instagram";
 
   return (
-    <div className="relative h-full w-full bg-black">
-      {video.videoUrl && !videoError ? (
+    <div className={["relative h-full w-full", nurBedienelemente ? "pointer-events-none" : "bg-black"].join(" ")}>
+      {nurBedienelemente ? null : video.videoUrl && !videoError ? (
         <div className="absolute inset-0" onClick={togglePlayback}>
           <video
             ref={videoRef}
@@ -162,7 +168,7 @@ function SwipeSlide({
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
 
       {/* bottom-left: who/what */}
-      <div className="absolute bottom-4 left-4 right-20">
+      <div className="pointer-events-auto absolute bottom-4 left-4 right-20">
         <div className="flex items-center gap-2">
           <p className="text-[14px] text-white font-medium">@{video.username}</p>
           {canLike && (
@@ -221,7 +227,7 @@ function SwipeSlide({
           Add-to-Collection moved to the dedicated Save-to-Collection panel
           (ResearchAccountsPage) to match the reference, which doesn't show
           them on the video itself. */}
-      <div className="absolute bottom-6 right-3 flex flex-col items-center gap-4">
+      <div className="pointer-events-auto absolute bottom-6 right-3 flex flex-col items-center gap-4">
         {canLike && (
           <button
             type="button"
@@ -407,6 +413,8 @@ export function SwipeResearchPlayer({
   onRetryWake,
   onRefreshSession,
   active,
+  sitzung,
+  onLiveReel,
 }: {
   account: ResearchAccount;
   currentReel: ReelVideo | null;
@@ -432,6 +440,13 @@ export function SwipeResearchPlayer({
   blockStatus: Record<string, BlockStatus>;
   onRetryWake: () => void;
   onRefreshSession: () => void;
+  // Die laufende Sitzung -- nur V2 braucht sie, um die Buehne aufzubauen und
+  // Wische in Instagrams eigenen Tab zu schicken.
+  sitzung?: { sessionId: string; sessionSecret: string } | null;
+  // V2: der Connector sagt nach jedem Wisch, welches Reel jetzt im Bild ist.
+  // Kann er es nicht sagen, kommt null -- dann zeigt die Karte lieber nichts
+  // als das Falsche.
+  onLiveReel?: (reel: unknown | null) => void;
   // Whether Research Accounts is the section actually on screen — the page
   // itself stays mounted across navigation now (see App.tsx), so this is
   // what gates video playback and the arrow-key shortcuts instead.
@@ -454,6 +469,14 @@ export function SwipeResearchPlayer({
   const navLockedRef = useRef(false);
   const NAV_LOCK_MS = 350;
 
+  // V2 laeuft nur, wenn auch eine Sitzung da ist -- sonst gaebe es nichts
+  // durchzureichen und die Flaeche bliebe schwarz.
+  const liveAnsicht = RESEARCH_MODUS === "V2" && !!sitzung;
+  // Instagram startet stumm, und das soll es auch bleiben, bis der
+  // Mitarbeiter den Ton selbst anmacht. Die Verweildauer zaehlt Instagram
+  // unabhaengig davon.
+  const [stumm, setStumm] = useState(true);
+
   function lockNav() {
     navLockedRef.current = true;
     window.setTimeout(() => {
@@ -464,11 +487,27 @@ export function SwipeResearchPlayer({
   function goNext() {
     if (navLockedRef.current || loading) return;
     lockNav();
+    // In V2 geht der Wisch in Instagrams eigenen Tab -- genau darum geht es.
+    // onNext() wuerde zusaetzlich den Puffer weiterschieben und damit
+    // doppelt wischen, deshalb bleibt es hier aussen vor.
+    if (liveAnsicht && sitzung) {
+      void buehneEingabe(sitzung.sessionId, sitzung.sessionSecret, "weiter")
+        .then((a) => onLiveReel?.(a.reel ?? null))
+        .catch(() => {});
+      return;
+    }
     onNext();
   }
   function goPrev() {
-    if (!hasPrev || navLockedRef.current || loading) return;
+    if (navLockedRef.current || loading) return;
     lockNav();
+    if (liveAnsicht && sitzung) {
+      void buehneEingabe(sitzung.sessionId, sitzung.sessionSecret, "zurueck")
+        .then((a) => onLiveReel?.(a.reel ?? null))
+        .catch(() => {});
+      return;
+    }
+    if (!hasPrev) return;
     onPrev();
   }
 
@@ -529,7 +568,36 @@ export function SwipeResearchPlayer({
         }}
         className="relative w-[345px] h-[min(76vh,670px)] rounded-2xl overflow-hidden border border-white/[0.08]"
       >
-        {currentReel ? (
+        {liveAnsicht && sitzung ? (
+          // V2: was hier laeuft, ist Instagram selbst. Die Bedienelemente
+          // bleiben unsere -- nur das Bild darunter ist echt.
+          <>
+            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} />
+            {currentReel && (
+              <SwipeSlide
+                key={currentReel.id}
+                video={currentReel}
+                active
+                pageActive={active}
+                nurBedienelemente
+                onLikeClick={() => onLikeClick(currentReel)}
+                likeStatus={likeStatus[currentReel.id]}
+                onFollowClick={() => onFollowClick(currentReel)}
+                followStatus={followStatus[currentReel.id]}
+                onBlockCreator={() => onBlockCreator(currentReel)}
+                blockStatus={blockStatus[currentReel.id]}
+                canLike={currentReel.platform === "instagram" || currentReel.platform === "tiktok"}
+              />
+            )}
+            <button
+              onClick={() => setStumm((v) => !v)}
+              title={stumm ? "Ton an" : "Ton aus"}
+              className="absolute left-3 top-3 z-20 h-8 w-8 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center text-white/90"
+            >
+              {stumm ? <VolumeX size={15} /> : <Volume2 size={15} />}
+            </button>
+          </>
+        ) : currentReel ? (
           <SwipeSlide
             key={currentReel.id}
             video={currentReel}
