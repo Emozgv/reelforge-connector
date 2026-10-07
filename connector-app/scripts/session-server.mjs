@@ -151,6 +151,7 @@ async function starteBrowser(optionen = {}) {
 const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required"];
 const BUEHNE_FENSTER = { width: 420, height: 746 };
 
+
 // Laeuft IN der Instagram-Seite.
 const BUEHNE_SKRIPT = () => {
   const B = (window.__buehne = { pc: null, protokoll: [] });
@@ -164,6 +165,7 @@ const BUEHNE_SKRIPT = () => {
     });
     return sichtbar.find((v) => !v.paused) ?? sichtbar[0] ?? null;
   };
+
 
   B.spurenVon = (v) => {
     if (!v.captureStream) throw new Error("captureStream gibt es in diesem Browser nicht");
@@ -230,6 +232,24 @@ const BUEHNE_SKRIPT = () => {
     B.strom = spuren.strom;
     B.quelle = v;
     B.tonQuelle = spuren.ton ? v : null;
+
+    // Bild und Ton kommen aus DERSELBEN Quelle -- Instagrams eigenem
+    // <video>. Dadurch sind sie vom Browser zusammen getaktet und koennen
+    // gar nicht auseinanderlaufen.
+    //
+    // Der Umweg ueber eine Zeichenflaeche (abmalen, neu kodieren) wurde
+    // gebaut und wieder verworfen: er sollte das Vollbild-Warten beim
+    // Elementwechsel vermeiden, nahm aber fuer das Bild einen laengeren Weg
+    // als fuer den Ton. Gemessen am 07.10.2026, zehn Wische in einer
+    // Sekunde, laengster Stillstand beim Zuschauer:
+    //
+    //     ueber die Zeichenflaeche   1200-1400 ms
+    //     direkt vom Element                0 ms
+    //
+    // Das Vollbild-Warten war in Wahrheit nie das Problem. Es entstand
+    // dadurch, dass beim schnellen Wischen mehrere Umhaengevorgaenge
+    // gleichzeitig liefen und sich gegenseitig zerlegten -- siehe
+    // B.nachfuehren, das jetzt nur noch eines zur Zeit zulaesst.
     const pc = new RTCPeerConnection();
     pc.addTrack(spuren.bild, spuren.strom);
     if (spuren.ton) pc.addTrack(spuren.ton, spuren.strom);
@@ -284,7 +304,25 @@ const BUEHNE_SKRIPT = () => {
     return !!t && t.readyState === "live";
   };
 
+  // Immer nur ein Umhaengen gleichzeitig.
+  //
+  // Jeder Wisch stoesst eines an, und sie laufen absichtlich im Hintergrund,
+  // damit der Wisch nicht warten muss. Beim schnellen Scrollen ueberlappten
+  // sie sich dadurch: zwei gleichzeitige Spurwechsel auf derselben
+  // Verbindung zerlegen Bild und Ton. Kommt waehrend eines Laufs ein
+  // weiterer Wunsch, wird er gemerkt und EINMAL nachgeholt -- nicht
+  // gestapelt, denn nur der letzte Stand zaehlt.
   B.nachfuehren = async () => {
+    if (B.laeuftNach) { B.nochmalNachfuehren = true; return { ok: true, eingereiht: true }; }
+    B.laeuftNach = true;
+    try {
+      let erg = await B.nachfuehrenEinzeln();
+      while (B.nochmalNachfuehren) { B.nochmalNachfuehren = false; erg = await B.nachfuehrenEinzeln(); }
+      return erg;
+    } finally { B.laeuftNach = false; }
+  };
+
+  B.nachfuehrenEinzeln = async () => {
     if (!B.pc) return { fehler: "keine Buehne" };
     const v = B.videoImBild();
     if (!v) return { fehler: "kein Video im Bild" };
@@ -293,6 +331,21 @@ const BUEHNE_SKRIPT = () => {
     // sah man beim Scrollen als Durcheinander. Ist die Spur aber tot, muss
     // umgelegt werden, auch wenn es scheinbar dasselbe Element ist.
     if (B.quelle === v && B.spurLebt()) return { ok: true, unveraendert: true };
+    // Nur auf ein Element umhaengen, das auch wirklich etwas liefert. Beim
+    // schnellen Wischen ist Instagram noch am Laden -- haengt man dann um,
+    // sendet man ein leeres Element und beim Mitarbeiter steht alles.
+    {
+      const ende = Date.now() + 2000;
+      while (Date.now() < ende && !(v.videoWidth > 0 && v.readyState >= 2)) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      if (!(v.videoWidth > 0 && v.readyState >= 2)) {
+        // Nicht bereit: lieber beim alten Bild bleiben als auf ein leeres
+        // umzuschalten. Der Waechter versucht es gleich wieder.
+        return { ok: false, fehler: "Element noch nicht bereit", nochNichtBereit: true };
+      }
+    }
+
     let spuren;
     try { spuren = B.spurenVon(v); } catch (e) { return { fehler: String(e?.message ?? e) }; }
 
@@ -441,9 +494,29 @@ const BUEHNE_SKRIPT = () => {
       // ist, was Instagram gerade zeigt: dann hat jemand auf Pause gedrueckt,
       // und genau das soll stehenbleiben. Nur wenn Instagram woanders
       // weiterspielt, haengen wir an der falschen Stelle.
-      if (!falschesElement && !spurTot) return;
+      // Steht die Quelle still, obwohl sie laufen soll? Das passiert beim
+      // schnellen Wischen, wenn umgehaengt wurde, bevor Instagram fertig
+      // geladen hatte: Spur lebt, richtiges Element -- und trotzdem kommt
+      // nichts an. Ohne diese Pruefung merkt es niemand.
+      let stehtStill = false;
+      if (!falschesElement && !spurTot && B.quelle && !B.quelle.paused) {
+        const zeit = B.quelle.currentTime;
+        if (B.letzteZeit !== undefined && B.letzteZeit === zeit) {
+          B.stillSeit = (B.stillSeit ?? 0) + 1;
+          stehtStill = B.stillSeit >= 4;   // rund zwei Sekunden
+        } else {
+          B.stillSeit = 0;
+        }
+        B.letzteZeit = zeit;
+      } else {
+        B.stillSeit = 0;
+        B.letzteZeit = undefined;
+      }
+
+      if (!falschesElement && !spurTot && !stehtStill) return;
+      if (stehtStill) { B.quelle = null; B.stillSeit = 0; }   // erzwingt neues Anhaengen
       B.heiltGerade = true;
-      B.letzteHeilung = { falschesElement, spurTot, zeit: Date.now() };
+      B.letzteHeilung = { falschesElement, spurTot, stehtStill, zeit: Date.now() };
       try { await B.nachfuehren(); } catch {} finally { B.heiltGerade = false; }
     }, 500);
   };
