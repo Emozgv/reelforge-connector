@@ -608,10 +608,19 @@ export function ResearchAccountsPage({
   // trip. Success is only ever reported once Connector has confirmed
   // Instagram's own button genuinely changed state.
   async function handleLikeClick(video: ReelVideo) {
-    if (likeStatus[video.id] === "pending" || likeStatus[video.id] === "liked") return;
+    // Geht der Like direkt in Instagrams Tab, ist das Herz dort ein Schalter
+    // -- genau wie auf Instagram. Ein zweiter Druck nimmt ihn zurueck, und
+    // genau das muss hier moeglich bleiben: wer sich vertippt, kann es
+    // selbst geradebiegen, ohne Instagram zu oeffnen.
+    if (likeStatus[video.id] === "pending") return;
     setLikeStatus((prev) => ({ ...prev, [video.id]: "pending" }));
-    const { liked } = await liveSession.like();
-    setLikeStatus((prev) => ({ ...prev, [video.id]: liked ? "liked" : "failed" }));
+    const { liked, inTab } = await liveSession.like();
+    setLikeStatus((prev) => ({
+      ...prev,
+      // Nur ausserhalb des Tabs ist "nicht geliked" ein Fehlschlag -- im Tab
+      // heisst es schlicht, dass der Like zurueckgenommen wurde.
+      [video.id]: liked ? "liked" : inTab ? "offen" : "failed",
+    }));
   }
 
   // A real platform action on the real connected account (see

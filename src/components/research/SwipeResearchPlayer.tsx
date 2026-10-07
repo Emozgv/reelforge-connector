@@ -10,7 +10,10 @@ import { DownloadConnectorLink } from "./DownloadConnectorButton";
 import { LiveBuehne, buehneEingabe } from "./LiveBuehne";
 import { RESEARCH_MODUS } from "../../lib/researchModus";
 
-export type LikeStatus = "pending" | "liked" | "failed";
+// "offen" gibt es, seit der Like direkt in Instagrams Tab gesetzt wird: das
+// Herz ist dort ein Schalter, und ein zweiter Druck nimmt ihn zurueck. Ohne
+// diesen Zustand saehe ein bewusstes Entliken wie ein Fehlschlag aus.
+export type LikeStatus = "pending" | "liked" | "failed" | "offen";
 export type FollowStatus = "pending" | "following" | "failed";
 export type BlockStatus = "pending" | "done" | "failed";
 
@@ -232,16 +235,21 @@ function SwipeSlide({
           <button
             type="button"
             onClick={onLikeClick}
-            disabled={likeStatus === "pending" || likeStatus === "liked"}
+            // Nur waehrend des Setzens gesperrt. Frueher blieb es nach einem
+            // Like dauerhaft gesperrt -- es gab ja kein Zurueck. Jetzt sitzt
+            // das Herz in Instagrams eigenem Tab und ist dort ein Schalter.
+            disabled={likeStatus === "pending"}
             className="flex flex-col items-center gap-1 text-white group disabled:cursor-default"
             title={
               likeStatus === "liked"
-                ? "Liked on the real Instagram account"
+                ? "Geliked — nochmal druecken nimmt es zurueck"
                 : likeStatus === "pending"
                   ? "Liking on Instagram…"
                   : likeStatus === "failed"
                     ? "Couldn't confirm the like — try again"
-                    : "Like on the real Instagram account"
+                    : likeStatus === "offen"
+                      ? "Like zurueckgenommen"
+                      : "Like on the real Instagram account"
             }
           >
             <span className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/65 transition-colors">

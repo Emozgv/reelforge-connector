@@ -965,9 +965,9 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, [recoverFromDeadSession]);
 
-  const like = useCallback(async (): Promise<{ liked: boolean; error?: string }> => {
+  const like = useCallback(async (): Promise<{ liked: boolean; inTab?: boolean; error?: string }> => {
     const session = sessionRef.current;
-    if (!session) return { liked: false, error: "No active research session." };
+    if (!session) return { liked: false, inTab: false, error: "No active research session." };
     try {
       const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/like`, {
         method: "POST",
@@ -975,9 +975,13 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         body: JSON.stringify({ sessionSecret: session.sessionSecret }),
       });
       const body = await res.json();
-      return { liked: !!body.liked, error: body.error };
+      // inTab sagt, dass der Like direkt in Instagrams Tab gesetzt wurde --
+      // dort ist das Herz ein Schalter, ein zweiter Druck nimmt ihn zurueck.
+      // Ohne diese Unterscheidung saehe ReelForge ein bewusstes Entliken als
+      // Fehlschlag an.
+      return { liked: !!body.liked, inTab: !!body.inTab, error: body.error };
     } catch (err) {
-      return { liked: false, error: err instanceof Error ? err.message : "Couldn't like this reel." };
+      return { liked: false, inTab: false, error: err instanceof Error ? err.message : "Couldn't like this reel." };
     }
   }, []);
 

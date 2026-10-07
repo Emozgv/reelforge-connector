@@ -448,6 +448,76 @@ const BUEHNE_SKRIPT = () => {
     }, 500);
   };
 
+
+  // Like und Follow direkt in dem Tab, den der Mitarbeiter sieht.
+  //
+  // In V1 war dafuer eine zweite Seite noetig: der Feed-Tab war der Anker
+  // des Puffers, und ein Like durfte dessen Scrollposition nicht
+  // verschieben. In V2 ist genau dieser Tab das, was der Mitarbeiter
+  // anschaut -- der Umweg hat seinen Grund verloren und war der letzte
+  // Punkt, an dem V2 nicht eins zu eins war: Instagram sah einen
+  // Seitenaufruf mit anschliessendem Like statt eines Herzens im Feed.
+  //
+  // Das Herz wird ueber sein aria-label gefunden ("Like" bzw. "Unlike") --
+  // das ist der eine Teil von Instagrams Markup, der nicht verschleiert ist,
+  // und dieselbe Kennung, die der bisherige Weg schon benutzt hat. Von
+  // mehreren im DOM wird das genommen, das wirklich im Bild steht.
+  B.knopfImBild = (namen) => {
+    const treffer = [];
+    for (const n of namen) {
+      for (const el of document.querySelectorAll(`svg[aria-label="${n}" i]`)) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.top >= 0 && r.bottom <= innerHeight + 4) treffer.push({ el, name: n, oben: r.top });
+      }
+    }
+    if (!treffer.length) return null;
+    // Das unterste im Bild: die Leiste des sichtbaren Reels sitzt unten.
+    treffer.sort((a, b) => b.oben - a.oben);
+    return treffer[0];
+  };
+
+  B.herzDruecken = async () => {
+    const vorher = B.knopfImBild(["Like", "Unlike"]);
+    if (!vorher) return { ok: false, fehler: "Kein Herz im Bild gefunden." };
+    const warGeliked = vorher.name.toLowerCase() === "unlike";
+    const knopf = vorher.el.closest("[role=button], button") ?? vorher.el.parentElement;
+    knopf?.click?.();
+    // Nachsehen, ob es wirklich umgesprungen ist -- nicht annehmen, dass ein
+    // Klick gewirkt hat.
+    const ende = Date.now() + 2500;
+    while (Date.now() < ende) {
+      await new Promise((r) => setTimeout(r, 120));
+      const jetzt = B.knopfImBild(["Like", "Unlike"]);
+      if (!jetzt) continue;
+      const istGeliked = jetzt.name.toLowerCase() === "unlike";
+      if (istGeliked !== warGeliked) return { ok: true, geliked: istGeliked };
+    }
+    return { ok: false, fehler: "Das Herz hat nicht reagiert.", warGeliked };
+  };
+
+  B.folgen = async () => {
+    const kandidaten = [...document.querySelectorAll("button, [role=button]")].filter((b) => {
+      const t = (b.textContent ?? "").trim().toLowerCase();
+      if (t !== "follow" && t !== "folgen") return false;
+      const r = b.getBoundingClientRect();
+      return r.width > 0 && r.top >= 0 && r.bottom <= innerHeight + 4;
+    });
+    if (!kandidaten.length) return { ok: false, fehler: "Kein Folgen-Knopf im Bild gefunden." };
+    kandidaten[kandidaten.length - 1].click();
+    const ende = Date.now() + 2500;
+    while (Date.now() < ende) {
+      await new Promise((r) => setTimeout(r, 120));
+      const noch = [...document.querySelectorAll("button, [role=button]")].some((b) => {
+        const t = (b.textContent ?? "").trim().toLowerCase();
+        if (t !== "follow" && t !== "folgen") return false;
+        const r = b.getBoundingClientRect();
+        return r.width > 0 && r.top >= 0 && r.bottom <= innerHeight + 4;
+      });
+      if (!noch) return { ok: true };
+    }
+    return { ok: false, fehler: "Der Folgen-Knopf hat nicht reagiert." };
+  };
+
   B.zustand = () => ({
     verbindung: B.pc?.connectionState ?? "-",
     spuren: B.strom ? `${B.strom.getVideoTracks().length}/${B.strom.getAudioTracks().length}` : "-",
@@ -1535,6 +1605,17 @@ class Session {
   }
 
   async like() {
+    // V2: direkt im Tab, den der Mitarbeiter sieht -- ohne Umweg ueber eine
+    // zweite Seite. Das ist derselbe Griff, den ein Mensch tut, und macht
+    // den Like genauso eins zu eins wie das Bild.
+    if (this.buehneSteht) {
+      const erg = await this.page.evaluate(() => window.__buehne.herzDruecken()).catch((e) => ({ ok: false, fehler: e.message }));
+      const was = await this.buehneAktuell().catch(() => ({ code: null }));
+      console.log(`[herz] session ${this.id}: reel=${was.code ?? "?"} -> ${erg.ok ? (erg.geliked ? "geliked" : "ENTLIKED") : "FEHLER " + erg.fehler}`);
+      if (erg.ok) return { liked: !!erg.geliked, inTab: true, reelCode: was.code ?? null };
+      // Faellt zurueck auf den alten Weg, statt den Mitarbeiter stehenzulassen.
+      console.log(`[herz] fallback auf die zweite Seite: ${erg.fehler}`);
+    }
     const { reel, fehler } = await this.handlungsZiel();
     if (fehler) return { liked: false, error: fehler };
     if (!reel) return { liked: false, error: "No reel is currently in view." };
@@ -1559,6 +1640,14 @@ class Session {
   }
 
   async follow() {
+    if (this.buehneSteht) {
+      const erg = await this.page.evaluate(() => window.__buehne.folgen()).catch((e) => ({ ok: false, fehler: e.message }));
+      if (erg.ok) {
+        console.log(`[folgen] session ${this.id}: im Tab gefolgt.`);
+        return { following: true, inTab: true };
+      }
+      console.log(`[folgen] fallback auf die zweite Seite: ${erg.fehler}`);
+    }
     const { reel, fehler } = await this.handlungsZiel();
     if (fehler) return { following: false, error: fehler };
     if (!reel) return { following: false, error: "No reel is currently in view." };

@@ -55,6 +55,8 @@ export function LiveBuehne({
   const aufbauRef = useRef<string | null>(null);
   const versucheRef = useRef(0);
   const [neustart, setNeustart] = useState(0);
+  // Als State, nicht als ref: wird in der Anzeige gelesen.
+  const [gibtNochAuf, setGibtNochAuf] = useState(false);
   // Die Rueckmeldung liegt in einem ref, nicht in der Abhaengigkeitsliste:
   // sie ist bei jedem Rendern eine neue Funktion, und der Abfragetakt haette
   // sich sonst staendig selbst neu aufgesetzt.
@@ -131,6 +133,7 @@ export function LiveBuehne({
         if (abgebrochen) return;
         setZustand("fehler");
         setMeldung(e instanceof Error ? e.message : "Die Buehne liess sich nicht aufbauen.");
+        setGibtNochAuf(versucheRef.current >= 6);
         // Nicht endgueltig aufgeben. Ein Fehlschlag heisst fast immer nur
         // "noch nicht soweit" -- Instagram laedt, die Seite baut sich auf,
         // eine Sitzung wird gerade gewechselt. Wer hier stehenbleibt, laesst
@@ -138,6 +141,7 @@ export function LiveBuehne({
         // Sekunden spaeter ginge.
         if (versucheRef.current < 6) {
           versucheRef.current += 1;
+          setGibtNochAuf(false);
           window.setTimeout(() => {
             if (abgebrochen) return;
             aufbauRef.current = null;
@@ -255,7 +259,7 @@ export function LiveBuehne({
             <>
               <p className="text-[13px] text-neutral-100">Die Live-Ansicht kam nicht zustande.</p>
               <p className="text-[11.5px] text-neutral-500 max-w-[240px]">{meldung}</p>
-              {versucheRef.current < 6 && (
+              {!gibtNochAuf && (
                 <p className="mt-1 text-[11px] text-neutral-600">Neuer Versuch laeuft…</p>
               )}
             </>
