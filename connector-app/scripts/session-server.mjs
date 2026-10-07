@@ -167,30 +167,78 @@ const BUEHNE_SKRIPT = () => {
 
   B.spurenVon = (v) => {
     if (!v.captureStream) throw new Error("captureStream gibt es in diesem Browser nicht");
-    v.muted = false;
+    // Instagrams Player wird bewusst NICHT entstummt. Gemessen am
+    // 06.10.2026: captureStream traegt den Ton auch von einem stummen
+    // Element (Pegel 0,4966 gegen 0,4514 beim entstummten). Wir aendern an
+    // deren Seite also gar nichts -- weniger Eingriff, weniger, das
+    // kaputtgehen kann.
     const strom = v.captureStream();
-    return { bild: strom.getVideoTracks()[0] ?? null, ton: strom.getAudioTracks()[0] ?? null, strom };
+    const bild = strom.getVideoTracks()[0] ?? null;
+    // Instagram wirft Video-Elemente weg, wann es will -- beim Wischen, beim
+    // Oeffnen der Kommentare, beim eigenen Nachladen. Stirbt das Element,
+    // stirbt unsere Spur mit, der Strom versiegt und beim Mitarbeiter steht
+    // das Bild. Gemessen am 06.10.2026: spur=ended, waehrend Instagram
+    // laengst ein anderes Element abspielte.
+
+    return { bild, ton: strom.getAudioTracks()[0] ?? null, strom };
+  };
+
+  // Wartet, bis Instagram ein Video hat, das sich wirklich abgreifen laesst.
+  //
+  // Ein einzelner Zugriff zum falschen Zeitpunkt war die Ursache dafuer,
+  // dass die Buehne mit "Das Reel liefert keine Bildspur" aufgab und nie
+  // wiederkam: solange das Vorspulen beim Start noch existierte, verging
+  // genug Zeit, bis Instagram soweit war -- danach griff sie sofort zu.
+  // Zeitpunkte sind nicht verlaesslich, Zustaende schon.
+  B.warteAufVideo = async (hoechstens = 20000) => {
+    const ende = Date.now() + hoechstens;
+    let zuletzt = "kein Video gefunden";
+    while (Date.now() < ende) {
+      const v = B.videoImBild();
+      if (v) {
+        if (v.videoWidth > 0 && v.readyState >= 2) {
+          try {
+            if (v.captureStream().getVideoTracks()[0]) return { v };
+            zuletzt = "Video liefert noch keine Bildspur";
+          } catch (e) { zuletzt = String(e?.message ?? e); }
+        } else {
+          zuletzt = `Video noch nicht bereit (${v.videoWidth}x${v.videoHeight}, readyState ${v.readyState})`;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return { fehler: `Instagram hat in ${Math.round(hoechstens / 1000)}s kein abspielbares Reel geliefert (${zuletzt}).` };
   };
 
   B.starte = async () => {
-    const v = B.videoImBild();
-    if (!v) return { fehler: "Es laeuft gerade kein Reel im Hintergrund." };
+    B.protokoll = [];
+    const warte = await B.warteAufVideo();
+    if (warte.fehler) return { fehler: warte.fehler };
+    const v = warte.v;
     let spuren;
     try { spuren = B.spurenVon(v); }
     catch (e) { return { fehler: String(e?.message ?? e) }; }
     if (!spuren.bild) return { fehler: "Das Reel liefert keine Bildspur." };
     sag(`Quelle ${v.videoWidth}x${v.videoHeight}, Ton ${spuren.ton ? "dabei" : "FEHLT"}`);
 
+    // Bewusst eine lokale Verbindung: liefe der Aufbau zweimal gleichzeitig
+    // (React ruft Effekte im Entwicklungsmodus absichtlich doppelt auf),
+    // dann schriebe der zweite Lauf B.pc um, waehrend der erste noch
+    // aushandelt -- und dessen setLocalDescription landete auf der fremden
+    // Verbindung. Genau das ist am 06.10.2026 passiert:
+    // "The order of m-lines in subsequent offer doesn't match".
     B.strom = spuren.strom;
-    B.pc = new RTCPeerConnection();
-    B.pc.addTrack(spuren.bild, spuren.strom);
-    if (spuren.ton) B.pc.addTrack(spuren.ton, spuren.strom);
+    B.quelle = v;
+    B.tonQuelle = spuren.ton ? v : null;
+    const pc = new RTCPeerConnection();
+    pc.addTrack(spuren.bild, spuren.strom);
+    if (spuren.ton) pc.addTrack(spuren.ton, spuren.strom);
 
     // Ohne das regelt WebRTC die Aufloesung herunter, sobald es eng wird --
     // gemessen: 180x320 statt 720x1280. Beide Enden sitzen auf demselben
     // Rechner, eng wird es nie, und ein koerniges Reel kann der Mitarbeiter
     // nicht beurteilen.
-    const sender = B.pc.getSenders().find((x) => x.track?.kind === "video");
+    const sender = pc.getSenders().find((x) => x.track?.kind === "video");
     if (sender) {
       const par = sender.getParameters();
       par.degradationPreference = "maintain-resolution";
@@ -198,20 +246,31 @@ const BUEHNE_SKRIPT = () => {
       try { await sender.setParameters(par); } catch { /* aeltere Chrome-Fassungen */ }
     }
 
-    await B.pc.setLocalDescription(await B.pc.createOffer());
+    await pc.setLocalDescription(await pc.createOffer());
     // Ohne Trickle: beide Enden sitzen auf demselben Rechner, das Sammeln
     // dauert Millisekunden und spart eine zweite Leitung fuer Kandidaten.
     await new Promise((ok) => {
-      if (B.pc.iceGatheringState === "complete") return ok();
-      B.pc.addEventListener("icegatheringstatechange", () => B.pc.iceGatheringState === "complete" && ok());
+      if (pc.iceGatheringState === "complete") return ok();
+      pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && ok());
       setTimeout(ok, 3000);
     });
+    // Eine aeltere Verbindung, die noch offen ist, wird geschlossen -- sonst
+    // laufen zwei Stroeme aus demselben Reel nebeneinander.
+    if (B.pc && B.pc !== pc) { try { B.pc.close(); } catch {} }
+    B.pc = pc;
+    // Jeder Aufbau bekommt eine eigene Kennung. Eine Antwort, die zu einem
+    // aelteren Angebot gehoert, wird dadurch erkannt und uebergangen --
+    // sonst landete sie auf der neuen Verbindung und zerschoesse sie.
+    B.aufbauId = Math.random().toString(36).slice(2, 10);
+    B.starteWaechter();
     sag("Angebot fertig");
-    return { ok: true, angebot: B.pc.localDescription.sdp, protokoll: B.protokoll };
+    return { ok: true, angebot: pc.localDescription.sdp, aufbauId: B.aufbauId, protokoll: B.protokoll };
   };
 
-  B.antwort = async (sdp) => {
-    if (!B.pc) return { fehler: "keine Buehne" };
+  B.antwort = async (sdp, aufbauId) => {
+    if (!B.pc) return { fehler: "Die Buehne stand noch nicht, als die Antwort kam." };
+    if (aufbauId && aufbauId !== B.aufbauId) return { ok: true, uebergangen: "veraltetes Angebot" };
+    if (B.pc.signalingState !== "have-local-offer") return { ok: true, uebergangen: B.pc.signalingState };
     await B.pc.setRemoteDescription({ type: "answer", sdp });
     return { ok: true };
   };
@@ -219,18 +278,54 @@ const BUEHNE_SKRIPT = () => {
   // Nach einem Wisch haengt Instagram ein anderes <video> ins Bild. Beide
   // Spuren werden auf das neue umgelegt -- ohne die Verbindung neu
   // aufzubauen, sonst gaebe es bei jedem Wisch ein schwarzes Loch.
+  // Lebt die Spur, die wir gerade senden, ueberhaupt noch?
+  B.spurLebt = () => {
+    const t = B.pc?.getSenders().find((x) => x.track?.kind === "video")?.track;
+    return !!t && t.readyState === "live";
+  };
+
   B.nachfuehren = async () => {
     if (!B.pc) return { fehler: "keine Buehne" };
     const v = B.videoImBild();
     if (!v) return { fehler: "kein Video im Bild" };
+    // Zeigt Instagram noch dasselbe Element UND lebt die Spur, gibt es
+    // nichts umzulegen -- jedes Umlegen unterbricht den Strom kurz, und das
+    // sah man beim Scrollen als Durcheinander. Ist die Spur aber tot, muss
+    // umgelegt werden, auch wenn es scheinbar dasselbe Element ist.
+    if (B.quelle === v && B.spurLebt()) return { ok: true, unveraendert: true };
     let spuren;
     try { spuren = B.spurenVon(v); } catch (e) { return { fehler: String(e?.message ?? e) }; }
-    B.strom = spuren.strom;
-    for (const s of B.pc.getSenders()) {
-      if (s.track?.kind === "video" && spuren.bild) await s.replaceTrack(spuren.bild);
-      if (s.track?.kind === "audio" && spuren.ton) await s.replaceTrack(spuren.ton);
+
+    // Auf die Tonspur warten, bevor umgehaengt wird.
+    //
+    // Ein frisch eingehaengtes Video hat oft noch keine Tonspur -- die
+    // entsteht erst, wenn Instagram den Ton dekodiert. Wurde sofort
+    // umgehaengt, wanderte das Bild auf das neue Reel, der Ton aber nicht
+    // (es gab nichts, worauf man haette umhaengen koennen), und man hoerte
+    // weiter das vorherige. Beim schnellen Wischen mehrfach hintereinander
+    // -- genau das klang nach "der Ton haengt hinterher".
+    if (!spuren.ton) {
+      const ende = Date.now() + 1500;
+      while (Date.now() < ende && !spuren.ton) {
+        await new Promise((r) => setTimeout(r, 100));
+        try { spuren = B.spurenVon(v); } catch { break; }
+      }
     }
-    return { ok: true, groesse: `${v.videoWidth}x${v.videoHeight}` };
+
+    B.quelle = v;
+    B.tonQuelle = spuren.ton ? v : null;
+    B.strom = spuren.strom;
+    // Beide Spuren im selben Durchgang tauschen, damit zwischen Bild und Ton
+    // kein zusaetzlicher Versatz entsteht.
+    const bildSender = B.pc.getSenders().find((x) => x.track?.kind === "video");
+    const tonSender = B.pc.getSenders().find((x) => x.track?.kind === "audio");
+    await Promise.all(
+      [
+        bildSender && spuren.bild ? bildSender.replaceTrack(spuren.bild) : null,
+        tonSender && spuren.ton ? tonSender.replaceTrack(spuren.ton) : null,
+      ].filter(Boolean)
+    );
+    return { ok: true, groesse: `${v.videoWidth}x${v.videoHeight}`, ton: !!spuren.ton };
   };
 
   // Welches Reel ist gerade zu sehen? In V1 war das trivial -- der Server
@@ -260,6 +355,97 @@ const BUEHNE_SKRIPT = () => {
       }
     }
     return { code: wege[0]?.code ?? null, wege };
+  };
+
+  // Fuer die Fehlersuche: was macht die Quelle, und geht wirklich etwas
+  // raus? Nur lesend, aendert nichts.
+  B.diagnose = async () => {
+    const v = B.videoImBild();
+    const spur = B.pc?.getSenders().find((x) => x.track?.kind === "video")?.track;
+    let gesendet = null, bilder = null;
+    if (B.pc) {
+      const st = await B.pc.getStats();
+      st.forEach((x) => { if (x.type === "outbound-rtp" && x.kind === "video") { gesendet = x.bytesSent; bilder = x.framesSent; } });
+    }
+    return {
+      quelleLaeuft: v ? !v.paused : null,
+      quelleZeit: v ? +v.currentTime.toFixed(2) : null,
+      quelleBereit: v ? v.readyState : null,
+      quelleGroesse: v ? `${v.videoWidth}x${v.videoHeight}` : null,
+      spurZustand: spur ? `${spur.readyState}/${spur.muted ? "stumm" : "offen"}` : null,
+      verbindung: B.pc?.connectionState ?? "-",
+      gesendet, bilder,
+      videosImDom: document.querySelectorAll("video").length,
+      amRichtigenElement: B.quelle === v,
+      letzteHeilung: B.letzteHeilung ?? null,
+      tonAmRichtigenElement: B.tonQuelle === B.quelle,
+      letzteTonHeilung: B.letzteTonHeilung ?? null,
+    };
+  };
+
+
+  // Der Waechter. Instagram tauscht beim Reels-Scrollen staendig
+  // Video-Elemente aus, und es gibt keinen verlaesslichen Hinweis darauf:
+  //
+  //   * Manchmal wirft es das Element weg -> die Spur endet (gemessen:
+  //     spur=ended, Bild stand still).
+  //   * Manchmal laesst es das Element leben und haelt es nur an, waehrend
+  //     es in einem anderen weiterspielt (gemessen: spur=live/offen, Bilder
+  //     standen trotzdem bei 710 fest, 17 Videos im DOM).
+  //
+  // Auf einzelne Ereignisse zu horchen, deckt deshalb immer nur einen der
+  // Faelle ab. Der Waechter prueft stattdessen die einzige Frage, auf die es
+  // ankommt: haengen wir noch an dem Element, das Instagram gerade zeigt,
+  // und laeuft es? Wenn nicht, wird umgehaengt.
+  // Zieht NUR den Ton nach. Es kommt vor, dass ein frisch eingehaengtes
+  // Element beim Umhaengen noch keine Tonspur hatte -- dann blieb der
+  // Tonsender auf der alten, inzwischen toten Spur haengen und es war
+  // dauerhaft still, waehrend das Bild einwandfrei lief. Nachgemessen in der
+  // Pruefung vom 07.10.2026: 619 Bilder, 30/s, Ton 0 Prozent.
+  B.tonNachziehen = async () => {
+    if (!B.pc || !B.quelle) return { ok: false };
+    const sender = B.pc.getSenders().find((x) => x.track?.kind === "audio");
+    if (!sender) return { ok: false };
+    let ton = null;
+    try { ton = B.quelle.captureStream().getAudioTracks()[0] ?? null; } catch { return { ok: false }; }
+    if (!ton) return { ok: false };
+    await sender.replaceTrack(ton);
+    B.tonQuelle = B.quelle;
+    return { ok: true };
+  };
+
+  B.starteWaechter = () => {
+    if (B.waechter) return;
+    B.waechter = setInterval(async () => {
+      if (!B.pc || B.heiltGerade) return;
+      const jetzt = B.videoImBild();
+      if (!jetzt) return;
+      const spur = B.pc.getSenders().find((x) => x.track?.kind === "video")?.track;
+      const tonSpur = B.pc.getSenders().find((x) => x.track?.kind === "audio")?.track;
+      const falschesElement = B.quelle !== jetzt;
+      const spurTot = !spur || spur.readyState !== "live";
+
+      // Der Ton wird getrennt geprueft: er kann allein wegbrechen, ohne dass
+      // am Bild etwas auffaellt -- und dann merkt es niemand.
+      if (!falschesElement && !spurTot) {
+        const tonTot = !tonSpur || tonSpur.readyState !== "live";
+        const tonVomFalschenElement = B.tonQuelle !== B.quelle;
+        if (tonTot || tonVomFalschenElement) {
+          B.heiltGerade = true;
+          const erg = await B.tonNachziehen().catch(() => ({ ok: false }));
+          B.letzteTonHeilung = { tonTot, tonVomFalschenElement, erfolg: !!erg.ok, zeit: Date.now() };
+          B.heiltGerade = false;
+        }
+      }
+      // Bewusst NICHT geheilt wird, wenn unser Element zwar steht, aber das
+      // ist, was Instagram gerade zeigt: dann hat jemand auf Pause gedrueckt,
+      // und genau das soll stehenbleiben. Nur wenn Instagram woanders
+      // weiterspielt, haengen wir an der falschen Stelle.
+      if (!falschesElement && !spurTot) return;
+      B.heiltGerade = true;
+      B.letzteHeilung = { falschesElement, spurTot, zeit: Date.now() };
+      try { await B.nachfuehren(); } catch {} finally { B.heiltGerade = false; }
+    }, 500);
   };
 
   B.zustand = () => ({
@@ -372,10 +558,16 @@ const MEDIA_ADAPTER = {
   tiktok: { looksLikeMedia: looksLikeTikTokMedia, parseMedia: parseTikTokMedia },
 };
 
-function collectMediaFrom(node, out, seenIds, adapter, depth = 0, stats) {
+// katalog sammelt JEDES gelesene Reel, auch die, die der Puffer verwirft.
+// Verworfen wird, was der Account schon gesehen hat -- in V1 richtig, damit
+// der Puffer nichts doppelt ausliefert. In V2 sieht der Mitarbeiter aber
+// Instagrams Feed direkt, bekannte Reels eingeschlossen, und zu denen
+// fehlten dann Name, Caption und der Like-Knopf (gemessen am 06.10.2026:
+// die ersten beiden Reels leer, ab dem dritten wieder da).
+function collectMediaFrom(node, out, seenIds, adapter, depth = 0, stats, katalog) {
   if (depth > 24 || !node) return;
   if (Array.isArray(node)) {
-    for (const item of node) collectMediaFrom(item, out, seenIds, adapter, depth + 1, stats);
+    for (const item of node) collectMediaFrom(item, out, seenIds, adapter, depth + 1, stats, katalog);
     return;
   }
   if (typeof node !== "object") return;
@@ -385,6 +577,7 @@ function collectMediaFrom(node, out, seenIds, adapter, depth = 0, stats) {
       // DIAGNOSTIC (temporary): stats is only ever passed by the trace
       // instrumentation below -- no behavior change when omitted.
       if (stats) stats.candidates++;
+      if (katalog) katalog.set(parsed.id, parsed);
       if (!seenIds.has(parsed.id)) {
         out.push(parsed);
       } else if (stats) {
@@ -393,7 +586,7 @@ function collectMediaFrom(node, out, seenIds, adapter, depth = 0, stats) {
       }
     }
   }
-  for (const key of Object.keys(node)) collectMediaFrom(node[key], out, seenIds, adapter, depth + 1, stats);
+  for (const key of Object.keys(node)) collectMediaFrom(node[key], out, seenIds, adapter, depth + 1, stats, katalog);
 }
 
 async function sleep(ms) {
@@ -849,6 +1042,10 @@ class Session {
     this.browser = browser;
     this.context = context;
     this.page = page;
+    // Alles, was je mitgelesen wurde -- unabhaengig davon, ob der Puffer es
+    // verworfen hat. Dient nur dem Nachschlagen von Angaben, nie der
+    // Auslieferung.
+    this.katalog = new Map();
     this.history = []; // reels already shown this session, in order
     this.cursor = -1;
     this.pending = []; // extracted-but-not-yet-shown, a natural read-ahead
@@ -875,15 +1072,40 @@ class Session {
       try {
         const url = response.url();
         if (!url.includes(domain)) return;
-        const body = await response.json().catch(() => null);
-        if (!body) return;
+
+        // Instagram liefert die ERSTEN Reels fertig in der Seite mit --
+        // eingebettet in <script type="application/json">-Bloecke. Erst was
+        // beim Scrollen nachgeladen wird, kommt als eigene JSON-Antwort.
+        //
+        // response.json() scheitert an HTML und verwarf die Seite deshalb
+        // komplett. Genau daher hatten immer exakt die ersten beiden Reels
+        // keine Angaben (@unknown, keine Like-Zahl), ab dem dritten war
+        // alles da -- nachgemessen am 07.10.2026.
+        let body = await response.json().catch(() => null);
+        const koerper = [];
+        if (body) {
+          koerper.push(body);
+        } else {
+          const typ = (response.headers()["content-type"] ?? "").toLowerCase();
+          if (!typ.includes("text/html")) return;
+          const html = await response.text().catch(() => "");
+          // Bewusst nur die ausgewiesenen JSON-Bloecke, nicht das ganze
+          // Dokument: alles andere waere Rateraten im Markup.
+          for (const m of html.matchAll(/<script[^>]+type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)) {
+            if (koerper.length >= 40) break;
+            try { koerper.push(JSON.parse(m[1])); } catch { /* kein brauchbarer Block */ }
+          }
+          if (koerper.length === 0) return;
+          console.log(`[seite] ${koerper.length} eingebettete Datenbloecke aus dem HTML gelesen.`);
+        }
+        body = koerper.length === 1 ? koerper[0] : koerper;
         const found = [];
         // DIAGNOSTIC (temporary): proves the seenIds filter is actively
         // rejecting candidates (from this session's own history, or seeded
         // from Archive), not just that Instagram happened not to re-serve
         // anything already known this time.
         const stats = { candidates: 0, rejected: 0, rejectedIds: [] };
-        collectMediaFrom(body, found, this.seenIds, adapter, 0, stats);
+        collectMediaFrom(body, found, this.seenIds, adapter, 0, stats, this.katalog);
         if (stats.rejected > 0) {
           console.log(`[trace-reject] session ${this.id}: response had ${stats.candidates} candidate(s), REJECTED ${stats.rejected} already-seen id(s): ${stats.rejectedIds.join(", ")}`);
         }
@@ -917,16 +1139,53 @@ class Session {
 
 
   // --- Buehne (V2) ---------------------------------------------------
+  // Zwei Aufbauten gleichzeitig gibt es nicht: der zweite wartet auf den
+  // ersten. Ohne diese Reihenfolge ueberholen sich die beiden Aushandlungen.
   async buehneStarten() {
-    await this.page.evaluate(BUEHNE_SKRIPT);
+    this.buehneAufbau = (this.buehneAufbau ?? Promise.resolve()).catch(() => {}).then(() => this.buehneStartenEinzeln());
+    return await this.buehneAufbau;
+  }
+
+  async buehneStartenEinzeln() {
+    // Das Skript nur einmal pro Seite einsetzen. Es jedes Mal neu
+    // einzusetzen, setzte window.__buehne zurueck -- und eine Antwort, die
+    // in genau diesem Moment eintraf, fand dann nichts mehr vor
+    // ("keine Buehne", gemessen am 06.10.2026). Instagram tauscht beim
+    // Wischen zwar Elemente aus, aber nicht das Fenster, also ueberlebt das
+    // Skript die ganze Sitzung.
+    const schonDa = await this.page.evaluate(() => !!window.__buehne).catch(() => false);
+    if (!schonDa) await this.page.evaluate(BUEHNE_SKRIPT);
     const erg = await this.page.evaluate(() => window.__buehne.starte());
     console.log(`[buehne] session ${this.id}: ${erg.ok ? "steht -- " + (erg.protokoll ?? []).join(", ") : "FEHLER " + erg.fehler}`);
     this.buehneSteht = !!erg.ok;
+    if (erg.ok) this.starteBeobachtung();
     return erg;
   }
 
-  async buehneAntwort(sdp) {
-    return await this.page.evaluate((x) => window.__buehne.antwort(x), sdp);
+  // Schreibt alle 3 Sekunden mit, was die Quelle tut und ob wirklich Bilder
+  // rausgehen. Nur fuer die Fehlersuche -- greift nirgends ein.
+  starteBeobachtung() {
+    if (this.beobachtung) return;
+    this.beobachtung = setInterval(async () => {
+      if (this.closed) return;
+      const d = await this.page.evaluate(() => window.__buehne?.diagnose?.()).catch((e) => ({ fehler: e.message }));
+      console.log(`[buehne-blick] ${JSON.stringify(d)}`);
+      // Selbstheilung: ist die Spur gestorben, sofort auf das Element
+      // umlegen, das Instagram jetzt zeigt. Ohne das bleibt das Bild beim
+      // Mitarbeiter stehen, obwohl Instagram munter weiterspielt.
+      if (d && typeof d.spurZustand === "string" && d.spurZustand.startsWith("ended")) {
+        const erg = await this.buehneNachfuehren();
+        console.log(`[buehne-heilung] Spur war tot -> ${JSON.stringify(erg)}`);
+      }
+    }, 3000);
+  }
+
+  async buehneAntwort(sdp, aufbauId) {
+    const erg = await this.page
+      .evaluate(({ x, id }) => (window.__buehne ? window.__buehne.antwort(x, id) : { fehler: "Buehne war nicht mehr da" }), { x: sdp, id: aufbauId })
+      .catch((e) => ({ fehler: String(e?.message ?? e) }));
+    console.log(`[buehne] session ${this.id}: Antwort ${erg?.ok ? (erg.uebergangen ? "uebergangen (" + erg.uebergangen + ")" : "angenommen") : "ABGELEHNT -- " + erg?.fehler}`);
+    return erg;
   }
 
   async buehneNachfuehren() {
@@ -941,10 +1200,105 @@ class Session {
     const sicht = await this.page.evaluate(() => window.__buehne.aktuellesReel()).catch(() => ({ code: null, wege: [] }));
     if (!sicht.code) return { reel: null, code: null, wege: sicht.wege ?? [] };
     const id = `instagram:${sicht.code}`;
-    const bekannt =
+    const nachschlagen = () =>
       this.history.find((r) => r.id === id) ??
       this.pending.find((r) => r.id === id) ??
+      this.katalog.get(id) ??
       null;
+    let bekannt = nachschlagen();
+
+    // Beim ersten Reel einer Sitzung ist Instagrams Antwort oft noch gar
+    // nicht mitgelesen -- nachgemessen am 07.10.2026: gefragt wurde in
+    // Protokollzeile 13, die Daten kamen in Zeile 21. Wer hier sofort
+    // aufgibt, zeigt dauerhaft @unknown, obwohl die Angaben Sekunden spaeter
+    // dastehen. Also einmal pro Reel kurz warten -- danach nie wieder, damit
+    // sich die Abfragen des Kunden nicht stauen.
+    this.__gewartetFuer = this.__gewartetFuer ?? new Set();
+    if (!bekannt && !this.__gewartetFuer.has(id)) {
+      this.__gewartetFuer.add(id);
+      const ende = Date.now() + 4000;
+      while (Date.now() < ende && !bekannt) {
+        await sleep(200);
+        bekannt = nachschlagen();
+      }
+      if (bekannt) console.log(`[aktuell] ${sicht.code}: Angaben kamen nach dem Warten.`);
+    }
+    if (!bekannt) {
+      // Letzter Ausweg: direkt von der Seite ablesen, was dort steht. Das
+      // deckt Reels ab, die in keiner mitgelesenen Antwort vorkamen --
+      // etwa weil Instagram sie aus seinem eigenen Zwischenspeicher zeigt.
+      const vonDerSeite = await this.page.evaluate((code) => {
+        // Vom Video aus nach oben gehen, bis ein Vorfahre einen Profillink
+        // enthaelt. Eine feste Tiefe zu raten ging schief -- Instagram
+        // schachtelt seine Reels unterschiedlich tief, und auf /reels/ gibt
+        // es nicht einmal zuverlaessig ein <article>.
+        const istProfil = (h) => {
+          const m = (h ?? "").match(/^\/([A-Za-z0-9._]{2,30})\/$/);
+          return m && !["explore", "reels", "accounts", "direct", "p", "stories"].includes(m[1]) ? m[1] : null;
+        };
+        const sucheIn = (wurzel) => {
+          for (const a of wurzel.querySelectorAll("a[href]")) {
+            const n = istProfil(a.getAttribute("href"));
+            if (n) return n;
+          }
+          return null;
+        };
+        const v = window.__buehne?.videoImBild?.();
+        let knoten = v?.parentElement ?? null;
+        for (let i = 0; i < 8 && knoten; i++, knoten = knoten.parentElement) {
+          const n = sucheIn(knoten);
+          if (n) return { nutzer: n, weg: `Profillink ${i + 1} Ebene(n) ueber dem Video` };
+        }
+        // Zweiter Weg: beim Link, der auf genau dieses Reel zeigt, nachsehen.
+        if (code) {
+          const reelLink = document.querySelector(`a[href*="/reel/${code}"]`);
+          let k = reelLink?.parentElement ?? null;
+          for (let i = 0; i < 6 && k; i++, k = k.parentElement) {
+            const n = sucheIn(k);
+            if (n) return { nutzer: n, weg: "Profillink neben dem Reel-Link" };
+          }
+        }
+        // Nichts gefunden: aufschreiben, was ueberhaupt dasteht. Zweimal
+        // habe ich hier einen Selektor geraten und zweimal danebengelegen --
+        // der dritte wird aus echten Daten gebaut, nicht aus einer Annahme.
+        const probe = [];
+        let k2 = v?.parentElement ?? null;
+        for (let i = 0; i < 8 && k2 && probe.length < 14; i++, k2 = k2.parentElement) {
+          for (const a of k2.querySelectorAll("a[href]")) {
+            const h = a.getAttribute("href") ?? "";
+            if (probe.length < 14) probe.push(`${i}:${h.slice(0, 48)}`);
+          }
+        }
+        const kopftext = (v?.closest("div")?.parentElement?.innerText ?? "").slice(0, 160).replace(/\n/g, " | ");
+        return { nutzer: null, weg: "nichts gefunden", probe, kopftext };
+      }, sicht.code).catch(() => null);
+      if (vonDerSeite && !vonDerSeite.nutzer && !this.__probeGeloggt?.has?.(sicht.code)) {
+        this.__probeGeloggt = this.__probeGeloggt ?? new Set();
+        this.__probeGeloggt.add(sicht.code);
+        console.log(`[probe] ${sicht.code} kein Name. Links in der Naehe: ${JSON.stringify(vonDerSeite.probe)}`);
+        console.log(`[probe] ${sicht.code} Text drumherum: ${vonDerSeite.kopftext}`);
+      }
+      if (vonDerSeite) {
+        bekannt = {
+          id,
+          platform: "instagram",
+          username: vonDerSeite.nutzer,
+          weg: vonDerSeite.weg,
+          sourceUrl: `https://www.instagram.com/reel/${sicht.code}/`,
+          thumbnailUrl: null,
+          videoUrl: null,
+          caption: null,
+          vonDerSeite: true,
+        };
+      }
+    }
+    if (!this.__letzterAktuellLog || this.__letzterAktuellLog !== sicht.code) {
+      this.__letzterAktuellLog = sicht.code;
+      console.log(
+        `[aktuell] code=${sicht.code ?? "-"} weg=${sicht.wege?.[0]?.weg ?? "-"} ` +
+          `verzeichnis=${this.katalog.size} gefunden=${bekannt ? (bekannt.vonDerSeite ? "von der Seite: " + (bekannt.username ?? "kein Name") : "im Verzeichnis") : "NEIN"}`
+      );
+    }
     return { reel: bekannt, code: sicht.code, wege: sicht.wege };
   }
 
@@ -956,21 +1310,52 @@ class Session {
   // Eine Eingabe des Mitarbeiters geht in GENAU DEN Tab, den er sieht.
   // Das ist der ganze Unterschied zu V1: dort wischte er in unserem eigenen
   // Player, hier wischt er in Instagram.
+  // Eingaben laufen strikt hintereinander. Zwei gleichzeitig bedeuteten zwei
+  // ueberlappende Spurwechsel, und genau das sah man beim Scrollen als
+  // Durcheinander aus auftauchenden Videos.
   async eingabe(art) {
+    this.eingabeKette = (this.eingabeKette ?? Promise.resolve()).catch(() => {}).then(() => this.eingabeEinzeln(art));
+    return await this.eingabeKette;
+  }
+
+  async eingabeEinzeln(art) {
     if (art === "weiter") {
       await this.page.keyboard.press("ArrowDown");
     } else if (art === "zurueck") {
       await this.page.keyboard.press("ArrowUp");
     } else if (art === "tippen") {
-      // Mitte des Fensters -- Instagram haelt damit an bzw. spielt weiter.
+      // Mitte des Fensters -- Instagram haelt damit an bzw. spielt weiter,
+      // genau wie ein Fingertipp auf dem Handy.
       await this.page.mouse.click(Math.round(BUEHNE_FENSTER.width / 2), Math.round(BUEHNE_FENSTER.height / 2));
+      // Nicht blind 180 ms warten und dann ablesen -- wie lange Instagram
+      // braucht, weiss niemand. Stattdessen nachsehen, bis sich der Zustand
+      // wirklich geaendert hat, hoechstens eine Sekunde lang.
+      const vorher = await this.page
+        .evaluate(() => { const v = window.__buehne?.videoImBild?.(); return v ? v.paused : null; })
+        .catch(() => null);
+      let pausiert = vorher;
+      const ende = Date.now() + 1000;
+      while (Date.now() < ende) {
+        await sleep(80);
+        pausiert = await this.page
+          .evaluate(() => { const v = window.__buehne?.videoImBild?.(); return v ? v.paused : null; })
+          .catch(() => null);
+        if (pausiert !== vorher) break;
+      }
+      return { ok: true, pausiert };
     } else {
       return { ok: false, fehler: "unbekannte Eingabe" };
     }
     // Nach jedem Wechsel haengt der Ton am alten Element -- nachziehen.
     if (art === "weiter" || art === "zurueck") {
-      await sleep(700);
-      await this.buehneNachfuehren();
+      // Kurz warten, damit Instagram sein neues Element eingehaengt hat --
+      // aber das Umhaengen selbst NICHT abwarten. Es wartet seinerseits auf
+      // die Tonspur (bis zu 1,5 s), und ReelForge haelt den Wisch solange
+      // gesperrt: beim schnellen Scrollen fuehlte sich das zaeh an. Der
+      // Waechter zieht ohnehin zweimal pro Sekunde nach, falls das hier
+      // noch zu frueh kommt.
+      await sleep(350);
+      void this.buehneNachfuehren();
     }
     return { ok: true };
   }
@@ -1112,6 +1497,30 @@ class Session {
   //
   // Laesst sich nicht sicher sagen, was im Bild ist, wird abgebrochen. Lieber
   // keine Handlung als die falsche auf einem echten Account.
+  // Eine Nebenseite fuer Like, Follow, Block oder Kommentare.
+  //
+  // Zwei Dinge, die V2 noetig gemacht hat:
+  //
+  // 1. Sie bekommt ausdruecklich die Schreibtischbreite zurueck. Die
+  //    Reels-Seite laeuft in V2 in Reel-Form (420 breit), und eine neue
+  //    Seite erbt dieses Mass vom Kontext. Instagram rendert bei 420 ein
+  //    anderes Layout -- das Kommentar-Lesen vergleicht den sichtbaren Text
+  //    vor und nach dem Oeffnen und griff dort nur noch Wiederholungen
+  //    ("jeder Kommentar sagt Video", 06.10.2026).
+  //
+  // 2. Die Reels-Seite wird sofort wieder nach vorn geholt. Eine neu
+  //    geoeffnete Seite wird aktiv, und die Reels-Seite gilt dann als
+  //    versteckt -- ein versteckter Tab drosselt sein Video, und damit
+  //    genau den Strom, den der Mitarbeiter gerade sieht. Playwright kann
+  //    die Nebenseite auch im Hintergrund bedienen, Vordergrund braucht sie
+  //    nicht.
+  async nebenseite() {
+    const seite = await this.context.newPage();
+    await seite.setViewportSize({ width: 1280, height: 800 }).catch(() => {});
+    await this.page.bringToFront().catch(() => {});
+    return seite;
+  }
+
   async handlungsZiel() {
     if (!this.buehneSteht) return { reel: this.current(), fehler: null };
     const { reel, code } = await this.buehneAktuell();
@@ -1134,7 +1543,7 @@ class Session {
     // reuses the session's real cookies without disturbing the Reels/For-You
     // tab's own scroll position (liking a reel the VA has scrolled back to
     // review shouldn't move the live feed out from under them).
-    const likePage = await this.context.newPage();
+    const likePage = await this.nebenseite();
     let result;
     try {
       await likePage.goto(reel.sourceUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -1154,7 +1563,7 @@ class Session {
     if (fehler) return { following: false, error: fehler };
     if (!reel) return { following: false, error: "No reel is currently in view." };
 
-    const followPage = await this.context.newPage();
+    const followPage = await this.nebenseite();
     let result;
     try {
       await followPage.goto(reel.sourceUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -1180,7 +1589,7 @@ class Session {
       ? `https://www.instagram.com/${reel.username}/`
       : `https://www.tiktok.com/@${reel.username}`;
 
-    const blockPage = await this.context.newPage();
+    const blockPage = await this.nebenseite();
     let result;
     try {
       await blockPage.goto(profileUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -1220,7 +1629,7 @@ class Session {
     // "trust only what's provably true, not what a click probably did"
     // rule Like/Follow already follow, just applied to reading instead of
     // clicking.
-    const commentsPage = await this.context.newPage();
+    const commentsPage = await this.nebenseite();
     try {
       await commentsPage.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
       await sleep(1500);
@@ -1264,12 +1673,13 @@ class Session {
 
   async close() {
     if (this.closed) return;
+    if (this.beobachtung) clearInterval(this.beobachtung);
     this.closed = true;
     await this.browser.close().catch(() => {});
   }
 }
 
-async function startSession(accountId, token, lockSecret) {
+async function startSession(accountId, token, lockSecret, modus) {
   // Diagnostic-only timing, no behavior change -- lets us see which of the
   // four real steps (Supabase session fetch, Chromium launch, page
   // navigation, first-reel polling) is actually slow on a given "Loading
@@ -1336,6 +1746,9 @@ async function startSession(accountId, token, lockSecret) {
   const session = new Session(id, secret, accountId, platform, token, lockSecret, browser, context, page, seenReelIds);
   sessions.set(id, session);
   console.log(`[session] started ${id} for account ${accountId} (${platform})`);
+  // Nur im Entwicklungslauf von Nutzen: damit sich das Wischen von aussen
+  // kontrolliert durchspielen laesst, statt es am Mausrad zu raten.
+  console.log(`[session-zugang] id=${id} secret=${secret}`);
 
   const t2 = Date.now();
   try {
@@ -1348,14 +1761,30 @@ async function startSession(accountId, token, lockSecret) {
   console.log(`[timing] page.goto navigation: ${Date.now() - t2}ms`);
 
   const t3 = Date.now();
-  const { reel } = await session.next();
-  console.log(`[timing] first-reel polling (session.next): ${Date.now() - t3}ms`);
+  let reel = null;
+  if (modus === "V2") {
+    // In V2 darf hier NICHTS gedrueckt werden. next() holt ueber
+    // ensurePending ein ArrowDown -- in V1 war das noetig, um das erste Reel
+    // in den Puffer zu bekommen. In V2 gibt es keinen Puffer, der
+    // Mitarbeiter sieht Instagrams Feed direkt, und dieser eine Tastendruck
+    // liess ihn auf Reel 2 starten. Sein Pfeil nach oben fuehrte dann zu
+    // Reel 1, das er nie gesehen hatte, und von dort ging es nicht weiter
+    // hoch -- so gefunden am 06.10.2026.
+    //
+    // Was Instagram beim Laden von selbst anzeigt, IST das erste Reel. Die
+    // Angaben dazu holt sich der Kunde ueber buehne-aktuell, sobald die
+    // Buehne steht.
+    console.log(`[session] ${id}: V2 -- kein Vorspulen, der Feed bleibt, wo Instagram ihn geoeffnet hat.`);
+  } else {
+    ({ reel } = await session.next());
+    console.log(`[timing] first-reel polling (session.next): ${Date.now() - t3}ms`);
+    // Makes the first reel's real provenance independently checkable from the
+    // log alone — this is a brand-new page.goto() + scroll on a fresh
+    // browser/context created above, never a replay of any prior session's
+    // history (each Session instance's history/pending/seenIds start empty).
+    console.log(`[session] ${id} first reel: ${reel ? `${reel.id} ${reel.sourceUrl}` : "(none — feed returned nothing)"}`);
+  }
   console.log(`[timing] startSession total: ${Date.now() - t0}ms`);
-  // Makes the first reel's real provenance independently checkable from the
-  // log alone — this is a brand-new page.goto() + scroll on a fresh
-  // browser/context created above, never a replay of any prior session's
-  // history (each Session instance's history/pending/seenIds start empty).
-  console.log(`[session] ${id} first reel: ${reel ? `${reel.id} ${reel.sourceUrl}` : "(none — feed returned nothing)"}`);
   return { session, reel };
 }
 
@@ -1443,10 +1872,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/sessions") {
-      const { accountId, token, lockSecret } = await readBody(req);
+      const { accountId, token, lockSecret, modus } = await readBody(req);
       if (!accountId || !token) return json(res, 400, { error: "Missing required fields." });
       try {
-        const { session, reel } = await startSession(accountId, token, lockSecret);
+        const { session, reel } = await startSession(accountId, token, lockSecret, modus);
         return json(res, 200, { sessionId: session.id, sessionSecret: session.secret, reel });
       } catch (err) {
         return json(res, 502, { error: err?.message ?? "Couldn't start a research session." });
@@ -1456,26 +1885,31 @@ const server = http.createServer(async (req, res) => {
     const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret, reelId, sourceUrl, sdp, art } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
 
       // --- Buehne (V2) ---
       if (action === "buehne") {
         const erg = await session.buehneStarten();
-        return erg.ok ? json(res, 200, { angebot: erg.angebot }) : json(res, 502, { error: erg.fehler });
+        return erg.ok ? json(res, 200, { angebot: erg.angebot, aufbauId: erg.aufbauId }) : json(res, 502, { error: erg.fehler });
       }
       if (action === "buehne-antwort") {
         if (!sdp) return json(res, 400, { error: "Missing sdp." });
-        const erg = await session.buehneAntwort(sdp);
+        const erg = await session.buehneAntwort(sdp, aufbauId);
         return erg.fehler ? json(res, 502, { error: erg.fehler }) : json(res, 200, { ok: true });
       }
       if (action === "eingabe") {
         const erg = await session.eingabe(art);
         if (!erg.ok) return json(res, 400, { error: erg.fehler });
-        // Gleich mitliefern, was jetzt zu sehen ist -- sonst muesste der
-        // Kunde sofort ein zweites Mal fragen.
-        return json(res, 200, { ok: true, ...(await session.buehneAktuell()) });
+        // Bewusst OHNE die Reel-Angaben: buehneAktuell wartet bis zu vier
+        // Sekunden, falls Instagram die Daten noch nicht geschickt hat, und
+        // ReelForge haelt den Wisch gesperrt, bis diese Antwort da ist.
+        // Dadurch fuehlte sich das Weiterwischen gelegentlich an, als haenge
+        // es -- obwohl der Bildstrom nachweislich ohne eine einzige Luecke
+        // weiterlief (95 Messpunkte, 0 Einbrueche am 07.10.2026). Die
+        // Angaben holt der Kunde ohnehin alle zwei Sekunden im Hintergrund.
+        return json(res, 200, { ok: true });
       }
       if (action === "buehne-zustand") {
         return json(res, 200, await session.buehneZustand());
@@ -1558,3 +1992,26 @@ function bindSessionServer(deadline) {
 }
 
 bindSessionServer(Date.now() + 8000);
+
+// Wird der Connector beendet, waehrend noch eine Sitzung laeuft, blieben
+// bisher offene Browser zurueck. Beim Beenden werden sie jetzt geschlossen.
+//
+// Was das NICHT loest: die Sperre des Accounts liegt bei Supabase und wird
+// mit dem Anmelde-Token des Nutzers freigegeben, das hier gar nicht
+// vorliegt. Faellt der Connector waehrend einer Sitzung weg, gilt der
+// Account deshalb weiter als belegt, bis entweder die App "End Research"
+// schickt oder die Pacht von fuenf Minuten ablaeuft. Genau das ist am
+// 06.10.2026 bei einem Neustart waehrend laufender Sitzung passiert.
+let beendetSich = false;
+for (const zeichen of ["SIGINT", "SIGTERM"]) {
+  process.on(zeichen, async () => {
+    if (beendetSich) process.exit(0);
+    beendetSich = true;
+    console.log(`[beenden] ${zeichen}: ${sessions.size} laufende Sitzung(en) werden geschlossen.`);
+    await Promise.allSettled([...sessions.values()].map((s) => s.close()));
+    sessions.clear();
+    server.close(() => process.exit(0));
+    // Falls das Schliessen haengt, trotzdem gehen.
+    setTimeout(() => process.exit(0), 3000).unref();
+  });
+}

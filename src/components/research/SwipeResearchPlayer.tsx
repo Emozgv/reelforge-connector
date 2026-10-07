@@ -385,6 +385,10 @@ function SwipeSlide({
 }
 
 const WHEEL_THRESHOLD = 60;
+// Wie lange nach einem Wechsel keine Eingabe angenommen wird. Ein Mausrad
+// liefert nach der Geste noch lange Ereignisse nach -- ohne diese Pause
+// wanderte ein einzelner Wisch ueber mehrere Reels.
+const NACHLAUF_MS = 450;
 const SWIPE_THRESHOLD = 50;
 
 // Driven by a real, persistent Instagram session (see
@@ -476,6 +480,16 @@ export function SwipeResearchPlayer({
   // Mitarbeiter den Ton selbst anmacht. Die Verweildauer zaehlt Instagram
   // unabhaengig davon.
   const [stumm, setStumm] = useState(true);
+  // Haelt Instagrams Reel gerade an? Kommt vom Connector zurueck, nicht
+  // geraten -- er liest nach dem Tipp nach, was Instagram daraus gemacht hat.
+  const [pausiert, setPausiert] = useState(false);
+
+  function antippen() {
+    if (!(liveAnsicht && sitzung)) return;
+    void buehneEingabe(sitzung.sessionId, sitzung.sessionSecret, "tippen")
+      .then((a) => { if (typeof a.pausiert === "boolean") setPausiert(a.pausiert); })
+      .catch(() => {});
+  }
 
   function lockNav() {
     navLockedRef.current = true;
@@ -486,25 +500,48 @@ export function SwipeResearchPlayer({
 
   function goNext() {
     if (navLockedRef.current || loading) return;
-    lockNav();
+    if (!(liveAnsicht && sitzung)) lockNav();
     // In V2 geht der Wisch in Instagrams eigenen Tab -- genau darum geht es.
     // onNext() wuerde zusaetzlich den Puffer weiterschieben und damit
     // doppelt wischen, deshalb bleibt es hier aussen vor.
     if (liveAnsicht && sitzung) {
+      navLockedRef.current = true;
+      setPausiert(false);
+      // Bewusst ohne Auswertung der Antwort: der Wisch liefert keine
+      // Reel-Angaben mehr (das Nachschlagen dauerte bis zu vier Sekunden und
+      // sperrte den Wisch solange). Haette man die leere Antwort trotzdem
+      // uebernommen, waeren Name und Likes bei JEDEM Wisch kurz verschwunden.
+      // Die Angaben kommen aus der laufenden Abfrage alle zwei Sekunden.
       void buehneEingabe(sitzung.sessionId, sitzung.sessionSecret, "weiter")
-        .then((a) => onLiveReel?.(a.reel ?? null))
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          // Nachlaufsperre: ein Mausrad liefert nach der eigentlichen Geste
+          // noch Dutzende Ereignisse nach. Ohne diese Pause schob jeder
+          // einzelne Wisch gleich mehrere Reels weiter.
+          wheelAccum.current = 0;
+          window.setTimeout(() => { navLockedRef.current = false; }, NACHLAUF_MS);
+        });
       return;
     }
     onNext();
   }
   function goPrev() {
     if (navLockedRef.current || loading) return;
-    lockNav();
+    if (!(liveAnsicht && sitzung)) lockNav();
     if (liveAnsicht && sitzung) {
+      navLockedRef.current = true;
+      setPausiert(false);
+      // Bewusst ohne Auswertung der Antwort: der Wisch liefert keine
+      // Reel-Angaben mehr (das Nachschlagen dauerte bis zu vier Sekunden und
+      // sperrte den Wisch solange). Haette man die leere Antwort trotzdem
+      // uebernommen, waeren Name und Likes bei JEDEM Wisch kurz verschwunden.
+      // Die Angaben kommen aus der laufenden Abfrage alle zwei Sekunden.
       void buehneEingabe(sitzung.sessionId, sitzung.sessionSecret, "zurueck")
-        .then((a) => onLiveReel?.(a.reel ?? null))
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          wheelAccum.current = 0;
+          window.setTimeout(() => { navLockedRef.current = false; }, NACHLAUF_MS);
+        });
       return;
     }
     if (!hasPrev) return;
@@ -572,7 +609,7 @@ export function SwipeResearchPlayer({
           // V2: was hier laeuft, ist Instagram selbst. Die Bedienelemente
           // bleiben unsere -- nur das Bild darunter ist echt.
           <>
-            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} />
+            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} onAntippen={antippen} pausiert={pausiert} onAktuellesReel={(r) => onLiveReel?.(r)} />
             {currentReel && (
               <SwipeSlide
                 key={currentReel.id}
@@ -781,7 +818,7 @@ export function SwipeResearchPlayer({
           </div>
         )}
 
-        {hasPrev && (
+        {(hasPrev || (liveAnsicht && sitzung)) && (
           <button
             type="button"
             onClick={goPrev}
@@ -791,7 +828,7 @@ export function SwipeResearchPlayer({
             {navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronUp size={16} />}
           </button>
         )}
-        {currentReel && (
+        {(currentReel || (liveAnsicht && sitzung)) && (
           <button
             type="button"
             onClick={goNext}

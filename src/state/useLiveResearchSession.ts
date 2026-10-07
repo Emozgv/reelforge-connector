@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDuration, formatViews } from "../lib/researchFeedMapping";
 import type { Platform, ReelVideo } from "../types";
+import { RESEARCH_MODUS } from "../lib/researchModus";
 
 // ReelForge Connector's local session server (scripts/session-server.mjs) —
 // see its own header comment for the full architecture reasoning. The web
@@ -548,7 +549,9 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         const res = await fetch(`${SESSION_SERVER_URL}/sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accountId, token: data.token, lockSecret: data.lockSecret }),
+          // Der Modus muss mit: in V2 darf der Connector den Feed beim
+          // Start nicht vorspulen, sonst beginnt der Mitarbeiter auf Reel 2.
+          body: JSON.stringify({ accountId, token: data.token, lockSecret: data.lockSecret, modus: RESEARCH_MODUS }),
         });
         const body = await res.json();
         console.log(

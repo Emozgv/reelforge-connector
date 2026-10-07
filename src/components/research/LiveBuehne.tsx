@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Play } from "lucide-react";
 
 // Die Live-Buehne (V2): zeigt Instagrams eigenes Reel, durchgereicht vom
 // Connector, und schickt jeden Wisch dorthin zurueck.
@@ -30,6 +31,9 @@ export function LiveBuehne({
   sessionSecret,
   stumm,
   onZustand,
+  onAntippen,
+  pausiert,
+  onAktuellesReel,
 }: {
   sessionId: string;
   sessionSecret: string;
@@ -37,11 +41,31 @@ export function LiveBuehne({
   // Instagram zaehlt die Verweildauer so oder so, der Ton haengt nicht daran.
   stumm: boolean;
   onZustand?: (z: BuehnenZustand, meldung?: string) => void;
+  // Antippen haelt Instagrams Reel an und spielt es wieder weiter -- wie ein
+  // Fingertipp auf dem Handy. Der Tipp geht in Instagrams eigenen Tab,
+  // nicht an unser Bild: hier laeuft nur an, was dort ankommt.
+  onAntippen?: () => void;
+  pausiert?: boolean;
+  // Welches Reel gerade laeuft. In V1 wusste das der Puffer; in V2 wischt
+  // der Mitarbeiter in Instagram, also weiss es nur Instagram selbst.
+  onAktuellesReel?: (reel: unknown | null) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const aufbauRef = useRef<string | null>(null);
+  const versucheRef = useRef(0);
+  const [neustart, setNeustart] = useState(0);
+  // Die Rueckmeldung liegt in einem ref, nicht in der Abhaengigkeitsliste:
+  // sie ist bei jedem Rendern eine neue Funktion, und der Abfragetakt haette
+  // sich sonst staendig selbst neu aufgesetzt.
+  const meldeRef = useRef(onAktuellesReel);
+  useEffect(() => { meldeRef.current = onAktuellesReel; }, [onAktuellesReel]);
   const [zustand, setZustand] = useState<BuehnenZustand>("aus");
   const [meldung, setMeldung] = useState<string | null>(null);
+  // Kleine Messanzeige: der Connector sendet nachweislich lueckenlos, aber
+  // das Bild steht trotzdem still -- also muss sichtbar werden, was DIESER
+  // Browser mit den ankommenden Bildern macht.
+  const [messung, setMessung] = useState<string>("");
 
   useEffect(() => {
     onZustand?.(zustand, meldung ?? undefined);
@@ -49,6 +73,13 @@ export function LiveBuehne({
 
   useEffect(() => {
     let abgebrochen = false;
+    // React ruft Effekte im Entwicklungsmodus absichtlich doppelt auf. Ohne
+    // diese Sperre baute ReelForge zwei Buehnen gleichzeitig auf, und die
+    // zweite riss der ersten die Aushandlung weg ("The order of m-lines in
+    // subsequent offer doesn't match", gemessen am 06.10.2026).
+    if (aufbauRef.current === sessionId) return;
+    aufbauRef.current = sessionId;
+
     const pc = new RTCPeerConnection();
     pcRef.current = pc;
 
@@ -56,13 +87,23 @@ export function LiveBuehne({
       // Die Tonspur muss an einem Element haengen, sonst liefert Chrome sie
       // gar nicht erst aus -- gemessen: ohne Element bleibt sie still,
       // obwohl der Sender nachweislich Pegel hat.
-      if (videoRef.current && !videoRef.current.srcObject) {
-        videoRef.current.srcObject = ev.streams[0];
-      }
+      //
+      // Immer setzen, nie nur "wenn noch nichts drin ist": React baut den
+      // Effekt im Entwicklungsmodus absichtlich zweimal auf. Die verworfene
+      // erste Verbindung hatte ihr Bild da schon hineingelegt, und als sie
+      // geschlossen wurde, blieb ein totes Bild stehen, das die zweite,
+      // funktionierende Verbindung nicht mehr ersetzen durfte. Genau das
+      // sah man als "spielt 2-3 Sekunden und haengt sich dann auf" --
+      // waehrend der Connector nachweislich 30 Bilder/s weitersendete.
+      const el = videoRef.current;
+      if (!el) return;
+      if (el.srcObject !== ev.streams[0]) el.srcObject = ev.streams[0];
+      // Ein frisch gesetzter Strom startet nicht immer von allein.
+      void el.play().catch(() => {});
     };
     pc.onconnectionstatechange = () => {
       if (abgebrochen) return;
-      if (pc.connectionState === "connected") setZustand("laeuft");
+      if (pc.connectionState === "connected") { setZustand("laeuft"); versucheRef.current = 0; }
       else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         setZustand("fehler");
         setMeldung("Die Verbindung zum Connector ist abgerissen.");
@@ -72,7 +113,7 @@ export function LiveBuehne({
     (async () => {
       try {
         setZustand("verbindet");
-        const { angebot } = await ruf(`/sessions/${sessionId}/buehne`, { sessionSecret });
+        const { angebot, aufbauId } = await ruf(`/sessions/${sessionId}/buehne`, { sessionSecret });
         if (abgebrochen) return;
         await pc.setRemoteDescription({ type: "offer", sdp: angebot });
         await pc.setLocalDescription(await pc.createAnswer());
@@ -84,27 +125,110 @@ export function LiveBuehne({
           window.setTimeout(ok, 3000);
         });
         if (abgebrochen) return;
-        await ruf(`/sessions/${sessionId}/buehne-antwort`, { sessionSecret, sdp: pc.localDescription?.sdp });
+        await ruf(`/sessions/${sessionId}/buehne-antwort`, { sessionSecret, sdp: pc.localDescription?.sdp, aufbauId });
+
       } catch (e) {
         if (abgebrochen) return;
         setZustand("fehler");
         setMeldung(e instanceof Error ? e.message : "Die Buehne liess sich nicht aufbauen.");
+        // Nicht endgueltig aufgeben. Ein Fehlschlag heisst fast immer nur
+        // "noch nicht soweit" -- Instagram laedt, die Seite baut sich auf,
+        // eine Sitzung wird gerade gewechselt. Wer hier stehenbleibt, laesst
+        // den Mitarbeiter vor einem toten Bildschirm sitzen, obwohl es zwei
+        // Sekunden spaeter ginge.
+        if (versucheRef.current < 6) {
+          versucheRef.current += 1;
+          window.setTimeout(() => {
+            if (abgebrochen) return;
+            aufbauRef.current = null;
+            setNeustart((n) => n + 1);
+          }, 2500);
+        }
       }
     })();
 
+    const el = videoRef.current;
     return () => {
       abgebrochen = true;
+      // Das tote Bild mit wegraeumen, sonst steht es weiter im Element.
+      if (el?.srcObject) el.srcObject = null;
       pc.close();
       pcRef.current = null;
+      // Beim echten Verlassen freigeben, damit ein spaeterer Besuch derselben
+      // Sitzung wieder aufbauen darf.
+      if (aufbauRef.current === sessionId) aufbauRef.current = null;
     };
-  }, [sessionId, sessionSecret]);
+  }, [sessionId, sessionSecret, neustart]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = stumm;
   }, [stumm]);
 
+  // Dauerhaft nachfragen, welches Reel Instagram gerade zeigt -- statt einmal
+  // nach dem Aufbau zu fragen und zu hoffen.
+  //
+  // Eine einzelne Abfrage traf zu oft daneben: nach "Refresh Feed" war die
+  // Seite gerade neu geladen und der Link zum sichtbaren Reel noch nicht da,
+  // und die Angaben blieben dann fuer immer leer. Instagram wechselt das
+  // Reel ausserdem auch von selbst, ohne dass jemand wischt -- dann waeren
+  // Name, Caption und der Like-Knopf stillschweigend veraltet, und ein Like
+  // traefe das falsche Reel.
+  useEffect(() => {
+    let gestoppt = false;
+    let letzterCode: string | null = null;
+    let letzteGueteWarGut = false;
+    const frag = async () => {
+      if (gestoppt) return;
+      try {
+        const a = await ruf(`/sessions/${sessionId}/buehne-aktuell`, { sessionSecret });
+        if (gestoppt) return;
+        const code = (a.code as string | null) ?? null;
+        const reel = (a.reel ?? null) as { username?: string | null } | null;
+        // "Gut" heisst: wir kennen wenigstens den Namen. Ohne ihn stuende in
+        // der Karte @unknown und der Like-Knopf haette nichts anzuzeigen.
+        const gut = !!reel && !!reel.username;
+        // Nicht nur bei Codewechsel melden, sondern auch nachreichen, sobald
+        // eine bessere Antwort da ist. Beim ersten Reel ist Instagrams
+        // Antwort oft noch gar nicht mitgelesen (verzeichnis=0) -- wer hier
+        // nur einmal meldet, laesst @unknown fuer immer stehen.
+        if (code !== letzterCode || (gut && !letzteGueteWarGut)) {
+          letzterCode = code;
+          letzteGueteWarGut = gut;
+          meldeRef.current?.(reel);
+        }
+      } catch { /* der naechste Versuch kommt gleich */ }
+    };
+    void frag();
+    const t = window.setInterval(frag, 2000);
+    return () => { gestoppt = true; window.clearInterval(t); };
+  }, [sessionId, sessionSecret]);
+
+  // Jede Sekunde ablesen, was ankommt und was das Element daraus macht.
+  useEffect(() => {
+    const t = window.setInterval(async () => {
+      const el = videoRef.current;
+      const pc = pcRef.current;
+      if (!el || !pc) return;
+      let an = 0, dek = 0, fps = 0;
+      try {
+        (await pc.getStats()).forEach((r) => {
+          if (r.type === "inbound-rtp" && r.kind === "video") {
+            an = r.framesReceived ?? 0;
+            dek = r.framesDecoded ?? 0;
+            fps = r.framesPerSecond ?? 0;
+          }
+        });
+      } catch { /* egal */ }
+      setMessung(
+        `an ${an} · dekodiert ${dek} · ${fps}/s · ${el.paused ? "PAUSIERT" : "laeuft"}` +
+          ` · bereit ${el.readyState} · ${el.videoWidth}x${el.videoHeight} · ${pc.connectionState}`
+      );
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
   return (
-    <div className="absolute inset-0 bg-black">
+    <div className="absolute inset-0 bg-black" onClick={onAntippen}>
       <video
         ref={videoRef}
         autoPlay
@@ -112,12 +236,28 @@ export function LiveBuehne({
         muted={stumm}
         className="absolute inset-0 w-full h-full object-cover"
       />
+      {pausiert && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/15 pointer-events-none">
+          <span className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+            <Play size={22} className="text-white/90 ml-1" fill="currentColor" />
+          </span>
+        </div>
+      )}
+      {/* Messanzeige -- fliegt wieder raus, sobald die Ursache gefunden ist. */}
+      {zustand === "laeuft" && messung && (
+        <div className="absolute bottom-0 left-0 right-0 z-30 bg-black/70 px-2 py-1 text-[9.5px] leading-tight text-emerald-300/90 font-mono pointer-events-none">
+          {messung}
+        </div>
+      )}
       {zustand !== "laeuft" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 px-6 text-center">
           {zustand === "fehler" ? (
             <>
               <p className="text-[13px] text-neutral-100">Die Live-Ansicht kam nicht zustande.</p>
               <p className="text-[11.5px] text-neutral-500 max-w-[240px]">{meldung}</p>
+              {versucheRef.current < 6 && (
+                <p className="mt-1 text-[11px] text-neutral-600">Neuer Versuch laeuft…</p>
+              )}
             </>
           ) : (
             <>
