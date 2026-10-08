@@ -39,6 +39,13 @@ export function CommentsPanel({
   const [displayReelId, setDisplayReelId] = useState<string | null>(null);
   const [dwelling, setDwelling] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Welcher Reiter gewaehlt ist. "notizen" ist bewusst kein Platzhalter nur
+  // in der Anzeige: solange er gewaehlt ist, wird NICHTS geholt. Nur so
+  // laesst sich pruefen, ob das Laden der Kommentare -- und damit das
+  // Oeffnen einer zweiten Instagram-Seite im selben Browser -- die Ursache
+  // fuer die zunehmende Traegheit der Sitzung ist.
+  const [reiter, setReiter] = useState<"kommentare" | "notizen">("kommentare");
+  const kommentareAktiv = isOpen && reiter === "kommentare";
 
   const wasOpenRef = useRef(false);
   const dwellTimerRef = useRef<number | null>(null);
@@ -77,8 +84,8 @@ export function CommentsPanel({
 
     clearDwellTimer();
 
-    if (!isOpen || !video) {
-      wasOpenRef.current = isOpen;
+    if (!kommentareAktiv || !video) {
+      wasOpenRef.current = kommentareAktiv;
       // Invalidate any fetch already in flight so its response, if it
       // lands after this, is discarded rather than shown once reopened.
       requestIdRef.current++;
@@ -120,7 +127,7 @@ export function CommentsPanel({
 
     return () => clearDwellTimer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, video?.id]);
+  }, [kommentareAktiv, video?.id]);
 
   if (!isOpen) return null;
 
@@ -136,25 +143,49 @@ export function CommentsPanel({
       <div className="mx-4 mt-4 flex items-stretch rounded-xl border border-white/[0.08] overflow-hidden">
         <button
           type="button"
-          className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[12.5px] font-medium text-[#D39448] border-b-2 border-[#D39448]"
+          onClick={() => setReiter("kommentare")}
+          className={
+            "flex-1 flex items-center justify-center gap-1.5 h-11 text-[12.5px] font-medium " +
+            (reiter === "kommentare"
+              ? "text-[#D39448] border-b-2 border-[#D39448]"
+              : "text-neutral-300")
+          }
         >
           <MessageCircle size={13} />
           Comments
         </button>
         <span className="w-px bg-white/[0.08]" />
+        {/* Notes war bewusst tot gestellt, weil es dahinter keine
+            Notizverwaltung gibt. Fuer die Fehlersuche ist der Reiter jetzt
+            benutzbar: solange er gewaehlt ist, werden KEINE Kommentare
+            geholt -- und damit oeffnet der Connector auch keine zweite
+            Instagram-Seite. Die erfundene Anzahl "2" ist weg, es gibt keine
+            Notizen zu zaehlen. */}
         <button
           type="button"
-          disabled
-          title="Notes aren't available yet"
-          className="flex-1 flex items-center justify-center gap-2 h-11 text-[12.5px] text-neutral-300 cursor-not-allowed"
+          onClick={() => setReiter("notizen")}
+          className={
+            "flex-1 flex items-center justify-center gap-2 h-11 text-[12.5px] font-medium " +
+            (reiter === "notizen"
+              ? "text-[#D39448] border-b-2 border-[#D39448]"
+              : "text-neutral-300")
+          }
         >
           Notes
-          <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-white/10 text-[10.5px] text-neutral-300">
-            2
-          </span>
         </button>
       </div>
 
+      {reiter === "notizen" ? (
+        <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
+          <p className="text-[12.5px] text-neutral-400">Notizen gibt es noch nicht.</p>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-neutral-600">
+            Solange dieser Reiter offen ist, werden keine Kommentare geladen –
+            der Connector öffnet dann auch keine zweite Instagram-Seite im
+            Hintergrund. Genau dafür ist er gerade da.
+          </p>
+        </div>
+      ) : (
+      <>
       <div className="px-4 pt-3 flex items-center justify-between">
         <span className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">Top Comments</span>
         {/* Sorting isn't implemented (comments render in whatever order the
@@ -242,6 +273,8 @@ export function CommentsPanel({
             View all {result.comments.length} comments
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   );

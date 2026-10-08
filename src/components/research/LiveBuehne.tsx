@@ -14,17 +14,32 @@ const SERVER = "http://127.0.0.1:48211";
 
 export type BuehnenZustand = "aus" | "verbindet" | "laeuft" | "fehler";
 
-async function ruf(pfad: string, koerper: Record<string, unknown>) {
+// frist: Bricht die Anfrage nach dieser Zeit selbst ab. Ohne sie kann eine
+// haengende Anfrage endlos offen bleiben -- und weil die Wischsperre an ihrem
+// Ende haengt, waere Wischen danach fuer den Rest der Sitzung tot.
+async function ruf(pfad: string, koerper: Record<string, unknown>, frist?: number) {
   const res = await fetch(`${SERVER}${pfad}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(koerper),
+    signal: frist ? AbortSignal.timeout(frist) : undefined,
   });
   const text = await res.text();
   const daten = text ? JSON.parse(text) : {};
   if (!res.ok) throw new Error(daten.error ?? "Der Connector hat die Buehne abgelehnt.");
   return daten;
 }
+
+// Wie viel Bild bzw. Ton das Fenster hoechstens vorhalten darf, bevor es
+// ausgegeben wird. Nicht 0: ein kleiner Vorrat faengt den normalen
+// Ruckler beim Reelwechsel ab. Aber eben gedeckelt, statt unbegrenzt zu
+// wachsen -- siehe die Begruendung bei ontrack.
+
+// Erlaubt es, die Reel-Abfrage SOFORT anzustossen, statt auf den naechsten
+// Takt zu warten. Ohne das erfuhr ReelForge erst bei der naechsten Abfrage
+// (alle zwei Sekunden), welches Reel laeuft -- Likes, Bio und Kommentare
+// hinkten hinterher oder zeigten noch das vorherige Reel.
+let sofortFragen: (() => void) | null = null;
 
 export function LiveBuehne({
   sessionId,
@@ -33,6 +48,7 @@ export function LiveBuehne({
   onZustand,
   onAntippen,
   pausiert,
+  laedt,
   onAktuellesReel,
 }: {
   sessionId: string;
@@ -46,6 +62,11 @@ export function LiveBuehne({
   // nicht an unser Bild: hier laeuft nur an, was dort ankommt.
   onAntippen?: () => void;
   pausiert?: boolean;
+  // Instagram laesst gerade laden: solange steht der Platzhalter ueber dem
+  // Bild, genau wie auf instagram.com. Wird erst nach einer kurzen Frist
+  // gesetzt -- ein normaler Wisch ist in rund 130 ms durch, und dafuer soll
+  // nichts aufblitzen.
+  laedt?: boolean;
   // Welches Reel gerade laeuft. In V1 wusste das der Puffer; in V2 wischt
   // der Mitarbeiter in Instagram, also weiss es nur Instagram selbst.
   onAktuellesReel?: (reel: unknown | null) => void;
@@ -203,9 +224,17 @@ export function LiveBuehne({
       } catch { /* der naechste Versuch kommt gleich */ }
     };
     void frag();
+    sofortFragen = () => { void frag(); };
     const t = window.setInterval(frag, 2000);
-    return () => { gestoppt = true; window.clearInterval(t); };
+    return () => { gestoppt = true; sofortFragen = null; window.clearInterval(t); };
   }, [sessionId, sessionSecret]);
+
+  // Stand der Zaehler bei der vorigen Messung -- fuer die Veraenderung,
+  // siehe die Begruendung bei stau().
+  const vorhinRef = useRef<{
+    video: { d: number; n: number } | null;
+    audio: { d: number; n: number } | null;
+  }>({ video: null, audio: null });
 
   // Jede Sekunde ablesen, was ankommt und was das Element daraus macht.
   useEffect(() => {
@@ -214,18 +243,55 @@ export function LiveBuehne({
       const pc = pcRef.current;
       if (!el || !pc) return;
       let an = 0, dek = 0, fps = 0;
+      // NUR ANZEIGE, greift in nichts ein.
+      //
+      // Emres Befund am 08.10.2026: wenn die Sitzung gekippt ist, pausiert
+      // das Bild zu spaet, und beim Weiterspielen ist der Ton sofort da und
+      // das Bild kommt hinterher. Beide kommen durch dieselbe Leitung -- ist
+      // der Ton puenktlich und das Bild nicht, dann liegt auf DIESER Seite
+      // ein Bildvorrat, der sich aufstaut. Genau den zeigen diese zwei
+      // Zahlen: wie viele Millisekunden Bild bzw. Ton vor der Ausgabe
+      // zwischengelagert werden. Im gesunden Fall sind beide klein und
+      // ungefaehr gleich.
+      let bildStau: number | null = null, tonStau: number | null = null;
+      // JETZT, nicht im Mittel.
+      //
+      // Hier stand d/n -- aber beide Zaehler laufen seit dem Sitzungsstart
+      // mit, das ergibt den DURCHSCHNITT ueber alles. Der steigt langsam und
+      // kann nie wieder fallen. Genau deshalb sah es am 08.10.2026 aus wie
+      // ein stetig wachsender Vorrat (9 -> 71 -> 200 -> 325 -> 422 ms),
+      // obwohl das in Wahrheit nur der Mittelwert war und ueber den
+      // tatsaechlichen Zustand nichts aussagte.
+      //
+      // Richtig ist die Veraenderung zwischen zwei Messungen: wie viel
+      // Wartezeit ist fuer die Bilder angefallen, die SEIT der letzten
+      // Sekunde ausgegeben wurden.
+      const stau = (art: "video" | "audio", d?: number, n?: number) => {
+        if (d === undefined || n === undefined) return null;
+        const vorher = vorhinRef.current[art];
+        vorhinRef.current[art] = { d, n };
+        if (!vorher) return null;
+        const dn = n - vorher.n;
+        if (dn <= 0) return null;
+        return Math.round(((d - vorher.d) / dn) * 1000);
+      };
       try {
         (await pc.getStats()).forEach((r) => {
-          if (r.type === "inbound-rtp" && r.kind === "video") {
+          if (r.type !== "inbound-rtp") return;
+          if (r.kind === "video") {
             an = r.framesReceived ?? 0;
             dek = r.framesDecoded ?? 0;
             fps = r.framesPerSecond ?? 0;
+            bildStau = stau("video", r.jitterBufferDelay, r.jitterBufferEmittedCount);
+          } else if (r.kind === "audio") {
+            tonStau = stau("audio", r.jitterBufferDelay, r.jitterBufferEmittedCount);
           }
         });
       } catch { /* egal */ }
       setMessung(
         `an ${an} · dekodiert ${dek} · ${fps}/s · ${el.paused ? "PAUSIERT" : "laeuft"}` +
-          ` · bereit ${el.readyState} · ${el.videoWidth}x${el.videoHeight} · ${pc.connectionState}`
+          ` · bereit ${el.readyState} · ${el.videoWidth}x${el.videoHeight} · ${pc.connectionState}` +
+          ` · Stau Bild ${bildStau ?? "?"}ms / Ton ${tonStau ?? "?"}ms`
       );
     }, 1000);
     return () => window.clearInterval(t);
@@ -240,6 +306,22 @@ export function LiveBuehne({
         muted={stumm}
         className="absolute inset-0 w-full h-full object-cover"
       />
+      {/* Ladezustand wie auf instagram.com: grauer Block in Player-Form,
+          unten die Skelettzeilen fuer Name und Text. Er liegt UEBER dem
+          Bild, damit beim Warten nicht das alte Reel stehenbleibt und so
+          tut, als sei nichts. Sobald das neue Reel da ist, faellt er weg. */}
+      {laedt && (
+        <div className="absolute inset-0 z-30 flex flex-col justify-end bg-[#1f1f1f] pointer-events-none">
+          <div className="p-4 space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-full bg-white/10 animate-pulse" />
+              <span className="h-2.5 flex-1 max-w-[55%] rounded-full bg-white/10 animate-pulse" />
+            </div>
+            <span className="block h-2.5 w-[42%] rounded-full bg-white/10 animate-pulse" />
+            <span className="block h-2.5 w-[62%] rounded-full bg-white/10 animate-pulse" />
+          </div>
+        </div>
+      )}
       {pausiert && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/15 pointer-events-none">
           <span className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
@@ -282,5 +364,11 @@ export async function buehneEingabe(
   sessionSecret: string,
   art: "weiter" | "zurueck" | "tippen"
 ) {
-  return await ruf(`/sessions/${sessionId}/eingabe`, { sessionSecret, art });
+  // Der Wisch wartet im Connector darauf, dass Instagram wirklich gewechselt
+  // hat und das neue Reel da ist -- beim Nachladen dauert das. Deshalb hier
+  // mehr Luft als die frueheren 6 s.
+  const antwort = await ruf(`/sessions/${sessionId}/eingabe`, { sessionSecret, art }, 12000);
+  // Steht das neue Reel, sofort die Angaben nachziehen.
+  if (art === "weiter" || art === "zurueck") sofortFragen?.();
+  return antwort;
 }

@@ -149,7 +149,18 @@ async function starteBrowser(optionen = {}) {
 // Sperre auf, damit das Reel mit Ton laeuft.
 // ===========================================================================
 const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required"];
-const BUEHNE_FENSTER = { width: 420, height: 746 };
+// Normales Rechnerfenster, nicht Handybreite.
+//
+// 08.10.2026: Mit 420 Pixeln Breite liefert Instagram das schmale Layout --
+// und das hat KEINE Pfeil-Knoepfe (nachgewiesen: gefunden wurden nur Home,
+// Search, Reels, New post, Messages, Like, Comment, Share, Save, More).
+// Wir haben deshalb Tastatur-Pfeile hineingeschickt und gehofft, Instagram
+// behandelt das wie einen echten Klick. Auf normaler Breite zeigt Instagram
+// seine eigenen Pfeile am rechten Rand -- genau die, die Emre benutzt.
+//
+// Fuer das Bild aendert das nichts: abgegriffen wird das <video>-Element in
+// seiner eigenen Aufloesung, nicht ein Fensterausschnitt.
+const BUEHNE_FENSTER = { width: 1280, height: 860 };
 
 
 // Laeuft IN der Instagram-Seite.
@@ -166,6 +177,81 @@ const BUEHNE_SKRIPT = () => {
     return sichtbar.find((v) => !v.paused) ?? sichtbar[0] ?? null;
   };
 
+
+  // EINE Tonleitung fuer die ganze Sitzung. Sie wird nie getauscht.
+  //
+  // 08.10.2026, in der Nachstellung GEMESSEN. Vorher wurde bei jedem
+  // Reelwechsel auch die Tonspur ausgetauscht. Der Empfaenger haelt das
+  // Bild daraufhin ein Stueck zurueck, damit es zum Ton passt -- und gibt
+  // dieses Stueck nie wieder her. Ueber 60 Reelwechsel:
+  //
+  //      Tonspur wird getauscht   Rueckstand 0 -> 21 Bilder, Stau 7 -> 821 ms
+  //      feste Tonleitung         Rueckstand 0 ->  0 Bilder, Stau 11 -> 22 ms
+  //
+  // Das ist Emres "es kippt irgendwann und kommt nicht mehr hoch": nicht
+  // ein Ereignis, sondern sechzig kleine, die sich aufsummieren. Deshalb
+  // half weder langsamer wischen noch eine Begrenzung der Bildrate, und
+  // deshalb war auch die Bildspur unschuldig -- mit fester Bildleitung
+  // (Leinwand) wuchs es genauso weiter, solange der Ton getauscht wurde.
+  //
+  // Dahinter wird nur noch umgesteckt, welches Reel hineinspielt.
+  B.tonBus = () => {
+    if (B.bus) return B.bus;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ziel = ctx.createMediaStreamDestination();
+    B.bus = { ctx, ziel, spur: ziel.stream.getAudioTracks()[0] ?? null };
+    return B.bus;
+  };
+
+  // Dieses Reel in die Tonleitung stecken, das vorherige abziehen.
+  // An Instagrams Player wird dabei NICHTS veraendert -- Begruendung unten.
+  B.tonAnklemmen = async (v) => {
+    const bus = B.tonBus();
+    if (!bus.spur) return false;
+    try { if (bus.ctx.state === "suspended") await bus.ctx.resume(); } catch { /* egal */ }
+    // Schon angeklemmt? Nur dann aussteigen, wenn hinten auch wirklich noch
+    // etwas hineinspielt.
+    //
+    // 08.10.2026, Emres Befund: "beim zweiten Anschauen desselben Reels ist
+    // der Ton weg". Faengt Instagram das Reel von vorn an, bleibt das
+    // Element dasselbe -- die Tonspur aus captureStream() stirbt dabei aber.
+    // Mit einem blossen "ist ja schon angeklemmt" blieb die Leitung auf der
+    // toten Spur haengen, und es war fuer immer still. Deshalb wird hier
+    // zusaetzlich geprueft, ob die eingesteckte Spur noch lebt.
+    if (B.tonQuelle === v && B.tonEingangSpur && B.tonEingangSpur.readyState === "live") {
+      return true;
+    }
+
+    // Der Ton kommt aus captureStream(), NICHT direkt vom Element.
+    //
+    // 08.10.2026, zwei Anlaeufe gebraucht:
+    //   1. Erst ueber createMediaElementSource am Element selbst. Instagrams
+    //      Player ist aber stumm, und der haengt am AUSGANG des Elements --
+    //      es kam gar kein Ton mehr.
+    //   2. Dann den Stummschalter geloest. Darauf hat Instagrams Video
+    //      AUFGEHOERT zu spielen (gemessen: quelleLaeuft=false, Zeit stand
+    //      ueber zwei Minuten bei 0,97 s). Entstummen stoppt die Wiedergabe.
+    //
+    // captureStream() dagegen kommt am Stummschalter vorbei (gemessen am
+    // 06.10.2026: Pegel 0,4966 stumm gegen 0,4514 entstummt) und laesst
+    // Instagrams Player voellig unberuehrt. Genau das wird hier als Eingang
+    // benutzt -- und hinten bleibt die Leitung dieselbe wie seit dem Start.
+    let strom;
+    try { strom = B.spurenVon(v).strom; } catch { return false; }
+    if (!strom || strom.getAudioTracks().length === 0) return false;
+
+    if (B.tonEingang) {
+      try { B.tonEingang.disconnect(); } catch { /* egal */ }
+      B.tonEingang = null;
+    }
+    try {
+      B.tonEingang = bus.ctx.createMediaStreamSource(strom);
+      B.tonEingang.connect(bus.ziel);
+      B.tonEingangSpur = strom.getAudioTracks()[0] ?? null;
+    } catch { return false; }
+    B.tonQuelle = v;
+    return true;
+  };
 
   B.spurenVon = (v) => {
     if (!v.captureStream) throw new Error("captureStream gibt es in diesem Browser nicht");
@@ -231,7 +317,10 @@ const BUEHNE_SKRIPT = () => {
     // "The order of m-lines in subsequent offer doesn't match".
     B.strom = spuren.strom;
     B.quelle = v;
-    B.tonQuelle = spuren.ton ? v : null;
+    // B.tonQuelle gehoert ab jetzt allein B.tonAnklemmen. Wurde es hier
+    // vorab gesetzt, hielt sich tonAnklemmen fuer schon angeklemmt, stieg
+    // sofort aus und legte den Abgriff nie an -- Ergebnis: voellige Stille,
+    // ohne jede Fehlermeldung. (08.10.2026 in der Nachstellung gefunden.)
 
     // Bild und Ton kommen aus DERSELBEN Quelle -- Instagrams eigenem
     // <video>. Dadurch sind sie vom Browser zusammen getaktet und koennen
@@ -251,8 +340,12 @@ const BUEHNE_SKRIPT = () => {
     // gleichzeitig liefen und sich gegenseitig zerlegten -- siehe
     // B.nachfuehren, das jetzt nur noch eines zur Zeit zulaesst.
     const pc = new RTCPeerConnection();
+    // Der Ton geht ueber die feste Leitung (siehe B.tonBus) und wird fuer
+    // den Rest der Sitzung nicht mehr angefasst.
+    const tonBus = B.tonBus();
+    await B.tonAnklemmen(v);
     pc.addTrack(spuren.bild, spuren.strom);
-    if (spuren.ton) pc.addTrack(spuren.ton, spuren.strom);
+    if (tonBus.spur) pc.addTrack(tonBus.spur, spuren.strom);
 
     // Ohne das regelt WebRTC die Aufloesung herunter, sobald es eng wird --
     // gemessen: 180x320 statt 720x1280. Beide Enden sitzen auf demselben
@@ -366,18 +459,18 @@ const BUEHNE_SKRIPT = () => {
     }
 
     B.quelle = v;
-    B.tonQuelle = spuren.ton ? v : null;
+    // B.tonQuelle gehoert ab jetzt allein B.tonAnklemmen. Wurde es hier
+    // vorab gesetzt, hielt sich tonAnklemmen fuer schon angeklemmt, stieg
+    // sofort aus und legte den Abgriff nie an -- Ergebnis: voellige Stille,
+    // ohne jede Fehlermeldung. (08.10.2026 in der Nachstellung gefunden.)
     B.strom = spuren.strom;
-    // Beide Spuren im selben Durchgang tauschen, damit zwischen Bild und Ton
-    // kein zusaetzlicher Versatz entsteht.
+    // Nur das BILD wird umgehaengt. Die Tonspur bleibt dieselbe wie seit dem
+    // Start -- sie wird hinten nur umgesteckt.
     const bildSender = B.pc.getSenders().find((x) => x.track?.kind === "video");
-    const tonSender = B.pc.getSenders().find((x) => x.track?.kind === "audio");
-    await Promise.all(
-      [
-        bildSender && spuren.bild ? bildSender.replaceTrack(spuren.bild) : null,
-        tonSender && spuren.ton ? tonSender.replaceTrack(spuren.ton) : null,
-      ].filter(Boolean)
-    );
+    await Promise.all([
+      bildSender && spuren.bild ? bildSender.replaceTrack(spuren.bild) : null,
+      B.tonAnklemmen(v),
+    ].filter(Boolean));
     return { ok: true, groesse: `${v.videoWidth}x${v.videoHeight}`, ton: !!spuren.ton };
   };
 
@@ -407,11 +500,350 @@ const BUEHNE_SKRIPT = () => {
         if (m) { wege.push({ weg: "sichtbarer Link", code: m[1] }); break; }
       }
     }
-    return { code: wege[0]?.code ?? null, wege };
+    return { code: wege[0]?.code ?? null, weg: wege[0]?.weg ?? null, wege };
   };
 
   // Fuer die Fehlersuche: was macht die Quelle, und geht wirklich etwas
   // raus? Nur lesend, aendert nichts.
+  // WELCHES Reel ist gerade zu sehen -- als Kennung, an der sich ein
+  // Wechsel erkennen laesst.
+  //
+  // 08.10.2026: Das fehlende Stueck hinter drei Beschwerden auf einmal.
+  // Bisher haben wir eine Taste geschickt und GEHOFFT -- wir wussten weder,
+  // ob gewechselt wurde, noch auf was.
+  // Instagrams EIGENE Pfeil-Knoepfe finden.
+  //
+  // 08.10.2026, Emres Einwand: Auf der Reels-Seite am Rechner gibt es
+  // Pfeil-Knoepfe, und das ist dort die native Bedienung. Wir haben
+  // stattdessen Tastatur-Pfeile geschickt und angenommen, Instagram
+  // behandelt beides gleich. Das ist nicht gesagt -- anderes Einrasten,
+  // andere Historie, anderes Nachladen. Wenn wir wollen, dass sich der Feed
+  // eins zu eins wie bei einem Menschen verhaelt, muessen wir druecken, was
+  // ein Mensch drueckt.
+  //
+  // Beim ersten Mal wird aufgeschrieben, was gefunden wurde -- Instagram
+  // benennt seine Knoepfe je nach Sprache und Fassung anders, und raten
+  // hilft hier nicht weiter.
+  // Nur Messung, greift nicht ein: wie viele Pfeile dieser Richtung stehen
+  // gerade im Fenster, wo sitzen sie, und welchen davon nimmt wischKnopf?
+  // Verdacht (noch unbewiesen): Instagram haelt mehrere Reel-Behaelter
+  // gleichzeitig im Fenster, jeder mit eigenem Pfeilpaar. Nach dem
+  // Nachladen gibt es dann mehr als ein Paar, und wir druecken den Pfeil
+  // eines Behaelters, der gerade NICHT zu sehen ist.
+  B.knopfLage = (richtung) => {
+    const passt = B.KNOPF_NAME[richtung] ?? B.KNOPF_NAME.weiter;
+    const treffer = [];
+    for (const el of document.querySelectorAll("button, [role='button'], svg[aria-label]")) {
+      const name = el.getAttribute("aria-label") ??
+        el.querySelector?.("svg[aria-label]")?.getAttribute("aria-label") ?? "";
+      if (!name || !passt.test(name)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      treffer.push({ y: Math.round(r.top), x: Math.round(r.left) });
+    }
+    const v = B.videoImBild();
+    const vr = v ? v.getBoundingClientRect() : null;
+    return {
+      anzahl: treffer.length,
+      stellen: treffer.slice(0, 8),
+      // Der genommene ist immer der erste in der Dokumentreihenfolge.
+      genommen: treffer[0] ?? null,
+      videoOben: vr ? Math.round(vr.top) : null,
+      videoUnten: vr ? Math.round(vr.bottom) : null,
+      fensterHoch: innerHeight,
+    };
+  };
+
+  // Gemessen am 08.10.2026: Instagram nennt seine Pfeile "Navigate to next
+  // Reel" und "Navigate to previous Reel". Die alten Muster waren am
+  // Wortanfang verankert und konnten deshalb NIE greifen -- der Namensweg
+  // war tot, und es lief nur ueber die Lage. Das ging gut, solange das Reel
+  // formatfuellend war (Video y16..844). Bei einem anderen Bildformat
+  // (gemessen: y214..646) ist der unterste runde Knopf am rechten Rand aber
+  // nicht mehr der Weiter-Pfeil, sondern das Drei-Punkte-Menue -- und dann
+  // oeffnete jeder Next-Versuch nur ein Menue ("NICHT GEWECHSELT [More]").
+  B.KNOPF_NAME = {
+    weiter: /navigate to next|next reel|n(ae|ä)chstes reel|scroll down|nach unten|^next$/i,
+    zurueck: /navigate to previous|previous reel|vorheriges reel|scroll up|nach oben|^back$|^previous$/i,
+  };
+  // Runde Knoepfe am rechten Rand, die sicher KEINE Pfeile sind. Ohne diese
+  // Sperre greift der Ersatzweg irgendwann daneben.
+  B.KEIN_PFEIL = /more|options|mehr|like|comment|kommentar|share|teilen|send|audio|sound|mute|profile|follow|save|speichern|report/i;
+
+  B.wischKnopf = (richtung) => {
+    const passt = B.KNOPF_NAME[richtung] ?? B.KNOPF_NAME.weiter;
+    const kandidaten = [];
+    for (const el of document.querySelectorAll("button, [role='button'], svg[aria-label]")) {
+      const name = el.getAttribute("aria-label") ?? el.querySelector?.("svg[aria-label]")?.getAttribute("aria-label") ?? "";
+      if (!name) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      kandidaten.push({ name, oben: Math.round(r.top), links: Math.round(r.left) });
+      if (passt.test(name.trim())) {
+        // Bei einem <svg> den anklickbaren Vorfahren nehmen.
+        B.letzterKnopfWeg = "Name";
+        return el.tagName === "svg" ? (el.closest("button, [role='button']") ?? el.parentElement) : el;
+      }
+    }
+    // Kein passender Name? Dann ueber Form und Lage: Instagram setzt die
+    // beiden Pfeile als runde Knoepfe uebereinander an den rechten Rand,
+    // etwa auf halber Hoehe. Namen aendern sich mit Sprache und Fassung,
+    // die Anordnung nicht.
+    const rund = [];
+    for (const el of document.querySelectorAll("button, [role='button'], div[role='button']")) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 28 || r.width > 72 || Math.abs(r.width - r.height) > 10) continue;
+      if (r.left < innerWidth * 0.75) continue;             // rechter Rand
+      if (r.top < innerHeight * 0.2 || r.top > innerHeight * 0.8) continue;
+      // Traegt er den Namen einer anderen Funktion, ist er kein Pfeil.
+      const wieHeisst = el.getAttribute("aria-label") ??
+        el.querySelector?.("svg[aria-label]")?.getAttribute("aria-label") ?? "";
+      if (wieHeisst && B.KEIN_PFEIL.test(wieHeisst)) continue;
+      rund.push({ el, oben: r.top });
+    }
+    if (rund.length >= 2) {
+      rund.sort((a, b) => a.oben - b.oben);
+      if (!B.rundGemeldet) {
+        B.rundGemeldet = true;
+        B.rundListe = rund.map((x) => {
+          const el = x.el;
+          const n = el.getAttribute("aria-label") ??
+            el.querySelector?.("svg[aria-label]")?.getAttribute("aria-label") ?? "(ohne Namen)";
+          const r = el.getBoundingClientRect();
+          return `"${n}" @ x${Math.round(r.left)} y${Math.round(r.top)}`;
+        });
+      }
+      B.letzterKnopfWeg = `Lage, ${rund.length} runde Knoepfe am rechten Rand`;
+      return richtung === "weiter" ? rund[rund.length - 1].el : rund[0].el;
+    }
+    if (!B.knopfProtokoll) {
+      B.knopfProtokoll = kandidaten;
+    }
+    return null;
+  };
+
+  // Das Nachbar-Reel im Feed -- eines weiter oder eines zurueck.
+  //
+  // Die <video>-Elemente stehen im Dokument in Feed-Reihenfolge. Das
+  // Nachbar-Element ist also schlicht das davor oder danach.
+  B.nachbar = (richtung) => {
+    const alle = [...document.querySelectorAll("video")];
+    const jetzt = B.videoImBild();
+    const i = alle.indexOf(jetzt);
+    if (i < 0) return null;
+    return richtung === "weiter" ? (alle[i + 1] ?? null) : (alle[i - 1] ?? null);
+  };
+
+  // EIN Schritt. Genau einer.
+  //
+  // 08.10.2026, der bewiesene Fehler: Beim Nachladen schiebt Instagram einen
+  // Schwung neuer Reels ein, und ein einziger Klick landete am ENDE dieses
+  // Schwungs. Gemessen an Emres Sitzung: ein Druck auf Weiter, und er war
+  // SECHZEHN Reels weiter. Die uebersprungenen tauchten beim Zurueckgehen
+  // als "nie gesehene Reels" auf.
+  //
+  // Dagegen hilft keine Bremse und keine Wartezeit, sondern nur, das Ziel
+  // VORHER zu kennen und hinterher nachzusehen:
+  //   1. welches Reel ist das Nachbar-Reel?
+  //   2. warten, bis es wirklich da ist (statt in eine Luecke zu klicken)
+  //   3. klicken
+  //   4. pruefen, ob wir genau dort gelandet sind
+  //   5. falls nicht: zurueckkorrigieren, bis wir es sind
+  // EIN Schritt, in zwei Teilen -- damit der Tastatur-Rueckfall moeglich
+  // bleibt: der Tastendruck muss von aussen kommen, der Rest passiert hier.
+  //
+  // 08.10.2026, der bewiesene Fehler: Beim Nachladen schiebt Instagram einen
+  // Schwung neuer Reels ein, und ein einziger Klick landete am ENDE dieses
+  // Schwungs -- gemessen an Emres Sitzung: ein Druck, SECHZEHN Reels weiter.
+  // Die uebersprungenen tauchten beim Zurueckgehen als "nie gesehene Reels"
+  // auf. Dagegen hilft nur, hinterher nachzusehen, ob es wirklich genau ein
+  // Schritt war, und sonst zurueckzukorrigieren.
+  B.schrittBeginnen = (richtung) => {
+    const v = B.videoImBild();
+    if (!v) return { ok: false, grund: "kein Video im Bild" };
+    B.schrittVon = v;
+    B.schrittRichtung = richtung;
+    // Klicken ZUERST -- der Klick ist es, der Instagram zum Nachladen
+    // bringt. Vorher auf den Nachbarn zu warten war falsch: am Feed-Ende
+    // gibt es keinen, also wartete man ewig und loeste das Laden nie aus.
+    const knopf = B.wischKnopf(richtung);
+    if (!knopf) return { ok: true, keinKnopf: true };
+    knopf.click();
+    return { ok: true, keinKnopf: false };
+  };
+
+  B.schrittAbschliessen = async (hoechstens = 12000) => {
+    const ende = Date.now() + hoechstens;
+    const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+    const richtung = B.schrittRichtung;
+    const vorher = B.schrittVon;
+    const nachbarVon = (el) => {
+      const liste = [...document.querySelectorAll("video")];
+      const i = liste.indexOf(el);
+      if (i < 0) return null;
+      return richtung === "weiter" ? (liste[i + 1] ?? null) : (liste[i - 1] ?? null);
+    };
+
+    // Auf den Nachbarn warten -- beim Nachladen entsteht er erst jetzt.
+    let ziel = nachbarVon(vorher);
+    while (Date.now() < ende && !ziel) {
+      await warte(80);
+      ziel = nachbarVon(vorher);
+    }
+    if (!ziel) {
+      return { ok: false, grund: "Instagram hat kein weiteres Reel geliefert", laedt: true,
+               code: B.aktuellesReel().code };
+    }
+
+    // NICHT mehr zurueckkorrigieren.
+    //
+    // 08.10.2026, direkt an Emres Sitzung schiefgegangen: Die Korrektur
+    // klickte bis zu 40 mal auf Zurueck, wenn sie das Ziel nicht erkannte.
+    // Instagram tauscht die Elemente aber aus -- dann ist das gemerkte Ziel
+    // nie mehr dasselbe Objekt, die Bedingung wird nie wahr, und der Player
+    // lief von selbst bis zum ersten Reel zurueck. Schlimmer als der Fehler,
+    // den es beheben sollte.
+    //
+    // Es wird nur noch ABGEWARTET und MITGESCHRIEBEN, ob es ein Schritt war.
+    // Geklickt wird nichts von allein.
+    const ruhe = Date.now() + 1500;
+    while (Date.now() < ruhe) {
+      if (B.videoImBild() === ziel) break;
+      await warte(60);
+    }
+    const korrigiert = 0;
+    const angekommen = B.videoImBild() === ziel;
+    return { ok: angekommen, korrigiert, code: B.aktuellesReel().code,
+             grund: angekommen ? null : "Ziel nicht erreicht" };
+  };
+
+  // Bequemer Einzelaufruf fuer die Pruefungen -- im Produkt wird wegen des
+  // Tastatur-Rueckfalls zweiteilig gearbeitet.
+  B.einSchritt = async (richtung, hoechstens = 12000) => {
+    const start = B.schrittBeginnen(richtung);
+    if (!start.ok) return start;
+    if (start.keinKnopf) {
+      const v = B.schrittVon;
+      // Ohne Knopf bleibt nur ein Tastendruck in der Seite selbst.
+      v.dispatchEvent(new KeyboardEvent("keydown", { key: richtung === "weiter" ? "ArrowDown" : "ArrowUp", bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: richtung === "weiter" ? "ArrowDown" : "ArrowUp", bubbles: true }));
+    }
+    return await B.schrittAbschliessen(hoechstens);
+  };
+
+  // Welche Reels stehen GERADE als Element in der Seite, in welcher
+  // Reihenfolge, und an welcher Stelle darin sind wir?
+  //
+  // Hintergrund (Emre, 08.10.2026, bestaetigt durch zwei Messungen): Beim
+  // Nachladen schiebt Instagram den neuen Stapel MITTEN HINEIN, nicht
+  // hinten dran. Die vorher gesehenen Reels sind noch vorhanden -- aber
+  // zwischen ihnen und der aktuellen Stelle liegen rund fuenfzehn neue.
+  // Deshalb landet "Zurueck" in frischem Material statt in der Historie.
+  //
+  // Diese Messung entscheidet die Loesung: Stehen die alten Reels als
+  // Element da, koennen wir in EINEM Sprung dorthin. Stehen sie nicht da,
+  // muessen wir die Historie selbst fuehren. Nur Lesen, greift nicht ein.
+  B.listeImDom = () => {
+    // Erster Versuch ging ueber Reel-Links -- die gibt es auf Instagrams
+    // Reels-Seite gar nicht (deshalb liest die Kennung die Adresszeile).
+    // Gemessen: 0 Treffer. Also ueber die Videoelemente selbst, die
+    // nachweislich da sind (gemessen: 11 Stueck).
+    const fingerabdruck = (v) => {
+      const q = v.currentSrc || v.src || "";
+      if (!q) return null;
+      let h = 0;
+      for (let i = 0; i < q.length; i++) h = (h * 31 + q.charCodeAt(i)) | 0;
+      return "v" + (h >>> 0).toString(36);
+    };
+    const jetzt = B.videoImBild();
+    const liste = [...document.querySelectorAll("video")].map((v) => {
+      const r = v.getBoundingClientRect();
+      return {
+        f: fingerabdruck(v),
+        oben: Math.round(r.top),
+        hier: v === jetzt,
+        laeuft: !v.paused,
+      };
+    }).sort((a, b) => a.oben - b.oben);
+    return {
+      anzahl: liste.length,
+      stelle: liste.findIndex((x) => x.hier),
+      eintraege: liste.map((x) => `${x.hier ? ">" : ""}${x.f ?? "-"}@${x.oben}`),
+    };
+  };
+
+  B.kennung = () => {
+    const v = B.videoImBild();
+    const code = B.aktuellesReel().code;
+    // Rein textlich, damit die Kennung aus der Seite herausgereicht werden
+    // kann. Das Element bekommt beim ersten Sehen eine eigene Nummer -- so
+    // laesst sich ein Wechsel auch dann erkennen, wenn Instagram gerade
+    // keinen Reel-Link hergibt.
+    if (v && !v.__rfNr) v.__rfNr = "e" + (++B.elementZaehler || (B.elementZaehler = 1));
+    // Die abgespielte Videodatei als unbestechliche Kennung.
+    //
+    // 08.10.2026: Der Code kommt bei Instagram fast immer aus der
+    // ADRESSZEILE (der Link am Reel selbst ist nicht zu finden) -- und die
+    // ist ein globaler Wert, den Instagram setzt, wann es will. Damit
+    // laesst sich NICHT beweisen, welches Reel wirklich zu sehen war. Die
+    // Videodatei dagegen haengt direkt am gezeigten Element. Nur ein kurzer
+    // Fingerabdruck davon, die Adressen sind riesig.
+    let datei = null;
+    const quelle = v ? (v.currentSrc || v.src || "") : "";
+    if (quelle) {
+      let h = 0;
+      for (let i = 0; i < quelle.length; i++) h = (h * 31 + quelle.charCodeAt(i)) | 0;
+      datei = "v" + (h >>> 0).toString(36);
+    }
+    return { code: code ?? null, datei, zeichen: code ?? (v ? v.__rfNr : null) };
+  };
+
+  // Warten, bis Instagram wirklich gewechselt hat UND das neue Reel da ist.
+  //
+  // Zwei Bedingungen, nicht eine: Instagram wechselt sofort, laedt das Video
+  // aber erst danach. Wartete man nur auf den Wechsel, ging die Sperre
+  // sofort wieder auf -- der Mitarbeiter sah weiter das alte Bild, hielt es
+  // fuer "nichts passiert", drueckte nochmal, und war am Ende acht Reels
+  // weiter, obwohl jeder einzelne Druck korrekt war. Das war Emres
+  // "Multi-Skip": kein Stapeln, sondern fehlende Rueckmeldung.
+  //
+  // Die Obergrenze erzwingt nichts -- sie sagt nur ehrlich "hat nicht
+  // gewechselt" zurueck, statt blind etwas nachzuholen.
+  B.warteAufWechsel = async (vorher, hoechstens = 8000) => {
+    const start = Date.now();
+    const ende = start + hoechstens;
+    while (Date.now() < ende) {
+      const jetzt = B.kennung();
+      const v = B.videoImBild();
+      const bereit = !!v && v.videoWidth > 0 && v.readyState >= 2;
+      if (jetzt.zeichen && jetzt.zeichen !== vorher.zeichen && bereit) {
+        return { gewechselt: true, code: jetzt.code, dauer: Date.now() - start };
+      }
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    return { gewechselt: false, code: B.kennung().code, dauer: Date.now() - start };
+  };
+
+  // Zaehlt, wie oft Chrome die Seite in 300 ms zeichnen laesst. Das ist der
+  // Takt, in dem Instagrams EIGENER Code laeuft -- wird eine Seite als
+  // unsichtbar behandelt, drosselt Chrome ihn auf etwa 1/s, und dann merkt
+  // Instagram sehr wohl, dass hier niemand zuschaut. Nur Zaehlen.
+  B.zeichenrate = () =>
+    new Promise((fertig) => {
+      let n = 0;
+      const start = performance.now();
+      const tick = () => {
+        n += 1;
+        if (performance.now() - start >= 300) {
+          fertig(Math.round((n * 1000) / (performance.now() - start)));
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      setTimeout(() => fertig(n === 0 ? 0 : null), 1200);
+    });
+
   B.diagnose = async () => {
     const v = B.videoImBild();
     const spur = B.pc?.getSenders().find((x) => x.track?.kind === "video")?.track;
@@ -433,6 +865,14 @@ const BUEHNE_SKRIPT = () => {
       letzteHeilung: B.letzteHeilung ?? null,
       tonAmRichtigenElement: B.tonQuelle === B.quelle,
       letzteTonHeilung: B.letzteTonHeilung ?? null,
+      // Die einzigen drei Dinge, die Instagram von unserem Aufbau
+      // ueberhaupt bemerken KANN: haelt sich die Seite fuer sichtbar, hat
+      // sie den Tastaturfokus, und wird ihr Bild ueberhaupt gezeichnet.
+      // captureStream und das Auslesen des DOM sind fuer die Seite
+      // unsichtbar -- das hier ist es nicht. Nur Lesen, greift nicht ein.
+      sichtbar: document.visibilityState,
+      fokus: document.hasFocus(),
+      bilderProSekunde: await B.zeichenrate(),
     };
   };
 
@@ -457,14 +897,8 @@ const BUEHNE_SKRIPT = () => {
   // Pruefung vom 07.10.2026: 619 Bilder, 30/s, Ton 0 Prozent.
   B.tonNachziehen = async () => {
     if (!B.pc || !B.quelle) return { ok: false };
-    const sender = B.pc.getSenders().find((x) => x.track?.kind === "audio");
-    if (!sender) return { ok: false };
-    let ton = null;
-    try { ton = B.quelle.captureStream().getAudioTracks()[0] ?? null; } catch { return { ok: false }; }
-    if (!ton) return { ok: false };
-    await sender.replaceTrack(ton);
-    B.tonQuelle = B.quelle;
-    return { ok: true };
+    // Die Tonspur selbst wird NICHT getauscht -- nur umgesteckt.
+    return { ok: await B.tonAnklemmen(B.quelle) };
   };
 
   B.starteWaechter = () => {
@@ -481,7 +915,13 @@ const BUEHNE_SKRIPT = () => {
       // Der Ton wird getrennt geprueft: er kann allein wegbrechen, ohne dass
       // am Bild etwas auffaellt -- und dann merkt es niemand.
       if (!falschesElement && !spurTot) {
-        const tonTot = !tonSpur || tonSpur.readyState !== "live";
+        // Die gesendete Tonspur ist seit dem Umbau FEST -- sie stirbt nie,
+        // egal was Instagram tut. Entscheidend ist deshalb, ob hinten noch
+        // etwas in die Leitung hineinspielt: genau das stirbt, wenn
+        // Instagram ein Reel von vorn anfaengt (Emres "beim zweiten
+        // Anschauen ist der Ton weg", 08.10.2026).
+        const eingangTot = !B.tonEingangSpur || B.tonEingangSpur.readyState !== "live";
+        const tonTot = eingangTot || !tonSpur || tonSpur.readyState !== "live";
         const tonVomFalschenElement = B.tonQuelle !== B.quelle;
         if (tonTot || tonVomFalschenElement) {
           B.heiltGerade = true;
@@ -1211,7 +1651,53 @@ class Session {
 
     const domain = PLATFORM_DOMAIN[platform];
     const adapter = MEDIA_ADAPTER[platform];
+
+    // --- Netzmessung (08.10.2026) -----------------------------------
+    // Die eine offene Frage: Hoert Instagram am Umbruchpunkt auf, neue
+    // Reels ANZUFRAGEN -- oder fragt es weiter und bekommt nichts
+    // Brauchbares? Gemessen ist bisher nur die Folge: Der Vorrat unter uns
+    // sinkt 5-4-3-2-1-0, dann setzt Instagram die Liste neu auf.
+    //
+    // Deshalb hier BEIDE Richtungen mitschreiben, und zwar nur den Kopf:
+    // Pfad, Status, Groesse. Keine Koerper, nichts aus dem Browser
+    // gezogen -- das war schon einmal der Grund fuer 683 ms Verzoegerung
+    // pro Wisch. Reine Buchfuehrung, greift nirgends ein.
+    this.netzZaehler = 0;
+    const istMedien = (u) => /\.(mp4|m4a|webm|jpg|jpeg|png|webp|heic|svg|css|js|woff2?)(\?|$)/i.test(u)
+      || u.includes("cdninstagram") || u.includes("fbcdn");
+    const kurz = (u) => {
+      try {
+        const x = new URL(u);
+        return x.pathname + (x.search ? x.search.slice(0, 60) : "");
+      } catch { return u.slice(0, 90); }
+    };
+    context.on("request", (req) => {
+      try {
+        const u = req.url();
+        if (!u.includes(domain) || istMedien(u)) return;
+        if (req.method() !== "POST" && !/graphql|\/api\/|reels_media|clips/i.test(u)) return;
+        console.log(`[netz->] #${++this.netzZaehler} ${req.method()} ${kurz(u)}`);
+      } catch {}
+    });
+    context.on("requestfailed", (req) => {
+      try {
+        const u = req.url();
+        if (!u.includes(domain) || istMedien(u)) return;
+        console.log(`[netz-X] FEHLGESCHLAGEN ${kurz(u)} -- ${req.failure()?.errorText ?? "?"}`);
+      } catch {}
+    });
+
     context.on("response", async (response) => {
+      try {
+        const u0 = response.url();
+        if (u0.includes(domain) && !istMedien(u0)) {
+          const laenge = response.headers()["content-length"] ?? "?";
+          console.log(`[netz<-] ${response.status()} ${kurz(u0)} ${laenge}B`);
+        }
+      } catch {}
+      return await this.__netzAlt(response);
+    });
+    this.__netzAlt = (async (response) => {
       try {
         const url = response.url();
         if (!url.includes(domain)) return;
@@ -1224,13 +1710,39 @@ class Session {
         // komplett. Genau daher hatten immer exakt die ersten beiden Reels
         // keine Angaben (@unknown, keine Like-Zahl), ab dem dritten war
         // alles da -- nachgemessen am 07.10.2026.
+        // ERST nachsehen, was es ist -- dann erst den Inhalt holen.
+        //
+        // 08.10.2026, gemessen. Hier stand direkt response.json(), fuer
+        // JEDE Antwort von instagram.com. Und "instagram.com" steckt auch
+        // in cdninstagram.com -- also in den Reel-Videos selbst. Um die
+        // Frage "bist du JSON?" zu beantworten, muss Playwright aber den
+        // GANZEN Koerper aus dem Browser durch die Steuerleitung ziehen.
+        // Bei einem Reel sind das mehrere Megabyte, und durch dieselbe
+        // Leitung geht der Tastendruck des Mitarbeiters.
+        //
+        // Nachgestellt mit echten Dateien, schlimmster Wisch:
+        //
+        //     10 Dateien    133 ms    42 MB durch die Leitung
+        //     30 Dateien    604 ms   126 MB
+        //     60 Dateien    683 ms   206 MB
+        //     mit dieser Vorpruefung: 5 bis 20 ms, 0 MB
+        //
+        // Das ist Emres "ich druecke Next und es passiert nichts", genau in
+        // dem Moment, in dem Instagram nachlaedt.
+        //
+        // Bewusst NICHT auf "nur application/json" gefiltert: Instagram
+        // liefert Daten auch mal mit einem untypischen Inhaltstyp aus, und
+        // dann fehlten Name und Like-Zahl. Uebersprungen wird nur, was
+        // sicher nie Daten enthaelt.
+        const inhaltstyp = (response.headers()["content-type"] ?? "").toLowerCase();
+        if (/^(image|video|audio|font)\//.test(inhaltstyp) || inhaltstyp.includes("text/css")) return;
+
         let body = await response.json().catch(() => null);
         const koerper = [];
         if (body) {
           koerper.push(body);
         } else {
-          const typ = (response.headers()["content-type"] ?? "").toLowerCase();
-          if (!typ.includes("text/html")) return;
+          if (!inhaltstyp.includes("text/html")) return;
           const html = await response.text().catch(() => "");
           // Bewusst nur die ausgewiesenen JSON-Bloecke, nicht das ganze
           // Dokument: alles andere waere Rateraten im Markup.
@@ -1457,50 +1969,151 @@ class Session {
   // ueberlappende Spurwechsel, und genau das sah man beim Scrollen als
   // Durcheinander aus auftauchenden Videos.
   async eingabe(art) {
-    this.eingabeKette = (this.eingabeKette ?? Promise.resolve()).catch(() => {}).then(() => this.eingabeEinzeln(art));
-    return await this.eingabeKette;
-  }
+    // Ein Wisch zur Zeit -- und was waehrenddessen kommt, wird VERWORFEN,
+    // nicht aufgehoben.
+    //
+    // 08.10.2026, Emres Befund: "man kann den Next-Knopf so krass
+    // durchspammen, dass man auf einmal acht Videos ueberspringt". Genau
+    // das war der Grund: jeder Tastendruck wurde hier an die Kette
+    // gehaengt. Zehnmal druecken hiess zehn Wische -- sie kamen nur
+    // spaeter, alle auf einmal. Und acht Reelwechsel in einem Rutsch sind
+    // acht Neuansaetze fuer den Entpacker beim Mitarbeiter; daraus entsteht
+    // der Bildstapel, der die Sitzung danach traege macht.
+    //
+    // Instagram verhaelt sich genauso: was waehrend eines laufenden
+    // Wechsels gedrueckt wird, ist weg. Ein Wisch ist kein Auftrag, der
+    // abgearbeitet werden muss, sondern eine Geste -- und eine Geste, die
+    // ins Leere geht, wiederholt man einfach.
+    if (art === "weiter" || art === "zurueck") {
+      // Instagrams eigenen Pfeil druecken und warten, bis gewechselt ist.
+      //
+      // Die Schritt-Pruefung ("war es genau EIN Reel?") ist am 08.10.2026
+      // zweimal hintereinander schiefgegangen und wurde deshalb wieder
+      // entfernt:
+      //   1. Sie korrigierte selbstaendig zurueck -- und weil Instagram die
+      //      Elemente austauscht, wurde die Bedingung nie wahr: der Player
+      //      lief von allein bis zum ersten Reel.
+      //   2. Ohne Korrektur meldete sie staendig "Ziel nicht erreicht" und
+      //      blieb stehen, sobald das Video pausiert war (dann greift die
+      //      Erkennung, welches Element dran ist, daneben).
+      // Der Multi-Skip beim Nachladen bleibt damit offen -- aber er ist
+      // deutlich weniger schlimm als ein Player, der sich selbst verstellt
+      // oder gar nicht mehr weitergeht.
+      const vorher = await this.page.evaluate(() => window.__buehne.kennung())
+        .catch(() => ({ zeichen: null, code: null }));
 
-  async eingabeEinzeln(art) {
-    if (art === "weiter") {
-      await this.page.keyboard.press("ArrowDown");
-    } else if (art === "zurueck") {
-      await this.page.keyboard.press("ArrowUp");
-    } else if (art === "tippen") {
+      const lage = await this.page
+        .evaluate((richtung) => window.__buehne.knopfLage(richtung), art)
+        .catch(() => null);
+      let dom = await this.page
+        .evaluate(() => window.__buehne.listeImDom())
+        .catch(() => null);
+
+      // --- Nicht ins Leere klicken (08.10.2026) ------------------------
+      // Gemessen: Instagram fragt rechtzeitig nach Nachschub (bei Vorrat 4
+      // ging POST /graphql/query raus) und bekommt auch eine gueltige
+      // Antwort -- aber bis sie da ist, ist der Mitarbeiter vier Reels
+      // weiter und steht bei Vorrat 0. Der Stapel, der dann ankommt,
+      // landet ZWISCHEN ihm und seinen bereits gesehenen Reels. Genau das
+      // ist der Grund, warum "Zurueck" danach fremde Reels zeigt.
+      //
+      // Auf instagram.com passiert das nicht, weil dort niemand im
+      // 125-ms-Takt klickt -- die Antwort ist laengst da, bevor der Vorrat
+      // aufgebraucht ist.
+      //
+      // Also: Ist unter uns nichts mehr vorbereitet, wird NICHT geklickt,
+      // sondern gewartet, bis Instagram geliefert hat. Der Kunde zeigt
+      // dabei seinen Ladezustand (ab 350 ms) und bricht erst nach 12 s ab,
+      // deshalb hier hoechstens 9 s. Danach wird trotzdem geklickt --
+      // lieber ein unsauberer Schritt als ein Mitarbeiter, der feststeckt.
+      const vorratUnten = (d) => (d && d.stelle >= 0 ? d.anzahl - d.stelle - 1 : null);
+      if (art === "weiter" && vorratUnten(dom) === 0) {
+        const bis = Date.now() + 9000;
+        let gewartet = 0;
+        while (Date.now() < bis) {
+          await sleep(150);
+          const neu = await this.page
+            .evaluate(() => window.__buehne.listeImDom())
+            .catch(() => null);
+          gewartet = Date.now() - (bis - 9000);
+          if (vorratUnten(neu) > 0) { dom = neu; break; }
+          dom = neu ?? dom;
+        }
+        const jetzt = vorratUnten(dom);
+        console.log(`[warten] Vorrat war leer -- ${gewartet}ms gewartet, danach ${jetzt ?? "?"} Reels unter uns` +
+          (jetzt > 0 ? "" : " (Instagram hat nicht geliefert, es wird trotzdem geklickt)"));
+      }
+
+      const perKnopf = await this.page
+        .evaluate((richtung) => {
+          const k = window.__buehne.wischKnopf(richtung);
+          if (!k) return { ok: false };
+          const name =
+            k.getAttribute("aria-label") ??
+            k.querySelector?.("svg[aria-label]")?.getAttribute("aria-label") ??
+            "(ohne Namen)";
+          k.click();
+          return { ok: true, name };
+        }, art)
+        .catch(() => ({ ok: false }));
+      if (!perKnopf.ok) {
+        await this.page.keyboard.press(art === "weiter" ? "ArrowDown" : "ArrowUp");
+      }
+
+      const wechsel = await this.page
+        .evaluate((v) => window.__buehne.warteAufWechsel(v), vorher)
+        .catch(() => ({ gewechselt: false, code: null }));
+
+      console.log(
+        `[wisch] ${art}: ${vorher.code ?? "?"} -> ${wechsel.code ?? "?"}` +
+          ` (${wechsel.gewechselt ? `${wechsel.dauer}ms` : "NICHT GEWECHSELT, Instagram laedt vermutlich noch"})` +
+          (perKnopf.ok ? ` [${perKnopf.name}]` : " [Tastatur]") +
+          (lage ? ` {Pfeile:${lage.anzahl} genommen@y${lage.genommen?.y ?? "?"}` +
+            ` Video y${lage.videoOben}..${lage.videoUnten} von ${lage.fensterHoch}` +
+            ` alle:${lage.stellen.map((p) => "y" + p.y).join(",")}}` : "")
+      );
+      if (dom) {
+        console.log(`[liste] ${dom.anzahl} Videos in der Seite, wir auf Platz ${dom.stelle}` +
+          ` | vorher=${vorher.datei ?? "?"} | ${dom.eintraege.join(" ")}`);
+      }
+
+      // Erst wenn der Wechsel steht, die Buehne umhaengen -- so kommen Bild
+      // und Angaben gemeinsam an.
+      await this.buehneNachfuehren().catch(() => {});
+      return { ok: true, gewechselt: !!wechsel.gewechselt, code: wechsel.code ?? null };
+    }
+    if (art === "tippen") {
       // Mitte des Fensters -- Instagram haelt damit an bzw. spielt weiter,
       // genau wie ein Fingertipp auf dem Handy.
-      await this.page.mouse.click(Math.round(BUEHNE_FENSTER.width / 2), Math.round(BUEHNE_FENSTER.height / 2));
-      // Nicht blind 180 ms warten und dann ablesen -- wie lange Instagram
-      // braucht, weiss niemand. Stattdessen nachsehen, bis sich der Zustand
-      // wirklich geaendert hat, hoechstens eine Sekunde lang.
+      // Der Zustand VOR dem Klick -- und zwar wirklich vorher.
+      //
+      // Hier wurde erst geklickt und danach "vorher" gelesen. Damit stand in
+      // "vorher" schon der Zustand NACH dem Klick, die Schleife wartete auf
+      // eine Aenderung, die laengst passiert war, und lief immer die vollen
+      // 1000 ms leer. Jeder Tipp kostete also eine geschlagene Sekunde,
+      // bevor ReelForge erfuhr, dass pausiert wurde -- und weil Eingaben
+      // streng hintereinander laufen, blockierte das auch alles dahinter.
+      // Ein Klick hinter schnellen Wischen: zwei bis drei Sekunden, bis
+      // Pause ankam. Gemeldet von Emre am 07.10.2026.
       const vorher = await this.page
         .evaluate(() => { const v = window.__buehne?.videoImBild?.(); return v ? v.paused : null; })
         .catch(() => null);
+      await this.page.mouse.click(Math.round(BUEHNE_FENSTER.width / 2), Math.round(BUEHNE_FENSTER.height / 2));
+      // Nicht blind warten und dann ablesen -- wie lange Instagram braucht,
+      // weiss niemand. Stattdessen nachsehen, bis sich der Zustand wirklich
+      // geaendert hat. Das ist jetzt nach wenigen Zehntelsekunden der Fall.
       let pausiert = vorher;
       const ende = Date.now() + 1000;
       while (Date.now() < ende) {
-        await sleep(80);
         pausiert = await this.page
           .evaluate(() => { const v = window.__buehne?.videoImBild?.(); return v ? v.paused : null; })
           .catch(() => null);
         if (pausiert !== vorher) break;
+        await sleep(25);
       }
       return { ok: true, pausiert };
-    } else {
-      return { ok: false, fehler: "unbekannte Eingabe" };
     }
-    // Nach jedem Wechsel haengt der Ton am alten Element -- nachziehen.
-    if (art === "weiter" || art === "zurueck") {
-      // Kurz warten, damit Instagram sein neues Element eingehaengt hat --
-      // aber das Umhaengen selbst NICHT abwarten. Es wartet seinerseits auf
-      // die Tonspur (bis zu 1,5 s), und ReelForge haelt den Wisch solange
-      // gesperrt: beim schnellen Scrollen fuehlte sich das zaeh an. Der
-      // Waechter zieht ohnehin zweimal pro Sekunde nach, falls das hier
-      // noch zu frueh kommt.
-      await sleep(350);
-      void this.buehneNachfuehren();
-    }
-    return { ok: true };
+    return { ok: false, fehler: "unbekannte Eingabe" };
   }
 
   current() {

@@ -397,6 +397,15 @@ const WHEEL_THRESHOLD = 60;
 // liefert nach der Geste noch lange Ereignisse nach -- ohne diese Pause
 // wanderte ein einzelner Wisch ueber mehrere Reels.
 const NACHLAUF_MS = 450;
+// Reine Notbremse gegen Festhaengen. Bewusst LAENGER als die Frist der
+// Anfrage selbst (12 s): ein Wisch wartet darauf, dass Instagram wirklich
+// gewechselt hat. Eine kuerzere Notbremse wuerde die Sperre mitten im
+// laufenden Wisch oeffnen.
+const SPERRE_NOTBREMSE_MS = 14000;
+// Erst ab hier wird der Ladezustand sichtbar. Gemessen am 08.10.2026: ein
+// normaler Wisch ist in 120-190 ms durch, der langsame beim Nachladen lag bei
+// 490 ms und 1861 ms. Darunter wuerde bei JEDEM Wisch kurz grau aufblitzen.
+const LADE_ANZEIGE_AB_MS = 350;
 const SWIPE_THRESHOLD = 50;
 
 // Driven by a real, persistent Instagram session (see
@@ -499,6 +508,50 @@ export function SwipeResearchPlayer({
       .catch(() => {});
   }
 
+  // Die Sperre MUSS von selbst aufgehen -- auch wenn die Anfrage nie
+  // zurueckkommt. Vorher hing sie allein an .finally(): blieb eine einzige
+  // Anfrage haengen, war Wischen fuer den Rest der Sitzung tot (Pause ging
+  // weiter, weil die keine Sperre braucht). Emre sass am 07.10.2026 genau so
+  // in einem Reel fest. Jetzt laeuft immer ein Wecker mit.
+  const notbremseRef = useRef<number | null>(null);
+  // Der Ladezustand haengt an derselben Sperre wie der Wisch selbst: zu,
+  // solange der Wisch unterwegs ist, auf, wenn er durch ist. Damit kann er
+  // nicht stehenbleiben, wenn eine Anfrage haengt -- die Notbremse raeumt
+  // ihn mit weg.
+  const [ladeAnzeige, setLadeAnzeige] = useState(false);
+  const ladeWeckerRef = useRef<number | null>(null);
+  function ladeAnzeigeAus() {
+    if (ladeWeckerRef.current !== null) {
+      window.clearTimeout(ladeWeckerRef.current);
+      ladeWeckerRef.current = null;
+    }
+    setLadeAnzeige(false);
+  }
+  function sperreZu() {
+    if (ladeWeckerRef.current !== null) window.clearTimeout(ladeWeckerRef.current);
+    ladeWeckerRef.current = window.setTimeout(() => {
+      ladeWeckerRef.current = null;
+      setLadeAnzeige(true);
+    }, LADE_ANZEIGE_AB_MS);
+    navLockedRef.current = true;
+    if (notbremseRef.current !== null) window.clearTimeout(notbremseRef.current);
+    notbremseRef.current = window.setTimeout(() => {
+      notbremseRef.current = null;
+      navLockedRef.current = false;
+      wheelAccum.current = 0;
+      ladeAnzeigeAus();
+    }, SPERRE_NOTBREMSE_MS);
+  }
+  function sperreAuf() {
+    ladeAnzeigeAus();
+    if (notbremseRef.current !== null) {
+      window.clearTimeout(notbremseRef.current);
+      notbremseRef.current = null;
+    }
+    wheelAccum.current = 0;
+    window.setTimeout(() => { navLockedRef.current = false; }, NACHLAUF_MS);
+  }
+
   function lockNav() {
     navLockedRef.current = true;
     window.setTimeout(() => {
@@ -513,7 +566,7 @@ export function SwipeResearchPlayer({
     // onNext() wuerde zusaetzlich den Puffer weiterschieben und damit
     // doppelt wischen, deshalb bleibt es hier aussen vor.
     if (liveAnsicht && sitzung) {
-      navLockedRef.current = true;
+      sperreZu();
       setPausiert(false);
       // Bewusst ohne Auswertung der Antwort: der Wisch liefert keine
       // Reel-Angaben mehr (das Nachschlagen dauerte bis zu vier Sekunden und
@@ -522,13 +575,10 @@ export function SwipeResearchPlayer({
       // Die Angaben kommen aus der laufenden Abfrage alle zwei Sekunden.
       void buehneEingabe(sitzung.sessionId, sitzung.sessionSecret, "weiter")
         .catch(() => {})
-        .finally(() => {
-          // Nachlaufsperre: ein Mausrad liefert nach der eigentlichen Geste
-          // noch Dutzende Ereignisse nach. Ohne diese Pause schob jeder
-          // einzelne Wisch gleich mehrere Reels weiter.
-          wheelAccum.current = 0;
-          window.setTimeout(() => { navLockedRef.current = false; }, NACHLAUF_MS);
-        });
+        // Nachlaufsperre: ein Mausrad liefert nach der eigentlichen Geste
+        // noch Dutzende Ereignisse nach. Ohne diese Pause schob jeder
+        // einzelne Wisch gleich mehrere Reels weiter.
+        .finally(sperreAuf);
       return;
     }
     onNext();
@@ -537,7 +587,7 @@ export function SwipeResearchPlayer({
     if (navLockedRef.current || loading) return;
     if (!(liveAnsicht && sitzung)) lockNav();
     if (liveAnsicht && sitzung) {
-      navLockedRef.current = true;
+      sperreZu();
       setPausiert(false);
       // Bewusst ohne Auswertung der Antwort: der Wisch liefert keine
       // Reel-Angaben mehr (das Nachschlagen dauerte bis zu vier Sekunden und
@@ -546,10 +596,7 @@ export function SwipeResearchPlayer({
       // Die Angaben kommen aus der laufenden Abfrage alle zwei Sekunden.
       void buehneEingabe(sitzung.sessionId, sitzung.sessionSecret, "zurueck")
         .catch(() => {})
-        .finally(() => {
-          wheelAccum.current = 0;
-          window.setTimeout(() => { navLockedRef.current = false; }, NACHLAUF_MS);
-        });
+        .finally(sperreAuf);
       return;
     }
     if (!hasPrev) return;
@@ -617,7 +664,7 @@ export function SwipeResearchPlayer({
           // V2: was hier laeuft, ist Instagram selbst. Die Bedienelemente
           // bleiben unsere -- nur das Bild darunter ist echt.
           <>
-            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} onAntippen={antippen} pausiert={pausiert} onAktuellesReel={(r) => onLiveReel?.(r)} />
+            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} onAntippen={antippen} pausiert={pausiert} laedt={ladeAnzeige} onAktuellesReel={(r) => onLiveReel?.(r)} />
             {currentReel && (
               <SwipeSlide
                 key={currentReel.id}
