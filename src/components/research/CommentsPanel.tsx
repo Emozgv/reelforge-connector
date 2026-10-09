@@ -15,7 +15,11 @@ import type { LiveComment } from "../../state/useLiveResearchSession";
 // Closing the panel (isOpen false) tears down any pending timer and fetches
 // nothing until it's reopened -- there is no comment-fetch activity at all
 // while it's closed.
-const DWELL_MS = 5000;
+// 09.10.2026 von 5000 auf 4000 gesenkt -- Emre wollte die Kommentare eine
+// Sekunde frueher sehen. Der Zweck der Wartezeit bleibt erhalten: wer
+// zuegig durchblaettert (gemessen 1,2-1,4 s je Reel), loest weiterhin
+// keinen einzigen Abruf aus.
+const DWELL_MS = 4000;
 
 // Disabled ("View all N comments" was a dead promise -- no pagination/API
 // support for loading more than the initial batch exists) -- flip back to
@@ -98,7 +102,20 @@ export function CommentsPanel({
     wasOpenRef.current = true;
 
     if (justOpened) {
-      resultsRef.current = new Map();
+      // Der Zwischenspeicher wird hier bewusst NICHT mehr geleert. Vorher
+      // stand an dieser Stelle `resultsRef.current = new Map()` -- ein
+      // Wechsel auf Notes und zurueck warf damit alles weg und holte die
+      // Kommentare desselben Reels noch einmal, mit Ladezeit und einem
+      // weiteren Seitenaufruf in der Instagram-Sitzung. Kommentare
+      // gehoeren zum Reel, nicht zum Oeffnen des Panels.
+      // (09.10.2026 von Emre gemeldet.)
+      if (resultsRef.current.has(video.id)) {
+        requestIdRef.current++;
+        setLoading(false);
+        setDwelling(false);
+        setDisplayReelId(video.id);
+        return;
+      }
       void runFetch(video);
       return;
     }

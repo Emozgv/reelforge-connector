@@ -77,6 +77,14 @@ const PREFETCH_MAX_DURATION_MS = 90_000;
 // is the fast path back for anything beyond this — it re-checks and
 // recovers the instant a tab becomes visible again, rather than waiting.
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Ist das naechste Reel noch nicht bereit, wartet ReelForge -- und zwar
+// lange. Emres Regel vom 09.10.2026: "Wenn da keine Reels kommen, dann
+// komme ich halt in dieses Fenster, wo es grau laedt, und warte einfach,
+// egal wie lange." Es wird NIE ins Leere geklickt.
+// Die Kette dahinter muss zusammenpassen, sonst bricht jemand frueher ab:
+//   warten 55 s  <  Frist der Anfrage 60 s  <  Notbremse der Sperre 65 s
+const WARTEN_AUF_REEL_MS = 55_000;
 // Instagram/TikTok are otherwise identical from here down — this is the one
 // map that actually varies per platform: where the live For-You/Reels
 // surface lives, and which domain its own internal JSON responses come
@@ -1210,7 +1218,14 @@ const TIMEAGO_LINE_RE = /^\d+\s*[hdwmy]$/i;
 // doesn't span the comma, so a plain \d+-based check silently fails to
 // recognize these as metadata and lets them leak into comment text instead.
 const LIKE_COUNT_LINE_RE = /^([\d,]+)\s*(like|likes)$/i;
-const METADATA_LINE_RE = /^(\d+\s*[hdwmy]|[\d,]+\s*(like|likes)|verified|reply|view (all|replies).*|•)$/i;
+// Instagrams eigene Bedienelemente, die in innerText als eigene Zeile
+// mitten im Kommentar stehen. Sie gehoeren NICHT zum Kommentar -- bisher
+// landeten sie im Text, und in der Oberflaeche stand dann
+// "...bro was born to smile through the pain See translation"
+// (09.10.2026 von Emre gemeldet). Deutsch und Englisch, weil die
+// Oberflaeche der Sitzung in beiden Sprachen laufen kann.
+const UI_LINE_RE = /^(see (translation|original)|translated (by|from) [a-z]+|(originaltext|original) anzeigen|(\u00fcbersetzung|\u00fcbersetzen) (anzeigen|ansehen)|\u00fcbersetzt von [a-z]+|antworten|mehr ansehen|see more|hide replies|antworten ausblenden)$/i;
+const METADATA_LINE_RE = /^(\d+\s*[hdwmy]|[\d,]+\s*(like|likes)|[\d,]+\s*„?gef\u00e4llt mir"?-angaben?|verified|reply|view (all|replies).*|alle (\d+ )?antworten ansehen.*|•)$/i;
 
 function isCommentStart(lines, index) {
   return USERNAME_LINE_RE.test(lines[index] ?? "") && TIMEAGO_LINE_RE.test(lines[index + 1] ?? "");
@@ -1236,7 +1251,9 @@ function parseCommentLines(lines) {
     let sawMetadata = false;
     while (j < lines.length && !isCommentStart(lines, j) && textParts.length < 5) {
       const line = lines[j];
-      if (METADATA_LINE_RE.test(line)) {
+      if (UI_LINE_RE.test(line)) {
+        // Reines Bedienelement: weder Text noch Metadaten, einfach weg.
+      } else if (METADATA_LINE_RE.test(line)) {
         if (!sawMetadata) {
           const match = line.match(LIKE_COUNT_LINE_RE);
           if (match) likeCount = parseInt(match[1].replace(/,/g, ""), 10);
@@ -2076,22 +2093,37 @@ class Session {
       // dabei seinen Ladezustand (ab 350 ms) und bricht erst nach 12 s ab,
       // deshalb hier hoechstens 9 s. Danach wird trotzdem geklickt --
       // lieber ein unsauberer Schritt als ein Mitarbeiter, der feststeckt.
+      // Produktregel (Emre, 09.10.2026): Ist das naechste Reel noch nicht
+      // bereit, wartet ReelForge. Es wird NICHT ins Leere geklickt -- auch
+      // nicht nach Ablauf der Frist. Vorher wurde nach 9 s trotzdem
+      // geklickt; gemessen am 08.10.2026 waren danach alle sechs
+      // Videoelemente ausgetauscht, auch die fuenf ueber dem laufenden, und
+      // "Zurueck" fuehrte in nie gesehene Reels.
+      //
+      // Die Frist liegt unter der 12-s-Grenze der Anfrage, damit der Kunde
+      // eine ordentliche Antwort bekommt statt eines Abbruchs. Laeuft sie
+      // ab, passiert gar nichts: dasselbe Reel bleibt stehen, der
+      // Mitarbeiter kann erneut druecken.
       const vorratUnten = (d) => (d && d.stelle >= 0 ? d.anzahl - d.stelle - 1 : null);
       if (art === "weiter" && vorratUnten(dom) === 0) {
-        const bis = Date.now() + 9000;
-        let gewartet = 0;
+        const start = Date.now();
+        const bis = start + WARTEN_AUF_REEL_MS;
         while (Date.now() < bis) {
           await sleep(150);
           const neu = await this.page
             .evaluate(() => window.__buehne.listeImDom())
             .catch(() => null);
-          gewartet = Date.now() - (bis - 9000);
           if (vorratUnten(neu) > 0) { dom = neu; break; }
           dom = neu ?? dom;
         }
+        const gewartet = Date.now() - start;
         const jetzt = vorratUnten(dom);
-        console.log(`[warten] Vorrat war leer -- ${gewartet}ms gewartet, danach ${jetzt ?? "?"} Reels unter uns` +
-          (jetzt > 0 ? "" : " (Instagram hat nicht geliefert, es wird trotzdem geklickt)"));
+        if (!(jetzt > 0)) {
+          console.log(`[warten] ${gewartet}ms gewartet, Instagram hat nichts bereitgestellt -- es wird NICHT geklickt.`);
+          await this.buehneNachfuehren().catch(() => {});
+          return { ok: true, gewechselt: false, nichtBereit: true, code: vorher.code ?? null };
+        }
+        console.log(`[warten] ${gewartet}ms gewartet, danach ${jetzt} Reels unter uns`);
       }
 
       const perKnopf = await this.page
@@ -2587,6 +2619,45 @@ async function startSession(accountId, token, lockSecret, modus) {
     throw new Error("Couldn't open the real Reels session. Check your internet connection and try again.");
   }
   console.log(`[timing] page.goto navigation: ${Date.now() - t2}ms`);
+
+  // Steht der Account ueberhaupt noch zur Verfuegung? Bisher gab es dafuer
+  // gar keine Pruefung: Bei einem gesperrten Account lief der Start normal
+  // weiter, fand 20 Sekunden lang kein Reel und meldete dann "Instagram hat
+  // kein abspielbares Reel geliefert" -- was nach einem technischen Problem
+  // klingt, obwohl der Account das Problem ist.
+  //
+  // Zuerst die ADRESSE pruefen, denn Instagram leitet in diesen Faellen um,
+  // und eine Adresse ist unabhaengig von der Sprache. Der Text dient nur als
+  // zweites Netz und ist bewusst eng gehalten -- lieber eine Sperre
+  // uebersehen als einen funktionierenden Start abwuergen.
+  const zustand = await page
+    .evaluate(() => {
+      const weg = location.pathname + location.search;
+      const txt = (document.body?.innerText ?? "").slice(0, 4000);
+      return { weg, txt };
+    })
+    .catch(() => null);
+  if (zustand) {
+    const gesperrtWeg = /\/(challenge|accounts\/suspended|accounts\/disabled)/i.test(zustand.weg);
+    // Bewusst nur Wendungen, in denen das KONTO vorkommt. Ein blosses
+    // "eingeschraenkt" oder "restricted" steht auch mal in einer Caption
+    // oder einem Kommentar -- und ein falscher Treffer wuerde einen
+    // funktionierenden Start abwuergen. Lieber eine Sperre uebersehen.
+    const gesperrtText = /(suspended your account|your account has been (disabled|restricted|suspended)|we (have )?restricted your account|dein konto wurde (gesperrt|deaktiviert|eingeschr(ä|ae)nkt)|wir haben dein konto gesperrt)/i.test(zustand.txt);
+    const abgemeldet = /\/accounts\/login/i.test(zustand.weg);
+    if (gesperrtWeg || gesperrtText) {
+      console.error(`[zugang] Account gesperrt -- Adresse "${zustand.weg}"`);
+      sessions.delete(id);
+      await browser.close().catch(() => {});
+      throw new Error("Account got restricted, please check your account.");
+    }
+    if (abgemeldet) {
+      console.error(`[zugang] nicht angemeldet -- Adresse "${zustand.weg}"`);
+      sessions.delete(id);
+      await browser.close().catch(() => {});
+      throw new Error("This account is signed out of Instagram. Reconnect it and try again.");
+    }
+  }
 
   const t3 = Date.now();
   let reel = null;

@@ -309,7 +309,13 @@ function SwipeSlide({
           session-server.mjs's Session.block) — not a local hide — so it
           gets one confirm step first, since it's genuinely consequential
           and not easily reversible the way Like/Save are. */}
-      <div ref={menuRef} className="absolute top-3 right-3">
+      {/* pointer-events-auto ist hier Pflicht: in der Live-Ansicht laeuft
+          dieser ganze Aufbau als reine Ueberlagerung mit
+          pointer-events-none (damit Klicks ins Bild durchgehen). Caption
+          und die rechte Spalte holen sich die Klicks gezielt zurueck --
+          dieses Menue tat es als einziges nicht und war deshalb im
+          Live-Betrieb tot (09.10.2026 von Emre gemeldet). */}
+      <div ref={menuRef} className="pointer-events-auto absolute top-3 right-3">
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
@@ -401,7 +407,7 @@ const NACHLAUF_MS = 450;
 // Anfrage selbst (12 s): ein Wisch wartet darauf, dass Instagram wirklich
 // gewechselt hat. Eine kuerzere Notbremse wuerde die Sperre mitten im
 // laufenden Wisch oeffnen.
-const SPERRE_NOTBREMSE_MS = 14000;
+const SPERRE_NOTBREMSE_MS = 65000;
 // Erst ab hier wird der Ladezustand sichtbar. Gemessen am 08.10.2026: ein
 // normaler Wisch ist in 120-190 ms durch, der langsame beim Nachladen lag bei
 // 490 ms und 1861 ms. Darunter wuerde bei JEDEM Wisch kurz grau aufblitzen.
@@ -562,6 +568,23 @@ export function SwipeResearchPlayer({
       navLockedRef.current = false;
     }, NAV_LOCK_MS);
   }
+
+  // Auf Instagram verschwindet das Reel, sobald man den Creator blockiert,
+  // und man landet auf dem naechsten. Bei uns blieb es stehen, weil wir auf
+  // einer eigenen Profilseite blockieren und Instagrams Feed davon nichts
+  // mitbekommt. Also gehen wir selbst einen Schritt weiter -- ueber den
+  // normalen Weg, damit Sperre und Ladeanzeige genauso greifen wie sonst.
+  const schonWeiterNachBlock = useRef<string | null>(null);
+  useEffect(() => {
+    if (!(liveAnsicht && sitzung && currentReel)) return;
+    if (blockStatus[currentReel.id] !== "done") return;
+    if (schonWeiterNachBlock.current === currentReel.id) return;
+    schonWeiterNachBlock.current = currentReel.id;
+    goNext();
+    // goNext haengt an Zustaenden, die sich bei jedem Rendern aendern --
+    // als Abhaengigkeit wuerde der Effekt staendig neu laufen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockStatus, currentReel?.id, liveAnsicht, sitzung]);
 
   function goNext() {
     if (navLockedRef.current || loading) return;

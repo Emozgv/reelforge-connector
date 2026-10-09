@@ -96,10 +96,6 @@ export function LiveBuehne({
   useEffect(() => { anfangRef.current = onAmAnfang; }, [onAmAnfang]);
   const [zustand, setZustand] = useState<BuehnenZustand>("aus");
   const [meldung, setMeldung] = useState<string | null>(null);
-  // Kleine Messanzeige: der Connector sendet nachweislich lueckenlos, aber
-  // das Bild steht trotzdem still -- also muss sichtbar werden, was DIESER
-  // Browser mit den ankommenden Bildern macht.
-  const [messung, setMessung] = useState<string>("");
 
   useEffect(() => {
     onZustand?.(zustand, meldung ?? undefined);
@@ -148,12 +144,28 @@ export function LiveBuehne({
     // wird derselbe Neuversuch ausgeloest, den es fuer Fehler schon gibt.
     // Nichts am Aufbau selbst geaendert -- das Wettrennen bleibt, es heilt
     // sich nur von allein.
-    const wecker = window.setTimeout(() => {
-      if (abgebrochen || pc.connectionState === "connected") return;
-      if (versucheRef.current >= 6) return;
+    // Ein Neuversuch, zwei Ausloeser. Vorher hing er allein im catch des
+    // Aufbaus -- brach die Verbindung danach weg (connectionState
+    // "failed"/"disconnected"), wurde nur die Meldung gesetzt und sonst
+    // nichts. Die Anzeige schrieb trotzdem "Neuer Versuch laeuft..." hin,
+    // und der Mitarbeiter sass vor einer Zusage, die niemand einloeste.
+    // Genau so am 09.10.2026 dreimal passiert.
+    const nochmal = (grund: string) => {
+      if (abgebrochen) return;
+      if (versucheRef.current >= 6) { setGibtNochAuf(true); return; }
       versucheRef.current += 1;
-      aufbauRef.current = null;
-      setNeustart((n) => n + 1);
+      setGibtNochAuf(false);
+      console.warn(`[buehne] Neuaufbau (${grund}), Versuch ${versucheRef.current}`);
+      window.setTimeout(() => {
+        if (abgebrochen) return;
+        aufbauRef.current = null;
+        setNeustart((n) => n + 1);
+      }, 1200);
+    };
+
+    const wecker = window.setTimeout(() => {
+      if (pc.connectionState === "connected") return;
+      nochmal(`kam in ${VERBINDUNG_FRIST_MS / 1000}s nicht zustande`);
     }, VERBINDUNG_FRIST_MS);
 
     pc.onconnectionstatechange = () => {
@@ -162,6 +174,8 @@ export function LiveBuehne({
       else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         setZustand("fehler");
         setMeldung("Die Verbindung zum Connector ist abgerissen.");
+        window.clearTimeout(wecker);
+        nochmal(`Verbindung ${pc.connectionState}`);
       }
     };
 
@@ -186,21 +200,7 @@ export function LiveBuehne({
         if (abgebrochen) return;
         setZustand("fehler");
         setMeldung(e instanceof Error ? e.message : "Die Buehne liess sich nicht aufbauen.");
-        setGibtNochAuf(versucheRef.current >= 6);
-        // Nicht endgueltig aufgeben. Ein Fehlschlag heisst fast immer nur
-        // "noch nicht soweit" -- Instagram laedt, die Seite baut sich auf,
-        // eine Sitzung wird gerade gewechselt. Wer hier stehenbleibt, laesst
-        // den Mitarbeiter vor einem toten Bildschirm sitzen, obwohl es zwei
-        // Sekunden spaeter ginge.
-        if (versucheRef.current < 6) {
-          versucheRef.current += 1;
-          setGibtNochAuf(false);
-          window.setTimeout(() => {
-            if (abgebrochen) return;
-            aufbauRef.current = null;
-            setNeustart((n) => n + 1);
-          }, 2500);
-        }
+        nochmal("Aufbau fehlgeschlagen");
       }
     })();
 
@@ -218,9 +218,12 @@ export function LiveBuehne({
     };
   }, [sessionId, sessionSecret, neustart]);
 
+  // Muss dieselbe Bedingung tragen wie das Element selbst -- sonst holt
+  // dieser Effekt den Ton zurueck, wenn jemand waehrend der Ladeflaeche den
+  // Tonschalter umlegt.
   useEffect(() => {
-    if (videoRef.current) videoRef.current.muted = stumm;
-  }, [stumm]);
+    if (videoRef.current) videoRef.current.muted = stumm || !!laedt;
+  }, [stumm, laedt]);
 
   // Dauerhaft nachfragen, welches Reel Instagram gerade zeigt -- statt einmal
   // nach dem Aufbau zu fragen und zu hoffen.
@@ -263,74 +266,6 @@ export function LiveBuehne({
     return () => { gestoppt = true; sofortFragen = null; window.clearInterval(t); };
   }, [sessionId, sessionSecret]);
 
-  // Stand der Zaehler bei der vorigen Messung -- fuer die Veraenderung,
-  // siehe die Begruendung bei stau().
-  const vorhinRef = useRef<{
-    video: { d: number; n: number } | null;
-    audio: { d: number; n: number } | null;
-  }>({ video: null, audio: null });
-
-  // Jede Sekunde ablesen, was ankommt und was das Element daraus macht.
-  useEffect(() => {
-    const t = window.setInterval(async () => {
-      const el = videoRef.current;
-      const pc = pcRef.current;
-      if (!el || !pc) return;
-      let an = 0, dek = 0, fps = 0;
-      // NUR ANZEIGE, greift in nichts ein.
-      //
-      // Emres Befund am 08.10.2026: wenn die Sitzung gekippt ist, pausiert
-      // das Bild zu spaet, und beim Weiterspielen ist der Ton sofort da und
-      // das Bild kommt hinterher. Beide kommen durch dieselbe Leitung -- ist
-      // der Ton puenktlich und das Bild nicht, dann liegt auf DIESER Seite
-      // ein Bildvorrat, der sich aufstaut. Genau den zeigen diese zwei
-      // Zahlen: wie viele Millisekunden Bild bzw. Ton vor der Ausgabe
-      // zwischengelagert werden. Im gesunden Fall sind beide klein und
-      // ungefaehr gleich.
-      let bildStau: number | null = null, tonStau: number | null = null;
-      // JETZT, nicht im Mittel.
-      //
-      // Hier stand d/n -- aber beide Zaehler laufen seit dem Sitzungsstart
-      // mit, das ergibt den DURCHSCHNITT ueber alles. Der steigt langsam und
-      // kann nie wieder fallen. Genau deshalb sah es am 08.10.2026 aus wie
-      // ein stetig wachsender Vorrat (9 -> 71 -> 200 -> 325 -> 422 ms),
-      // obwohl das in Wahrheit nur der Mittelwert war und ueber den
-      // tatsaechlichen Zustand nichts aussagte.
-      //
-      // Richtig ist die Veraenderung zwischen zwei Messungen: wie viel
-      // Wartezeit ist fuer die Bilder angefallen, die SEIT der letzten
-      // Sekunde ausgegeben wurden.
-      const stau = (art: "video" | "audio", d?: number, n?: number) => {
-        if (d === undefined || n === undefined) return null;
-        const vorher = vorhinRef.current[art];
-        vorhinRef.current[art] = { d, n };
-        if (!vorher) return null;
-        const dn = n - vorher.n;
-        if (dn <= 0) return null;
-        return Math.round(((d - vorher.d) / dn) * 1000);
-      };
-      try {
-        (await pc.getStats()).forEach((r) => {
-          if (r.type !== "inbound-rtp") return;
-          if (r.kind === "video") {
-            an = r.framesReceived ?? 0;
-            dek = r.framesDecoded ?? 0;
-            fps = r.framesPerSecond ?? 0;
-            bildStau = stau("video", r.jitterBufferDelay, r.jitterBufferEmittedCount);
-          } else if (r.kind === "audio") {
-            tonStau = stau("audio", r.jitterBufferDelay, r.jitterBufferEmittedCount);
-          }
-        });
-      } catch { /* egal */ }
-      setMessung(
-        `an ${an} · dekodiert ${dek} · ${fps}/s · ${el.paused ? "PAUSIERT" : "laeuft"}` +
-          ` · bereit ${el.readyState} · ${el.videoWidth}x${el.videoHeight} · ${pc.connectionState}` +
-          ` · Stau Bild ${bildStau ?? "?"}ms / Ton ${tonStau ?? "?"}ms`
-      );
-    }, 1000);
-    return () => window.clearInterval(t);
-  }, []);
-
   return (
     <div className="absolute inset-0 bg-black" onClick={onAntippen}>
       <video
@@ -367,12 +302,6 @@ export function LiveBuehne({
           </span>
         </div>
       )}
-      {/* Messanzeige -- fliegt wieder raus, sobald die Ursache gefunden ist. */}
-      {zustand === "laeuft" && messung && (
-        <div className="absolute bottom-0 left-0 right-0 z-30 bg-black/70 px-2 py-1 text-[9.5px] leading-tight text-emerald-300/90 font-mono pointer-events-none">
-          {messung}
-        </div>
-      )}
       {zustand !== "laeuft" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 px-6 text-center">
           {zustand === "fehler" ? (
@@ -405,7 +334,10 @@ export async function buehneEingabe(
   // Der Wisch wartet im Connector darauf, dass Instagram wirklich gewechselt
   // hat und das neue Reel da ist -- beim Nachladen dauert das. Deshalb hier
   // mehr Luft als die frueheren 6 s.
-  const antwort = await ruf(`/sessions/${sessionId}/eingabe`, { sessionSecret, art }, 12000);
+  // 60 s, weil der Connector am Ladepunkt bis zu 55 s auf Instagram
+  // wartet, statt ins Leere zu klicken. Kuerzer hiesse: der Kunde bricht
+  // ab, waehrend der Connector noch korrekt wartet.
+  const antwort = await ruf(`/sessions/${sessionId}/eingabe`, { sessionSecret, art }, 60000);
   // Steht das neue Reel, sofort die Angaben nachziehen.
   if (art === "weiter" || art === "zurueck") sofortFragen?.();
   return antwort;
