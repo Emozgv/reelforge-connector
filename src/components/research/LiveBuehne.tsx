@@ -14,6 +14,11 @@ const SERVER = "http://127.0.0.1:48211";
 
 export type BuehnenZustand = "aus" | "verbindet" | "laeuft" | "fehler";
 
+// So lange darf der Aufbau hoechstens brauchen. Gemessen stand die
+// Verbindung bisher in unter zwei Sekunden; acht lassen reichlich Luft,
+// auch wenn Instagram beim Start noch laedt.
+const VERBINDUNG_FRIST_MS = 8000;
+
 // frist: Bricht die Anfrage nach dieser Zeit selbst ab. Ohne sie kann eine
 // haengende Anfrage endlos offen bleiben -- und weil die Wischsperre an ihrem
 // Ende haengt, waere Wischen danach fuer den Rest der Sitzung tot.
@@ -124,9 +129,30 @@ export function LiveBuehne({
       // Ein frisch gesetzter Strom startet nicht immer von allein.
       void el.play().catch(() => {});
     };
+    // Kommt die Verbindung ueberhaupt zustande? Gemessen am 08.10.2026:
+    // Sie blieb auf "new" stehen, ohne jede Fehlermeldung -- der Connector
+    // hatte die Antwort angenommen und die fertige Verbindung im selben
+    // Moment durch einen zweiten Aufbau ersetzt (React baut im
+    // Entwicklungsmodus absichtlich doppelt auf). Weil das kein Fehler ist,
+    // sondern nur ein Ausbleiben, griff der vorhandene Neuversuch nie, und
+    // der Mitarbeiter sass vor "Die Verbindung zum Connector ist
+    // abgerissen", bis er die Seite neu lud.
+    //
+    // Deshalb hier nur ein Wecker: Steht nach dieser Zeit keine Verbindung,
+    // wird derselbe Neuversuch ausgeloest, den es fuer Fehler schon gibt.
+    // Nichts am Aufbau selbst geaendert -- das Wettrennen bleibt, es heilt
+    // sich nur von allein.
+    const wecker = window.setTimeout(() => {
+      if (abgebrochen || pc.connectionState === "connected") return;
+      if (versucheRef.current >= 6) return;
+      versucheRef.current += 1;
+      aufbauRef.current = null;
+      setNeustart((n) => n + 1);
+    }, VERBINDUNG_FRIST_MS);
+
     pc.onconnectionstatechange = () => {
       if (abgebrochen) return;
-      if (pc.connectionState === "connected") { setZustand("laeuft"); versucheRef.current = 0; }
+      if (pc.connectionState === "connected") { window.clearTimeout(wecker); setZustand("laeuft"); versucheRef.current = 0; }
       else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         setZustand("fehler");
         setMeldung("Die Verbindung zum Connector ist abgerissen.");
@@ -175,6 +201,7 @@ export function LiveBuehne({
     const el = videoRef.current;
     return () => {
       abgebrochen = true;
+      window.clearTimeout(wecker);
       // Das tote Bild mit wegraeumen, sonst steht es weiter im Element.
       if (el?.srcObject) el.srcObject = null;
       pc.close();

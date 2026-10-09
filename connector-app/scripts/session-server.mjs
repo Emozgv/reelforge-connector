@@ -25,6 +25,14 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 
+// Jede Protokollzeile bekommt die Uhrzeit auf die Millisekunde. Ohne sie
+// laesst sich nicht sagen, wie lange ein Mitarbeiter auf einem Reel stand --
+// und genau das ist die Frage bei der Verweildauer.
+for (const art of ["log", "error"]) {
+  const alt = console[art].bind(console);
+  console[art] = (...teile) => alt(new Date().toISOString().slice(11, 23), ...teile);
+}
+
 const PORT = Number(process.env.REELFORGE_SESSION_SERVER_PORT ?? 48211);
 const FETCH_SESSION_URL = process.env.REELFORGE_FETCH_SESSION_URL
   ?? "https://vbnilccvnygeedkdfbvd.supabase.co/functions/v1/fetch-research-account-session";
@@ -1676,7 +1684,17 @@ class Session {
         const u = req.url();
         if (!u.includes(domain) || istMedien(u)) return;
         if (req.method() !== "POST" && !/graphql|\/api\/|reels_media|clips/i.test(u)) return;
-        console.log(`[netz->] #${++this.netzZaehler} ${req.method()} ${kurz(u)}`);
+        // Bei Instagrams eigener Wiedergabemeldung zusaetzlich die GROESSE
+        // des Pakets. Darin steckt, was der Player ueber die Wiedergabe
+        // berichtet -- je laenger geschaut, desto mehr Ereignisse. Bewusst
+        // NUR die Groesse: in den Paketen stehen Sitzungsmerkmale, und die
+        // haben in einem Protokoll nichts verloren.
+        let zusatz = "";
+        if (/unified_cvc|logging_client_events/.test(u)) {
+          const d = req.postData();
+          zusatz = d ? ` ${d.length}B` : "";
+        }
+        console.log(`[netz->] #${++this.netzZaehler} ${req.method()} ${kurz(u)}${zusatz}`);
       } catch {}
     });
     context.on("requestfailed", (req) => {
