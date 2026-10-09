@@ -55,6 +55,7 @@ export function LiveBuehne({
   pausiert,
   laedt,
   onAktuellesReel,
+  onAmAnfang,
 }: {
   sessionId: string;
   sessionSecret: string;
@@ -75,6 +76,9 @@ export function LiveBuehne({
   // Welches Reel gerade laeuft. In V1 wusste das der Puffer; in V2 wischt
   // der Mitarbeiter in Instagram, also weiss es nur Instagram selbst.
   onAktuellesReel?: (reel: unknown | null) => void;
+  // true, solange das erste Reel der Sitzung zu sehen ist. Dann gibt es
+  // nach oben nichts mehr.
+  onAmAnfang?: (amAnfang: boolean) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -88,6 +92,8 @@ export function LiveBuehne({
   // sich sonst staendig selbst neu aufgesetzt.
   const meldeRef = useRef(onAktuellesReel);
   useEffect(() => { meldeRef.current = onAktuellesReel; }, [onAktuellesReel]);
+  const anfangRef = useRef(onAmAnfang);
+  useEffect(() => { anfangRef.current = onAmAnfang; }, [onAmAnfang]);
   const [zustand, setZustand] = useState<BuehnenZustand>("aus");
   const [meldung, setMeldung] = useState<string | null>(null);
   // Kleine Messanzeige: der Connector sendet nachweislich lueckenlos, aber
@@ -235,6 +241,7 @@ export function LiveBuehne({
         const a = await ruf(`/sessions/${sessionId}/buehne-aktuell`, { sessionSecret });
         if (gestoppt) return;
         const code = (a.code as string | null) ?? null;
+        if (typeof a.amAnfang === "boolean") anfangRef.current?.(a.amAnfang);
         const reel = (a.reel ?? null) as { username?: string | null } | null;
         // "Gut" heisst: wir kennen wenigstens den Namen. Ohne ihn stuende in
         // der Karte @unknown und der Like-Knopf haette nichts anzuzeigen.
@@ -330,7 +337,11 @@ export function LiveBuehne({
         ref={videoRef}
         autoPlay
         playsInline
-        muted={stumm}
+        // Waehrend des Ladens auch stumm: der graue Platzhalter deckt nur
+        // das Bild ab, Instagrams altes Reel laeuft darunter weiter und war
+        // dann als einziges noch zu hoeren. Sobald das neue Reel steht,
+        // kommt der Ton von allein zurueck.
+        muted={stumm || !!laedt}
         className="absolute inset-0 w-full h-full object-cover"
       />
       {/* Ladezustand wie auf instagram.com: grauer Block in Player-Form,

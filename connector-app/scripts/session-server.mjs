@@ -1671,6 +1671,16 @@ class Session {
     // gezogen -- das war schon einmal der Grund fuer 683 ms Verzoegerung
     // pro Wisch. Reine Buchfuehrung, greift nirgends ein.
     this.netzZaehler = 0;
+    // MESSUNG (09.10.2026, Emres Frage "worauf wuerde die Anzeige stehen?"):
+    // Der zweite moegliche Kanal fuer Verweildauer. Das Video wird
+    // stueckweise nachgeladen, waehrend es laeuft -- wer lange schaut, holt
+    // mehr Stuecke. Instagram sieht das auf seiner Seite, ganz ohne eine
+    // eigene Meldung. Diese Anfragen hatte ich bisher ausgefiltert, es kann
+    // also sein, dass die eigentliche Watchtime hier laeuft und nicht in
+    // den Meldungen, die ich dafuer gehalten habe.
+    this.videoStuecke = 0;
+    this.videoBytes = 0;
+    this.feldNamenGemeldet = false;
     const istMedien = (u) => /\.(mp4|m4a|webm|jpg|jpeg|png|webp|heic|svg|css|js|woff2?)(\?|$)/i.test(u)
       || u.includes("cdninstagram") || u.includes("fbcdn");
     const kurz = (u) => {
@@ -1682,6 +1692,11 @@ class Session {
     context.on("request", (req) => {
       try {
         const u = req.url();
+        // Videostuecke zaehlen, statt sie wie bisher nur zu verwerfen.
+        if (/\.mp4|\.m4s|video\/|bytestart|efg=/i.test(u) && (u.includes("cdninstagram") || u.includes("fbcdn"))) {
+          this.videoStuecke += 1;
+          return;
+        }
         if (!u.includes(domain) || istMedien(u)) return;
         if (req.method() !== "POST" && !/graphql|\/api\/|reels_media|clips/i.test(u)) return;
         // Bei Instagrams eigener Wiedergabemeldung zusaetzlich die GROESSE
@@ -1693,6 +1708,15 @@ class Session {
         if (/unified_cvc|logging_client_events/.test(u)) {
           const d = req.postData();
           zusatz = d ? ` ${d.length}B` : "";
+          // EINMAL pro Sitzung: nur die FELDNAMEN. Keine Werte -- darin
+          // stehen Sitzungsmerkmale. Damit laesst sich beantworten, ob in
+          // diesen Paketen ueberhaupt etwas ueber die Wiedergabedauer
+          // steht, oder ob meine Deutung des Pfadnamens danebenlag.
+          if (!this.feldNamenGemeldet && d && /unified_cvc/.test(u)) {
+            this.feldNamenGemeldet = true;
+            const namen = [...new Set(d.split("&").map((x) => decodeURIComponent(x.split("=")[0])))];
+            console.log(`[felder] unified_cvc hat ${namen.length} Felder: ${namen.join(", ").slice(0, 900)}`);
+          }
         }
         console.log(`[netz->] #${++this.netzZaehler} ${req.method()} ${kurz(u)}${zusatz}`);
       } catch {}
@@ -1972,7 +1996,15 @@ class Session {
           `verzeichnis=${this.katalog.size} gefunden=${bekannt ? (bekannt.vonDerSeite ? "von der Seite: " + (bekannt.username ?? "kein Name") : "im Verzeichnis") : "NEIN"}`
       );
     }
-    return { reel: bekannt, code: sicht.code, wege: sicht.wege };
+    // Am ersten Reel der Sitzung ist nach oben Schluss -- Emres Vorgabe
+    // ("Am ersten Reel ist Schluss nach oben"). Bewusst am ZUSTAND
+    // festgemacht, nicht an einem mitgezaehlten Schrittzaehler: ein
+    // verworfener oder fehlgeschlagener Wisch wuerde den Zaehler
+    // verschieben, und dann waere "Zurueck" irgendwann falsch gesperrt
+    // oder falsch freigegeben. Der Code des ersten Reels dagegen stimmt
+    // immer.
+    this.erstesReel = this.erstesReel ?? sicht.code;
+    return { reel: bekannt, code: sicht.code, wege: sicht.wege, amAnfang: sicht.code === this.erstesReel };
   }
 
   async buehneZustand() {
@@ -2094,6 +2126,9 @@ class Session {
         console.log(`[liste] ${dom.anzahl} Videos in der Seite, wir auf Platz ${dom.stelle}` +
           ` | vorher=${vorher.datei ?? "?"} | ${dom.eintraege.join(" ")}`);
       }
+      // Was hat das gerade verlassene Reel an Videostuecken gekostet?
+      console.log(`[video] vorheriges Reel: ${this.videoStuecke} Stuecke nachgeladen`);
+      this.videoStuecke = 0;
 
       // Erst wenn der Wechsel steht, die Buehne umhaengen -- so kommen Bild
       // und Angaben gemeinsam an.
@@ -2678,7 +2713,7 @@ const server = http.createServer(async (req, res) => {
     const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
 
@@ -2693,6 +2728,10 @@ const server = http.createServer(async (req, res) => {
         return erg.fehler ? json(res, 502, { error: erg.fehler }) : json(res, 200, { ok: true });
       }
       if (action === "eingabe") {
+        // MESSUNG (09.10.2026): Jede eintreffende Eingabe, bevor
+        // irgendetwas damit passiert. Ohne das war nicht zu sehen, ob eine
+        // Eingabe ueberhaupt ankam oder ReelForge sie schon vorher verwarf.
+        console.log(`[eingabe->] ${art}`);
         const erg = await session.eingabe(art);
         if (!erg.ok) return json(res, 400, { error: erg.fehler });
         // Bewusst OHNE die Reel-Angaben: buehneAktuell wartet bis zu vier

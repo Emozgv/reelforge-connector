@@ -475,6 +475,10 @@ export function SwipeResearchPlayer({
 }) {
   const connecting = account.status === "connecting";
   const wheelAccum = useRef(0);
+  // Solange das erste Reel der Sitzung zu sehen ist, gibt es nach oben
+  // nichts. Der Connector sagt es uns, am Reel-Code festgemacht -- nicht
+  // mitgezaehlt, damit ein verworfener Wisch die Sperre nicht verschiebt.
+  const [amAnfang, setAmAnfang] = useState(true);
   const touchStartY = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // One deliberate navigation action must move exactly one reel — a fast
@@ -584,6 +588,9 @@ export function SwipeResearchPlayer({
     onNext();
   }
   function goPrev() {
+    // Am ersten Reel ist Schluss nach oben -- gilt fuer Knopf, Mausrad und
+    // Pfeiltaste gleichermassen, weil alle drei hier durchlaufen.
+    if (liveAnsicht && sitzung && amAnfang) return;
     if (navLockedRef.current || loading) return;
     if (!(liveAnsicht && sitzung)) lockNav();
     if (liveAnsicht && sitzung) {
@@ -664,7 +671,7 @@ export function SwipeResearchPlayer({
           // V2: was hier laeuft, ist Instagram selbst. Die Bedienelemente
           // bleiben unsere -- nur das Bild darunter ist echt.
           <>
-            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} onAntippen={antippen} pausiert={pausiert} laedt={ladeAnzeige} onAktuellesReel={(r) => onLiveReel?.(r)} />
+            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} onAntippen={antippen} pausiert={pausiert} laedt={ladeAnzeige} onAktuellesReel={(r) => onLiveReel?.(r)} onAmAnfang={setAmAnfang} />
             {currentReel && (
               <SwipeSlide
                 key={currentReel.id}
@@ -877,8 +884,20 @@ export function SwipeResearchPlayer({
           <button
             type="button"
             onClick={goPrev}
-            title={navBusy ? "Waiting for the next reel to load…" : "Previous"}
-            className="absolute top-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-colors"
+            disabled={liveAnsicht && !!sitzung && amAnfang}
+            title={
+              liveAnsicht && sitzung && amAnfang
+                ? "This is the first reel of the session"
+                : navBusy
+                  ? "Waiting for the next reel to load…"
+                  : "Previous"
+            }
+            className={
+              "absolute top-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center transition-colors " +
+              (liveAnsicht && sitzung && amAnfang
+                ? "text-white/25 cursor-not-allowed"
+                : "text-white/80 hover:text-white hover:bg-black/60")
+            }
           >
             {navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronUp size={16} />}
           </button>
