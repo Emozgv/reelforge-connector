@@ -100,8 +100,27 @@ export function ProfilBuehne({
     let weg = false;
     const innen = fensterRef.current?.firstElementChild?.getBoundingClientRect();
     const kasten = innen ?? flaecheRef.current?.getBoundingClientRect();
-    const w = Math.round(kasten?.width ?? 1040);
-    const h = Math.round(kasten?.height ?? 900);
+    // Wie breit ist das Fenster drueben?
+    //
+    // Bewusst NICHT so breit wie die Flaeche hier, sondern fest 1920 --
+    // Chrome bekommt diese Breite, und das Bild wird bei uns passend
+    // verkleinert.
+    //
+    // Der Grund ist Instagram selbst: sein Raster richtet sich nach der
+    // Fensterbreite. Bei der Breite, die auf einem Notebook-Bildschirm
+    // uebrig bleibt, zeigt es drei Kacheln je Reihe; erst bei annaehernd
+    // Vollbild werden es vier. Mit 1920 sind es fuenf -- also deutlich
+    // mehr Uebersicht, ohne an Instagram selbst irgendetwas zu aendern
+    // (10.10.2026 von Emre an seinem eigenen Chrome gegengeprueft und so
+    // entschieden).
+    //
+    // Auf 0 setzen heisst: wieder genau so breit wie die Flaeche hier.
+    const BUEHNE_BREITE_FEST = 1920;
+    const kastenB = Math.round(kasten?.width ?? 1040);
+    const kastenH = Math.round(kasten?.height ?? 900);
+    // Seitenverhaeltnis beibehalten, sonst verzerrt das Bild.
+    const w = BUEHNE_BREITE_FEST || kastenB;
+    const h = BUEHNE_BREITE_FEST ? Math.round((BUEHNE_BREITE_FEST * kastenH) / kastenB) : kastenH;
     groesseRef.current = { w, h };
     setFehler(null);
     const abbruch = new AbortController();
@@ -312,7 +331,13 @@ export function ProfilBuehne({
           ringsum -- und weil mit doppelter Punktdichte gezeichnet wird,
           bleibt es dabei scharf. */}
       <div ref={fensterRef} className="absolute inset-0 pt-14 pb-5 px-5 flex justify-center">
-        <div className="w-full max-w-[1040px] h-full rounded-xl overflow-hidden bg-black shadow-[0_18px_60px_-12px_rgba(0,0,0,0.9)]">
+        {/* Breite der Buehne. Sie ist zugleich die Fensterbreite drueben: was
+            hier steht, wird beim Oeffnen an Chrome weitergegeben. 1040 war die
+            alte Deckelung; auf 1600 angehoben, um zu sehen, ob Instagrams
+            Raster bei mehr Platz mehr als drei pro Reihe zeigt (10.10.2026,
+            von Emre gewuenscht -- meine Vermutung war, dass es mittig auf
+            fester Breite bleibt, geprueft war das nicht). */}
+          <div className="w-full max-w-[1600px] h-full rounded-xl overflow-hidden bg-black shadow-[0_18px_60px_-12px_rgba(0,0,0,0.9)]">
           {bild && (
             <img
               src={bild}
