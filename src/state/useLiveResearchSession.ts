@@ -417,23 +417,44 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     // conditional UPDATE reach the database before this release's UPDATE
     // did, finding the just-ended lock still present and reporting the
     // account as already in use by its own prior holder.
+    // Dem Connector ZUERST Bescheid sagen -- abgeschickt, aber noch nicht
+    // abgewartet.
+    //
+    // Vorher stand dieser Aufruf hinter dem Freigeben der Sperre, und das
+    // wird abgewartet. Beim Schliessen oder Neuladen der Seite hat der
+    // Browser aber nur einen Wimpernschlag: die Freigabe ging noch raus,
+    // waehrend darauf gewartet wurde war die Seite schon weg -- und der
+    // Aufruf an den Connector wurde nie abgeschickt. keepalive haelt nur
+    // eine Anfrage am Leben, die bereits unterwegs ist.
+    //
+    // Folge: der Connector hielt die Sitzung weiter, bis seine fuenf
+    // Minuten ohne Lebenszeichen abgelaufen waren. Emre hat das am
+    // 10.10.2026 mehrfach gesehen -- er hatte beendet, und die Buehne lief
+    // drueben weiter.
+    //
+    // Die Reihenfolge der SPERRE bleibt unveraendert: sie wird weiter
+    // abgewartet, und zwar aus dem Grund, der direkt darunter steht.
+    const endeGemeldet = session
+      ? fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/end`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret }),
+          keepalive: true,
+        }).catch(() => {
+          // Best-effort — Connector's own heartbeat timeout closes it regardless.
+        })
+      : null;
+
     const lockedAccountId = lockedAccountIdRef.current;
     if (lockedAccountId) {
       lockedAccountIdRef.current = null;
       await releaseLock(lockedAccountId);
     }
 
-    if (!session) return;
-    try {
-      await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/end`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionSecret: session.sessionSecret }),
-        keepalive: true,
-      });
-    } catch {
-      // Best-effort — Connector's own heartbeat timeout closes it regardless.
-    }
+    // Erst hier abwarten. startSession() wartet auf endSession(), und ein
+    // schnelles End -> Start soll weiterhin erst weitermachen, wenn der
+    // Connector die alte Sitzung quittiert hat.
+    if (endeGemeldet) await endeGemeldet;
   }, [stopHeartbeat]);
 
   // Called once, the first time a Research Account becomes available (app
