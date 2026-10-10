@@ -2787,7 +2787,7 @@ class Session {
   async profilBild() {
     if (!this.profilSeite) return null;
     const roh = await this.profilSeite
-      .screenshot({ type: "jpeg", quality: 72 })
+      .screenshot({ type: "jpeg", quality: 92 })
       .catch(() => null);
     return roh ? `data:image/jpeg;base64,${roh.toString("base64")}` : null;
   }
@@ -2928,6 +2928,21 @@ class Session {
         });
       }
 
+      // ERST das normale Raster, DANN der Reels-Reiter.
+      //
+      // Das sieht nach einem Umweg aus, ist aber der Kern der Sache.
+      // Instagram schickt die Zahlen -- Likes, Kommentare, Reposts, Datum --
+      // mit der Antwort des normalen Rasters, und zwar fuer alle Beitraege
+      // einschliesslich der Reels. Die Reels-Seite allein schickt sie
+      // nicht: dort stehen nur die Aufrufe auf der Kachel.
+      //
+      // Emre hat das selbst herausgefunden (10.10.2026): oeffnete er das
+      // Profil direkt im Reels-Reiter, blieben die Kacheln leer; wechselte
+      // er kurz auf den normalen Feed und zurueck, waren alle Zahlen da.
+      // Gemessen passt es: im Raster kamen 156 Beitraege, im Reels-Reiter
+      // zweimal 12.
+      //
+      // Also machen wir genau das, was er von Hand gemacht hat.
       const hin = () => seite.goto(`https://www.instagram.com/${name}/`, { waitUntil: "commit", timeout: 30000 });
       try {
         await hin();
@@ -2943,13 +2958,96 @@ class Session {
       // Die Buehne gehoert wieder nach vorn, sonst drosselt Chrome ihre
       // Wiedergabe -- dasselbe, was nebenseite() schon tut.
       await this.page.bringToFront().catch(() => {});
-      await sleep(1800);
+      // 700 statt 1800 ms. Das Warten war Vorsicht, keine Notwendigkeit:
+      // direkt danach laeuft das Vorladen, und das wartet ohnehin zwischen
+      // seinen Runden. Gemessen am 10.10.2026 -- das Oeffnen brauchte 8
+      // Sekunden, davon war nur ein Drittel noetig.
+      await sleep(700);
       if (ueberholt() || seite.isClosed()) return { ok: false, fehler: "Cancelled.", lauf: meinLauf };
 
       if (PROFIL_FORSCHUNG) {
+        clearInterval(this.forschungPuls);
+        this.forschungPuls = setInterval(async () => {
+          const s = this.profilSeite;
+          if (!s || s.isClosed()) { clearInterval(this.forschungPuls); return; }
+          const d = await s
+            .evaluate(() => {
+              const RF = window.__rfForschung;
+              if (!RF) return { da: false };
+              // Nicht nur "beschriftet", sondern VOLLSTAENDIG.
+              //
+              // "Beschriftet" zaehlt auch ein halbes Schild. Emre sieht
+              // aber genau die halben (10.10.2026): Engagement, Likes,
+              // Kommentare, Aufrufe -- aber kein Datum, keine Reposts.
+              // Deshalb wird hier gezaehlt, bei wie vielen sichtbaren
+              // Kacheln wirklich alles dasteht.
+              let sichtbar = 0;
+              let mitDatum = 0;
+              let unbekannt = 0;
+              for (const a of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
+                const r = a.getBoundingClientRect();
+                if (r.width < 120 || r.height < 120) continue;
+                const m = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
+                if (!m) continue;
+                sichtbar++;
+                const b = RF.daten.get(m[1]);
+                if (!b) unbekannt++;
+                else if (b.zeitpunkt) mitDatum++;
+              }
+              return {
+                da: true,
+                stand: RF.stand,
+                sichtbar,
+                mitDatum,
+                unbekannt,
+                letztesZeichnen: RF.zuletztGezeichnet ? Date.now() - RF.zuletztGezeichnet : null,
+              };
+            })
+            .catch(() => null);
+          console.log(`[puls] ${JSON.stringify(d)}`);
+        }, 3000);
+
+        // Zweiter Schritt: hinueber in den Reels-Reiter. Die eingesammelten
+        // Zahlen liegen beim Connector und werden danach wieder in die
+        // Seite gegeben -- sie gehen beim Wechsel also nicht verloren.
+        // Zuerst das NORMALE Raster einmal durchladen.
+        //
+        // Das ist die eigentliche Quelle: seine Antworten tragen ALLE
+        // Felder -- Datum, Uhrzeit, Laenge, Reposts, Likes, Kommentare,
+        // Aufrufe -- und sie decken die Reels mit ab. Die Antworten des
+        // Reels-Reiters tragen Datum, Laenge und Reposts NICHT; deshalb
+        // hatten dort nur die obersten Kacheln den vollen Satz
+        // (10.10.2026 an Emres Bildern abgelesen).
+        //
+        // Es ist derselbe Handgriff, den er von Hand gefunden hat -- kurz
+        // auf den normalen Feed und zurueck --, nur vollstaendig statt
+        // einmal. Und es braucht dafuer KEINE Anfrage bei Instagram, kann
+        // also auch nicht mit 429 abgewiesen werden.
+        await this.profilVorladen(seite, `${name} (Raster)`);
+
+        // Danach noch die Reels-Liste direkt erfragen, falls Instagram
+        // gerade mit uns redet. Tut es das nicht, ist nichts verloren --
+        // die Zahlen stehen oben schon.
+        await this.profilReelsHolen(seite, name);
+
+        await seite
+          .goto(`https://www.instagram.com/${name}/reels/`, { waitUntil: "commit", timeout: 20000 })
+          .catch((e) => console.log(`[forschung] ${name}: Wechsel in den Reels-Reiter ging nicht (${e?.message?.split("\n")[0]})`));
+        await sleep(600);
+        if (ueberholt() || seite.isClosed()) return { ok: false, fehler: "Cancelled.", lauf: meinLauf };
+
         await this.profilSchichtEinsetzen(seite);
+        // Hier reichen zwei Runden. Im Reels-Reiter geht es nur noch
+        // darum, dass Kacheln dastehen -- die Zahlen hat das Raster oben
+        // schon geliefert. Fuenf Runden waren 2,4 Sekunden Wartezeit fuer
+        // nichts.
+        await this.profilVorladen(seite, name, 2);
         await this.profilSchichtFuettern();
         console.log(`[forschung] ${name}: Schilder ${JSON.stringify(this.profilSchichtStand ?? null)}`);
+        // Ab hier im Hintergrund weitersammeln -- ohne darauf zu warten.
+        void this.profilNachladen(name, meinLauf);
+        const warum = await seite.evaluate(() => window.__rfForschung?.warum()).catch(() => null);
+        console.log(`[forschung] ${name}: Kachelsuche ${JSON.stringify(warum)}`);
       }
 
       const bild = await this.profilBild();
@@ -3025,6 +3123,8 @@ class Session {
     this.profilNetzCdp = cdp;
     this.profilBeitraege = new Map();
     this.profilName = name;
+    this.aufrufeGemeldet = false;
+    this.reelsAntwortGemeldet = false;
     await cdp.send("Network.enable").catch(() => {});
 
     const zahl = (...k) => k.find((x) => typeof x === "number") ?? null;
@@ -3034,16 +3134,22 @@ class Session {
     const auswerten = (e) => {
       const code = e.code ?? e.shortcode ?? null;
       if (!code) return null;
+      // Hat der Creator Likes und Aufrufe ausgeblendet, liefert Instagram
+      // trotzdem eine Zahl mit -- aber sie bedeutet nichts. Am 10.10.2026
+      // stand deshalb auf fast jeder Kachel eines solchen Profils "3".
+      // Eine Zahl, die nichts bedeutet, ist schlimmer als keine: wir
+      // zeigen sie nicht.
+      const verborgen = e.like_and_view_counts_disabled === true;
       return {
         code,
-        likes: zahl(e.like_count, e.edge_liked_by?.count, e.edge_media_preview_like?.count),
+        likes: verborgen ? null : zahl(e.like_count, e.edge_liked_by?.count, e.edge_media_preview_like?.count),
         kommentare: zahl(e.comment_count, e.edge_media_to_comment?.count),
-        aufrufe: zahl(e.play_count, e.ig_play_count, e.video_view_count),
+        aufrufe: verborgen ? null : zahl(e.play_count, e.ig_play_count, e.video_view_count),
         reposts: zahl(e.media_repost_count),
         zeitpunkt: zahl(e.taken_at, e.taken_at_timestamp),
         dauer: typeof e.video_duration === "number" ? Math.round(e.video_duration) : null,
         // Versteckte Zahlen bleiben versteckt -- nichts schaetzen.
-        verborgen: e.like_and_view_counts_disabled === true,
+        verborgen,
       };
     };
 
@@ -3052,7 +3158,22 @@ class Session {
       if (Array.isArray(wert)) {
         for (const e of wert) {
           const b = e && typeof e === "object" ? auswerten(e.node ?? e.media ?? e) : null;
-          if (b && (b.likes !== null || b.kommentare !== null || b.aufrufe !== null)) {
+          // Nur zum Nachsehen (10.10.2026): Emre fragt, warum die Aufrufe
+          // oft fehlen. Hier wird EINMAL je Profil aufgeschrieben, welche
+          // Felder Instagram fuer einen Beitrag ohne Aufrufe ueberhaupt
+          // mitschickt. Fliegt danach wieder raus.
+          if (b && b.aufrufe === null && !this.aufrufeGemeldet) {
+            this.aufrufeGemeldet = true;
+            const roh = e.node ?? e.media ?? e;
+            const felder = Object.keys(roh).filter((k) =>
+              /count|view|play|disabled|product_type|media_type/i.test(k)
+            );
+            console.log(
+              `[aufrufe] ohne Aufrufe: ${b.code} | product_type=${roh.product_type} media_type=${roh.media_type} | ` +
+                `passende Felder: ${felder.map((k) => `${k}=${JSON.stringify(roh[k])}`).join(", ")}`
+            );
+          }
+          if (b && (b.likes !== null || b.kommentare !== null || b.aufrufe !== null || b.verborgen)) {
             const alt = this.profilBeitraege.get(b.code);
             // Spaeter eintreffende, vollstaendigere Angaben gewinnen -- aber
             // ein vorhandener Wert wird nie durch null ersetzt.
@@ -3064,8 +3185,30 @@ class Session {
         }
         return;
       }
+      // AUCH ein einfaches Objekt kann ein Beitrag sein.
+      //
+      // Hier lag der Fehler (10.10.2026): geprueft wurde nur, was in einer
+      // Liste steht. Im normalen Raster liegt der Beitrag direkt unter
+      // edges[].node -- das ist ein Listeneintrag, also klappte es. Bei den
+      // REELS liegt er eine Ebene tiefer unter edges[].node.media, und
+      // "media" ist ein gewoehnliches Objekt. Der Leser lief daran vorbei,
+      // obwohl code, play_count, like_count und comment_count alle
+      // dastanden. Ergebnis: beim Scrollen im Reels-Reiter vierzehn
+      // Antworten und null Ausbeute.
+      const selbst = auswerten(wert);
+      if (selbst && (selbst.likes !== null || selbst.kommentare !== null || selbst.aufrufe !== null || selbst.verborgen)) {
+        const alt = this.profilBeitraege.get(selbst.code);
+        this.profilBeitraege.set(
+          selbst.code,
+          alt ? { ...alt, ...Object.fromEntries(Object.entries(selbst).filter(([, v]) => v !== null)) } : selbst
+        );
+      }
       for (const k of Object.keys(wert)) sammeln(wert[k], tiefe + 1);
     };
+
+    // Derselbe Sammler auch fuer die Liste, die wir uns gleich SELBST
+    // holen -- eine Normalisierung, nicht zwei.
+    this.profilSammeln = (inhalt) => sammeln(inhalt, 0);
 
     let zuletzt = 0;
     const adressen = new Map();
@@ -3086,11 +3229,30 @@ class Session {
       adressen.delete(e.requestId);
       try {
         const { body } = await cdp.send("Network.getResponseBody", { requestId: e.requestId });
-        sammeln(JSON.parse(body), 0);
+        const inhalt = JSON.parse(body);
+        const vorher = this.profilBeitraege.size;
+        sammeln(inhalt, 0);
+        const dazu = this.profilBeitraege.size - vorher;
+        console.log(`[antwort] ${adresse.split("?")[0]} -> ${dazu} neue Beitraege (${JSON.stringify(Object.keys(inhalt)).slice(0, 90)})`);
         const jetzt = this.profilBeitraege.size;
         if (jetzt > zuletzt) {
           zuletzt = jetzt;
-          console.log(`[forschung] ${name}: ${jetzt} Beitraege mit Zahlen bekannt.`);
+          // Nur zum Nachsehen (10.10.2026): Emre sieht Kacheln, die
+          // Kommentare und Reposts zeigen, aber keine Likes und keine
+          // Aufrufe. Hier wird gezaehlt, ob Instagram sie ausgeblendet hat
+          // oder ob wir sie verlieren. Fliegt danach raus.
+          const alle = [...this.profilBeitraege.values()];
+          const ohneLikes = alle.filter((b) => b.likes === null);
+          const verborgen = alle.filter((b) => b.verborgen);
+          console.log(
+            `[forschung] ${name}: ${jetzt} Beitraege mit Zahlen bekannt. ` +
+              `| ohne Likes: ${ohneLikes.length} (davon verborgen: ${ohneLikes.filter((b) => b.verborgen).length}) ` +
+              `| ohne Aufrufe: ${alle.filter((b) => b.aufrufe === null).length} ` +
+              `| verborgen gesamt: ${verborgen.length}` +
+              (ohneLikes.length && !ohneLikes[0].verborgen
+                ? ` | Beispiel ohne Likes und nicht verborgen: ${JSON.stringify(ohneLikes[0])}`
+                : "")
+          );
           void this.profilSchichtFuettern();
         }
       } catch {
@@ -3101,6 +3263,334 @@ class Session {
 
   // Die Schicht in die Seite setzen. Mehrfaches Aufrufen schadet nicht:
   // sie setzt sich nur einmal und meldet sich danach selbst als vorhanden.
+  // Die vollstaendige Reels-Liste SELBST holen, statt auf Instagrams
+  // Antworten zu warten.
+  //
+  // Das ist der Unterschied zwischen "wir hoeren mit, was zufaellig
+  // vorbeikommt" und "wir fragen". Mitgehoert wird je nach Reiter anders
+  // geliefert, kommt zu spaet und unvollstaendig -- am 10.10.2026 stand
+  // die Zahl im Reels-Reiter bei zwoelf und wuchs nicht, egal wie weit
+  // Emre scrollte. Gefragt bekommen wir alles auf einmal, bevor er
+  // ueberhaupt scrollt.
+  //
+  // Gefragt wird AUS DER SEITE heraus: damit gelten die Anmeldung, die
+  // Keks-Angaben und die Kopfzeilen des Research-Accounts, ohne dass wir
+  // irgendetwas nachbauen. Genau so holen wir seit heute Nachmittag die
+  // Kommentare.
+  //
+  // Hoeflich fragen: Seiten zu 50, kleine Pause dazwischen, harte
+  // Obergrenze. Instagram bremst, wer zu schnell zu viel will -- das ist
+  // uns heute schon einmal passiert (HTTP 429).
+  // Das Raster EINMAL komplett durchscrollen, bevor der Mitarbeiter es
+  // sieht.
+  //
+  // Das ist die Antwort auf "es muss live sein". Nicht schneller
+  // nachladen, sondern vorher laden: Instagram liefert seine Zahlen genau
+  // dann, wenn es nachlaedt -- also lassen wir es einmal bis zum Ende
+  // nachladen, waehrend die Flaeche beim Mitarbeiter noch gar nicht steht.
+  // Unser Mithoeren faengt dabei alles ein. Danach geht es zurueck nach
+  // oben, und er sieht ein fertiges Raster statt eines, das sich unter ihm
+  // fuellt.
+  //
+  // Braucht kein Fragen bei Instagram und kann deshalb auch nicht mit 429
+  // abgewiesen werden -- genau das ist uns am 10.10.2026 passiert, als wir
+  // zu oft direkt gefragt haben.
+  async profilVorladen(seite, name, runden = 5) {
+    if (!seite || seite.isClosed()) return;
+    const t0 = Date.now();
+    let gelaufen = 0;
+    let leerlauf = 0;
+
+    // Gemessen wird, ob neue BEITRAEGE dazukommen -- nicht, ob neue
+    // Kacheln sichtbar werden.
+    //
+    // Mit Kacheln gemessen brach das Vorladen ab, sobald Instagram einen
+    // Moment brauchte: am 10.10.2026 nach zwei Runden und 1094 ms, und es
+    // blieb bei 13 von 55 Beitraegen mit Datum. Kacheln sagen nichts
+    // darueber, ob die Antwort mit den Zahlen schon da ist -- die
+    // Beitragszahl schon. Damit ist es auch egal, wie schnell die Seite
+    // beim Start ist.
+    for (let i = 0; i < runden; i++) {
+      if (seite.isClosed()) break;
+      const vorher = this.profilBeitraege?.size ?? 0;
+      await seite
+        .evaluate(async () => {
+          window.scrollTo(0, document.body.scrollHeight);
+          await new Promise((f) => setTimeout(f, 650));
+        })
+        .catch(() => {});
+      // Der Antwort noch einen Moment geben, bevor gezaehlt wird.
+      await sleep(350);
+      gelaufen++;
+      if ((this.profilBeitraege?.size ?? 0) > vorher) {
+        leerlauf = 0;
+        continue;
+      }
+      if (++leerlauf >= 2) break;
+    }
+
+    await seite.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    await sleep(200);
+    console.log(
+      `[vorladen] ${name}: ${gelaufen} Runden in ${Date.now() - t0}ms -> ${this.profilBeitraege?.size ?? 0} Beitraege bekannt`
+    );
+    await this.profilSchichtFuettern();
+  }
+
+  // Im HINTERGRUND weitersammeln, solange das Profil offen ist.
+  //
+  // Emres Vorgabe (10.10.2026): "Je weiter ich runterscrolle, desto mehr
+  // sollen nachladen." Das Raster ist die einzige Quelle mit ALLEN Feldern
+  // -- Datum, Uhrzeit, Laenge, Reposts --, und es weit durchzuladen dauert
+  // zu lange, um es beim Oeffnen abzuwarten.
+  //
+  // Also laeuft es in einem eigenen, unsichtbaren Tab weiter, waehrend
+  // vorne schon die Reels stehen. Was ankommt, wird laufend auf die
+  // Kacheln nachgetragen.
+  //
+  // WICHTIG, und hier lag der Fehler beim ersten Versuch: gemessen wird,
+  // ob neue BEITRAEGE dazukommen -- nicht, ob neue Kacheln sichtbar
+  // werden. Kacheln sagen nichts darueber, ob die Antwort mit den Zahlen
+  // schon da ist. Deshalb galt das Raster damals nach zwei Runden als
+  // "durch", und es blieb bei der Haelfte.
+  //
+  // Der Tab geht in jedem Fall wieder zu -- auch bei Profilwechsel.
+  async profilNachladen(name, lauf) {
+    if (!PROFIL_FORSCHUNG) return;
+    let hilfsSeite = null;
+    try {
+      hilfsSeite = await this.context.newPage();
+      this.profilHilfsSeite = hilfsSeite;
+      await hilfsSeite.setViewportSize({ width: 1280, height: 1600 }).catch(() => {});
+
+      const cdp = await this.context.newCDPSession(hilfsSeite).catch(() => null);
+      if (cdp) {
+        await cdp.send("Network.enable").catch(() => {});
+        const adressen = new Map();
+        cdp.on("Network.responseReceived", (e) => {
+          const a = e?.response?.url ?? "";
+          if (/instagram\.com\/(api\/v1|graphql)/.test(a)) adressen.set(e.requestId, a);
+        });
+        cdp.on("Network.loadingFinished", async (e) => {
+          if (!adressen.has(e.requestId)) return;
+          adressen.delete(e.requestId);
+          try {
+            const { body } = await cdp.send("Network.getResponseBody", { requestId: e.requestId });
+            const vorher = this.profilBeitraege?.size ?? 0;
+            this.profilSammeln?.(JSON.parse(body));
+            if ((this.profilBeitraege?.size ?? 0) > vorher) void this.profilSchichtFuettern();
+          } catch {
+            /* eine unlesbare Antwort darf den Rest nicht stoppen */
+          }
+        });
+      }
+
+      await hilfsSeite
+        .goto(`https://www.instagram.com/${name}/`, { waitUntil: "commit", timeout: 30000 })
+        .catch(() => {});
+      await sleep(1500);
+
+      const laeuftNoch = () => this.profilKennung === lauf && !hilfsSeite.isClosed();
+      const eineRunde = async () => {
+        const vorher = this.profilBeitraege?.size ?? 0;
+        await hilfsSeite
+          .evaluate(async () => {
+            window.scrollTo(0, document.body.scrollHeight);
+            await new Promise((f) => setTimeout(f, 1200));
+          })
+          .catch(() => {});
+        await sleep(600);
+        return (this.profilBeitraege?.size ?? 0) - vorher;
+      };
+
+      let runden = 0;
+      let leerlauf = 0;
+      let gemeldet = false;
+      while (laeuftNoch()) {
+        const dazu = await eineRunde();
+        if (dazu > 0) {
+          runden++;
+          leerlauf = 0;
+          continue;
+        }
+        // Erst nach DREI Runden ohne Zuwachs gilt das Raster als durch.
+        // Einmal nichts heisst bei Instagram oft nur "gleich".
+        if (++leerlauf < 3) continue;
+
+        if (!gemeldet) {
+          gemeldet = true;
+          console.log(
+            `[nachladen] ${name}: Raster durch nach ${runden} Runden -- ${this.profilBeitraege?.size ?? 0} Beitraege, ` +
+              `davon mit Datum ${[...(this.profilBeitraege?.values() ?? [])].filter((b) => b.zeitpunkt).length}. Wachdienst laeuft.`
+          );
+        }
+
+        // Nicht aufhoeren, nur leise werden.
+        //
+        // "Durch" heisst bei uns nur: Instagram hat dreimal nichts Neues
+        // geschickt. Das kann auch heissen, dass es gerade bremst. Deshalb
+        // bleibt der Tab offen und sieht alle paar Sekunden nach, ob beim
+        // Mitarbeiter Kacheln OHNE Zahlen stehen -- und laedt nur dann
+        // nochmal nach. Kein Scrollen auf Verdacht (Emres Frage,
+        // 10.10.2026: "was ist mit denen dann?").
+        leerlauf = 0;
+        await sleep(6000);
+        if (!laeuftNoch()) break;
+
+        const fehlen = await this.profilSeite
+          ?.evaluate(() => {
+            const RF = window.__rfForschung;
+            if (!RF) return 0;
+            let offen = 0;
+            for (const a of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
+              const m = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
+              if (m && !RF.daten.has(m[1])) offen++;
+            }
+            return offen;
+          })
+          .catch(() => 0);
+
+        if (fehlen > 0) {
+          console.log(`[nachladen] ${name}: ${fehlen} Kachel(n) ohne Zahlen -- wird nachgefasst.`);
+          gemeldet = false;
+        }
+      }
+    } catch (err) {
+      console.log(`[nachladen] ${name}: abgebrochen (${err?.message?.split("\n")[0]})`);
+    } finally {
+      if (this.profilHilfsSeite === hilfsSeite) this.profilHilfsSeite = null;
+      await hilfsSeite?.close().catch(() => {});
+      await this.profilSchichtFuettern();
+    }
+  }
+
+  async profilReelsHolen(seite, name) {
+    if (!seite || seite.isClosed()) return;
+    // Nach einer Abweisung eine Viertelstunde Ruhe geben. Wer nach einem
+    // 429 weiterfragt, macht es schlimmer -- und wir brauchen es nicht
+    // dringend, weil das Vorladen dieselben Zahlen liefert.
+    if (Session.reelsSperreBis && Date.now() < Session.reelsSperreBis) {
+      console.log(`[reels-liste] ${name}: uebersprungen, Instagram hat zuletzt abgewiesen.`);
+      return;
+    }
+    const t0 = Date.now();
+    const erg = await seite
+      .evaluate(
+        async ([nutzer, seiten, proSeite]) => {
+          const kopf = { "X-IG-App-ID": "936619743392459" };
+          const kekse = Object.fromEntries(
+            document.cookie.split("; ").map((s) => [s.split("=")[0], s.split("=").slice(1).join("=")])
+          );
+          if (kekse.csrftoken) kopf["X-CSRFToken"] = kekse.csrftoken;
+          const warte = (ms) => new Promise((f) => setTimeout(f, ms));
+
+          // Schritt 1: die Kennung des Creators.
+          let id = null;
+          try {
+            const r = await fetch(`/api/v1/users/web_profile_info/?username=${encodeURIComponent(nutzer)}`, {
+              headers: kopf,
+              credentials: "include",
+            });
+            if (!r.ok) return { fehler: `Profilauskunft HTTP ${r.status}` };
+            id = (await r.json())?.data?.user?.id ?? null;
+          } catch (e) {
+            return { fehler: `Profilauskunft: ${e?.message}` };
+          }
+          if (!id) return { fehler: "keine Kennung im Profil gefunden" };
+
+          const stuecke = [];
+          const fehler = [];
+          let seitenGesamt = 0;
+
+          // Schritt 2: der vollstaendige Beitrags-Strom des Creators.
+          //
+          // Diese Quelle traegt ALLE Felder, die wir anzeigen: taken_at
+          // (Datum und Uhrzeit), video_duration, media_repost_count, dazu
+          // Likes, Kommentare und Aufrufe. Die reine Reels-Liste darunter
+          // bringt zwar auch Zahlen, aber ohne Datum, Laenge und Reposts --
+          // genau das fehlte Emre beim Oeffnen (10.10.2026).
+          let weiter = null;
+          for (let i = 0; i < seiten; i++) {
+            try {
+              const u = `/api/v1/feed/user/${id}/?count=${proSeite}${weiter ? `&max_id=${encodeURIComponent(weiter)}` : ""}`;
+              const r = await fetch(u, { headers: kopf, credentials: "include" });
+              if (!r.ok) { fehler.push(`Beitragsstrom HTTP ${r.status}`); break; }
+              const j = await r.json();
+              stuecke.push(j);
+              seitenGesamt++;
+              weiter = j?.next_max_id ?? null;
+              if (!j?.more_available || !weiter) break;
+              await warte(400);
+            } catch (e) {
+              fehler.push(`Beitragsstrom: ${e?.message}`);
+              break;
+            }
+          }
+
+          // Schritt 3: zusaetzlich die reine Reels-Liste.
+          //
+          // Sie deckt Reels ab, die im Beitragsstrom weiter hinten liegen,
+          // und kostet wenig. Was sie bringt, wird mit dem Vorhandenen
+          // verschmolzen -- ein vorhandener Wert wird dabei nie durch einen
+          // fehlenden ersetzt.
+          weiter = null;
+          for (let i = 0; i < seiten; i++) {
+            try {
+              const koerper = new URLSearchParams({
+                target_user_id: id,
+                page_size: String(proSeite),
+                include_feed_video: "true",
+              });
+              if (weiter) koerper.set("max_id", weiter);
+              const r = await fetch("/api/v1/clips/user/", {
+                method: "POST",
+                headers: { ...kopf, "Content-Type": "application/x-www-form-urlencoded" },
+                body: koerper.toString(),
+                credentials: "include",
+              });
+              if (!r.ok) { fehler.push(`Reels-Liste HTTP ${r.status}`); break; }
+              const j = await r.json();
+              stuecke.push(j);
+              seitenGesamt++;
+              weiter = j?.paging_info?.max_id ?? null;
+              if (!j?.paging_info?.more_available || !weiter) break;
+              await warte(400);
+            } catch (e) {
+              fehler.push(`Reels-Liste: ${e?.message}`);
+              break;
+            }
+          }
+
+          return { stuecke, seiten: seitenGesamt, fehler };
+        },
+        [name, 6, 50]
+      )
+      .catch((e) => ({ fehler: e?.message }));
+
+    // Ein Fehlschlag ist kein Drama: das Mithoeren laeuft weiter und
+    // fuellt nach. Verschwiegen wird er trotzdem nicht.
+    const gemeldet = typeof erg?.fehler === "string" ? [erg.fehler] : erg?.fehler ?? [];
+    if (gemeldet.length) console.log(`[reels-liste] ${name}: ${gemeldet.join(" | ")}`);
+    if (gemeldet.some((f) => String(f).includes("429"))) {
+      Session.reelsSperreBis = Date.now() + 15 * 60 * 1000;
+      console.log(`[reels-liste] ${name}: abgewiesen -- 15 Minuten Ruhe, das Vorladen reicht derweil.`);
+    }
+    const vorher = this.profilBeitraege?.size ?? 0;
+    for (const stueck of erg?.stuecke ?? []) {
+      try {
+        this.profilSammeln?.(stueck);
+      } catch {
+        /* eine kaputte Seite darf den Rest nicht verhindern */
+      }
+    }
+    const jetzt = this.profilBeitraege?.size ?? 0;
+    console.log(
+      `[reels-liste] ${name}: ${erg?.seiten ?? 0} Seite(n) in ${Date.now() - t0}ms -> ${jetzt - vorher} neue, ${jetzt} insgesamt` +
+        ` | mit Datum: ${[...(this.profilBeitraege?.values() ?? [])].filter((b) => b.zeitpunkt).length}`
+    );
+    await this.profilSchichtFuettern();
+  }
+
   async profilSchichtEinsetzen(seite) {
     if (!seite || seite.isClosed()) return false;
     return await seite
@@ -3131,6 +3621,7 @@ class Session {
         };
 
         const GOLD = "#EAC088";
+        const RF_ZEICHEN = "<g id=\"image\"> <path id=\"Vector\" d=\"M10.5675 -0.0493019C11.0464 -0.0610019 11.6633 0.0075006 12.1512 0.0476006C14.4093 1.7119 15.2749 4.536 14.6466 7.2327C14.2647 8.8719 12.5435 10.0918 11.1701 10.8877C12.3702 12.1897 15.3516 17.6277 15.9944 19.6258C16.028 19.7302 15.8725 19.8172 15.761 19.911C15.2174 20.0725 14.3985 20.0522 13.8515 19.8992C12.9339 19.6427 9.5776 13.5208 8.9327 12.3818C7.7341 10.5061 7.7211 10.7666 5.7661 10.1874C5.2931 10.0472 4.3051 8.2138 4.4837 7.6494C6.4184 7.2786 9.3768 8.1231 11.6275 7.0652C12.0475 5.5903 11.9625 4.7612 11.637 3.2932C10.9324 3.1075 10.2431 2.8994 9.5105 2.8784C8.1031 2.8381 2.6326 3.6354 1.822 2.9021C1.7446 2.8321 0.00489944 0.5505 -0.0156006 0.501C-0.0411006 0.4393 -0.0212997 0.367698 -0.0240997 0.301098C0.5428 -0.210202 2.9791 -0.0232021 3.8193 -0.0239021L10.5675 -0.0493019Z\" fill=\"#D28E4E\"/> <path id=\"Vector_2\" d=\"M16.2054 1.3185C16.4104 0.3232 16.6969 0.0518997 17.7447 -0.000900333C19.1155 -0.0698003 20.4966 0.00180081 21.8695 -0.0140992C23.218 0.0226008 24.7326 -0.0753008 26.0314 -0.0264008L26.0219 2.792C23.7052 2.8062 21.2586 2.7838 18.9513 2.8592C18.8627 4.5077 18.8768 5.562 19.0169 7.2235C20.5046 7.6126 23.5544 7.3852 25.1038 7.1776C24.7023 7.9229 23.7135 10.0291 22.9246 10.3692C22.3208 10.6294 19.6063 10.1755 19.21 10.4952C19.341 11.2892 19.3372 15.6072 18.9992 16.1811L18.9903 16.2743C18.4937 16.9509 17.5838 18.2448 17.0148 18.767C16.8097 18.8801 16.8028 18.8879 16.5795 18.8551C16.3679 18.6326 16.3547 18.1811 16.31 17.8538C16.1288 17.4528 16.0618 17.0073 16.0411 16.5704C15.8286 12.0968 15.9978 7.6179 16.006 3.1418C16.0071 2.5261 16.043 1.9144 16.2054 1.3185Z\" fill=\"#D28E4E\"/> <path id=\"Vector_3\" d=\"M16.2054 1.3185C16.5723 1.7617 16.4136 4.2574 16.3756 4.9188C16.1413 8.9979 16.4688 13.075 16.4942 17.1526C16.4952 17.3386 16.3815 17.6848 16.31 17.8538C16.1288 17.4528 16.0618 17.0073 16.0411 16.5704C15.8286 12.0968 15.9978 7.6179 16.006 3.1418C16.0071 2.5261 16.043 1.9144 16.2054 1.3185Z\" fill=\"#B77835\"/> <path id=\"Vector_4\" d=\"M19.21 10.4952C19.341 11.2892 19.3372 15.6072 18.9992 16.1811C18.6435 15.692 18.8942 11.0082 19.21 10.4952Z\" fill=\"#B77835\"/> </g>";
         const uhrzeitText = (t) => (t ? new Date(t * 1000).toLocaleTimeString("de-DE") : null);
 
         // Das Bild der Seite wird bei uns verkleinert gezeigt. Damit die
@@ -3138,6 +3629,15 @@ class Session {
         // groesser gebaut. RF.groesse setzt der Connector.
         RF.groesse = vergroesserung || 1;
         const px = (n) => `${(n * RF.groesse).toFixed(1)}px`;
+
+        // Wie gross das Schild auf der Kachel ist -- EINE Zahl fuer alles.
+        //
+        // Stand 10.10.2026: erst auf 0.45 ("5x kleiner"), dann auf
+        // Emres Wunsch wieder das Anderthalbfache davon. Groesser oder
+        // kleiner ist allein diese Zahl, nichts sonst: alle
+        // Schriftgroessen, Hoehen, Abstaende und Zeichen haengen daran.
+        const SCHILD = 0.675;
+        const pxS = (n) => px(n * SCHILD);
 
         // Das Schild auf der Kachel: einzelne RUNDE Pillen, untereinander
         // gestapelt, ALLE GLEICH BREIT, unten links. Oben die
@@ -3156,18 +3656,21 @@ class Session {
         function schild(b) {
           const stapel = document.createElement("div");
           stapel.style.cssText =
-            `display:flex;flex-direction:column;align-items:stretch;gap:${px(3.5)};` +
-            `font:700 ${px(12)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
+            `display:flex;flex-direction:column;align-items:stretch;gap:${pxS(4)};` +
+            `font:700 ${pxS(13)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
 
           const pille = (kinder, farbig) => {
             const z = document.createElement("div");
             z.style.cssText =
-              `display:flex;align-items:center;gap:${px(6)};` +
-              `padding:${px(5)} ${px(10)};border-radius:${px(999)};white-space:nowrap;` +
-              "font-variant-numeric:tabular-nums;" +
+              `display:flex;align-items:center;gap:${pxS(7)};` +
+              `padding:0 ${pxS(11)};height:${pxS(farbig ? 21 : 26)};border-radius:${pxS(999)};` +
+              "white-space:nowrap;font-variant-numeric:tabular-nums;" +
               (farbig
-                ? "background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;font-weight:800;"
-                : "background:rgba(17,17,20,.82);color:#fff;border:1px solid rgba(255,255,255,.07);");
+                ? // Die Rate sitzt oben als schmaleres, farbiges Band ueber
+                  // die volle Breite des Stapels -- wie in der Vorlage.
+                  `background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;` +
+                  `font-weight:800;font-size:${pxS(12)};`
+                : "background:rgba(17,17,20,.86);color:#fff;border:1px solid rgba(255,255,255,.08);");
             z.append(...kinder);
             return z;
           };
@@ -3175,8 +3678,8 @@ class Session {
           const bildEl = (name) => {
             const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             s.setAttribute("viewBox", "0 0 16 16");
-            s.setAttribute("width", px(12));
-            s.setAttribute("height", px(12));
+            s.setAttribute("width", pxS(13.5));
+            s.setAttribute("height", pxS(13.5));
             s.setAttribute("fill", "currentColor");
             s.style.cssText = "flex:none";
             s.innerHTML = ZEICHEN[name];
@@ -3241,7 +3744,17 @@ class Session {
             const gross = link.getBoundingClientRect();
             const bildDa = (() => {
               const i = link.querySelector("img");
-              return !!(i && i.complete && i.naturalWidth > 0);
+              if (i && i.complete && i.naturalWidth > 0) return true;
+              // Im REELS-Reiter ist das Vorschaubild kein <img>, sondern
+              // ein Hintergrundbild auf einem div (10.10.2026 gemessen:
+              // "mitBild: 0", obwohl die Kachel samt Bild da war). Nur die
+              // unmittelbaren Kinder ansehen -- tiefer zu suchen kostet
+              // Rechenzeit, und dort liegt es ohnehin nicht.
+              for (const kind of link.children) {
+                const hg = getComputedStyle(kind).backgroundImage;
+                if (hg && hg !== "none" && hg.includes("url(")) return true;
+              }
+              return false;
             })();
             const istKachel = gross.width >= 120 && gross.height >= 120 && bildDa;
             let vorhanden = link.querySelector(":scope > .rf-schild");
@@ -3251,9 +3764,36 @@ class Session {
               continue;
             }
             kacheln++;
-            const b = RF.daten.get(code);
+            let b = RF.daten.get(code);
 
-            // Kein Wert -> kein Schild. Lieber nichts als etwas Falsches.
+            // Noch keine Zahlen von Instagrams Antwort? Dann nehmen wir das,
+            // was auf der Kachel ohnehin schon steht.
+            //
+            // Im REELS-Reiter schreibt Instagram die Aufrufe selbst auf
+            // jede Kachel, lange bevor seine Antwort mit den uebrigen
+            // Zahlen eintrifft. Im normalen Raster kommen alle Zahlen mit
+            // der ersten Antwort, im Reels-Reiter erst Sekunden spaeter und
+            // nicht fuer alle -- deshalb blieben dort Kacheln leer
+            // (10.10.2026 gemessen: 15 Kacheln, 0 bekannt).
+            //
+            // Das ist keine Schaetzung: es ist Instagrams eigene Zahl,
+            // abgelesen statt erfunden. Sobald die richtige Antwort da ist,
+            // ersetzt sie diese Notloesung.
+            if (!b) {
+              const roh = link.innerText || "";
+              const treffer = roh.match(/(\d[\d.,]*)\s*([KMB])?/);
+              if (treffer) {
+                const grund = parseFloat(treffer[1].replace(/,/g, ""));
+                const faktor = { K: 1e3, M: 1e6, B: 1e9 }[treffer[2]] ?? 1;
+                if (Number.isFinite(grund) && grund > 0) {
+                  b = { code, likes: null, kommentare: null, reposts: null,
+                        aufrufe: Math.round(grund * faktor), zeitpunkt: null,
+                        dauer: null, verborgen: false, vonDerKachel: true };
+                }
+              }
+            }
+
+            // Immer noch nichts -> kein Schild. Lieber nichts als Falsches.
             if (!b) {
               if (vorhanden) vorhanden.remove();
               continue;
@@ -3263,7 +3803,7 @@ class Session {
               vorhanden.remove();
               vorhanden = null;
             }
-            const stand = [code, b.likes, b.kommentare, b.aufrufe, b.reposts, b.zeitpunkt, b.dauer].join("|");
+            const stand = [code, b.likes, b.kommentare, b.aufrufe, b.reposts, b.zeitpunkt, b.dauer, b.vonDerKachel].join("|");
             if (vorhanden && vorhanden.dataset.stand === stand) {
               beschriftet++;
               continue;
@@ -3271,7 +3811,7 @@ class Session {
             if (!vorhanden) {
               vorhanden = document.createElement("div");
               vorhanden.className = "rf-schild";
-              vorhanden.style.cssText = `position:absolute;left:${px(9)};bottom:${px(9)};z-index:20;pointer-events:none`;
+              vorhanden.style.cssText = `position:absolute;left:${pxS(10)};bottom:${pxS(10)};z-index:20;pointer-events:none`;
               if (getComputedStyle(link).position === "static") link.style.position = "relative";
               link.appendChild(vorhanden);
             }
@@ -3282,6 +3822,7 @@ class Session {
             beschriftet++;
           }
           RF.stand = { kacheln, beschriftet, bekannt: RF.daten.size };
+          RF.zuletztGezeichnet = Date.now();
           try { RF.leisteSetzen(); } catch { /* Darstellung darf nie stoeren */ }
           try { RF.sortierungAnwenden(); } catch { /* dito */ }
         };
@@ -3426,34 +3967,127 @@ class Session {
           if (!behaelter || !behaelter.parentElement) return;
           let leiste = document.getElementById("rf-leiste");
           if (!leiste) {
+            // Die Leiste ist Stueck fuer Stueck nach Emres Vorlage gebaut
+            // (10.10.2026, Bild 3): flacher, stark abgerundeter Balken;
+            // links ein Punkt und der Name, daneben die Schalter als
+            // vollrunde Pillen, rechts die Werkzeuge als runde Knoepfe,
+            // abgetrennt durch einen feinen Strich. Nur die Farben sind
+            // unsere: neutrales Schwarz statt Weiss, Gold statt Blau.
+            //
+            // ACHTUNG: Datumsbereich, Automatische Analyse und die
+            // Werkzeuge rechts sind bisher NUR DARSTELLUNG -- dahinter
+            // liegt noch keine Funktion. Emre wollte die Leiste zuerst
+            // vollstaendig sehen und danach entscheiden, was bleibt.
+            const WERKZEUG = {
+              kalender: '<path d="M5 1.5v1.2h6V1.5h1.5v1.2H13A1.5 1.5 0 0 1 14.5 4.2v8.3A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.2A1.5 1.5 0 0 1 3 2.7h.5V1.5zM3 6.4v6.1h10V6.4z"/>',
+              saeulen: '<path d="M2 9h2.4v5H2zM6.8 5h2.4v9H6.8zM11.6 2H14v12h-2.4z"/>',
+              schichten: '<path d="M8 1.5 15 5.2 8 8.9 1 5.2zM1 8l7 3.7L15 8l-1.9-1L8 9.6 2.9 7zM1 10.8l7 3.7 7-3.7-1.9-1L8 12.4l-5.1-2.6z"/>',
+              stift: '<path d="M8 1.5a2.3 2.3 0 0 1 2.3 2.3v3.4a2.3 2.3 0 0 1-4.6 0V3.8A2.3 2.3 0 0 1 8 1.5zM3.6 7.2h1.5a2.9 2.9 0 0 0 5.8 0h1.5a4.4 4.4 0 0 1-3.6 4.3v1.6h2v1.4H5.2v-1.4h2v-1.6a4.4 4.4 0 0 1-3.6-4.3z"/>',
+              raster: '<path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/>',
+              runter: '<path d="M7.3 1.5h1.4v8.2l3-3 1 1L8 12.4 3.3 7.7l1-1 3 3zM2.5 13h11v1.4h-11z"/>',
+              rauf: '<path d="M8 1.6l4.7 4.7-1 1-3-3V12.5H7.3V4.3l-3 3-1-1zM2.5 13.6h11V15h-11z"/>',
+            };
+
+            const bildchen = (name, farbe) => {
+              const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+              s.setAttribute("viewBox", "0 0 16 16");
+              s.setAttribute("width", px(13));
+              s.setAttribute("height", px(13));
+              s.setAttribute("fill", farbe || "currentColor");
+              s.style.cssText = "flex:none";
+              s.innerHTML = WERKZEUG[name];
+              return s;
+            };
+
             leiste = document.createElement("div");
             leiste.id = "rf-leiste";
             leiste.style.cssText =
-              `display:flex;align-items:center;gap:${px(12)};flex-wrap:wrap;` +
-              `margin:0 0 ${px(12)};padding:${px(10)} ${px(14)};border-radius:${px(14)};` +
-              "background:linear-gradient(180deg,rgba(10,10,12,.96),rgba(6,6,7,.98));" +
-              `border:1px solid rgba(255,255,255,.10);box-shadow:0 ${px(8)} ${px(28)} rgba(0,0,0,.45);` +
-              `font:500 ${px(15)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#fff`;
+              `display:flex;align-items:center;gap:${px(7)};flex-wrap:nowrap;` +
+              `max-width:100%;overflow:hidden;` +
+              `margin:${px(9)} 0;padding:${px(6)} ${px(11)};border-radius:${px(13)};` +
+              "background:#0b0b0d;border:1px solid rgba(255,255,255,.08);" +
+              `box-shadow:0 ${px(4)} ${px(14)} rgba(0,0,0,.35);` +
+              `font:500 ${px(13)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#fff`;
 
+            // --- links: Punkt + Name ---------------------------------
+            const kopf = document.createElement("div");
+            kopf.style.cssText = `display:flex;align-items:center;gap:${px(8)};margin-right:${px(2)};flex:none`;
+            // Unser eigenes Zeichen statt des Punktes -- derselbe Platz, an
+            // dem die Vorlage ihr blaues Puenktchen hat. Der Pfad ist hier
+            // fest eingebaut, weil die Seite drueben Instagram gehoert und
+            // unsere Dateien dort nicht erreichbar sind.
+            const zeichen = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            zeichen.setAttribute("viewBox", "0 0 26 20");
+            zeichen.setAttribute("width", px(17));
+            zeichen.setAttribute("height", px(13));
+            zeichen.setAttribute("fill", "none");
+            zeichen.style.cssText = "flex:none";
+            zeichen.innerHTML = RF_ZEICHEN;
             const marke = document.createElement("div");
             marke.textContent = "ReelForge Research";
-            marke.style.cssText = `color:${GOLD};font-weight:700;font-size:${px(15)};letter-spacing:.02em`;
+            marke.style.cssText = `color:#fff;font-weight:700;font-size:${px(11.5)};letter-spacing:.01em;white-space:nowrap`;
+            kopf.append(zeichen, marke);
 
-            const knopf = (text) => {
+            // --- die Pillen -------------------------------------------
+            const pilleKnopf = (text, zeichen) => {
               const b2 = document.createElement("button");
               b2.type = "button";
-              b2.textContent = text;
               b2.style.cssText =
-                `padding:${px(8)} ${px(14)};border-radius:${px(10)};cursor:pointer;` +
-                "background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);" +
-                `color:#fff;font:600 ${px(14)}/1 inherit`;
+                `display:flex;align-items:center;gap:${px(6)};flex:none;` +
+                `padding:0 ${px(13)};height:${px(29)};border-radius:${px(999)};cursor:pointer;` +
+                "background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.10);" +
+                `color:rgba(255,255,255,.92);font:600 ${px(13)}/1 inherit;white-space:nowrap`;
+              if (zeichen) b2.appendChild(bildchen(zeichen));
+              const s = document.createElement("span");
+              s.textContent = text;
+              b2.appendChild(s);
+              b2.__text = s;
               return b2;
             };
 
-            const feldKnopf = knopf("Sortierung: Aus");
-            const richtungKnopf = knopf("Absteigend");
-            const stand = document.createElement("div");
-            stand.style.cssText = `margin-left:auto;font-size:${px(13)};color:rgba(255,255,255,.55)`;
+            const feldKnopf = pilleKnopf("Deaktiviert");
+            const richtungKnopf = pilleKnopf("Aufsteigend");
+            const datumKnopf = pilleKnopf("Beliebiges Datum", "kalender");
+
+            // --- der hervorgehobene Knopf (bei ihnen blau) -------------
+            const analyse = document.createElement("button");
+            analyse.type = "button";
+            analyse.style.cssText =
+              `display:flex;align-items:center;gap:${px(6)};margin-left:auto;flex:none;` +
+              `padding:0 ${px(14)};height:${px(29)};border-radius:${px(999)};cursor:pointer;` +
+              "background:linear-gradient(180deg,#EAC088,#D39448);border:1px solid rgba(0,0,0,.2);" +
+              `color:#231704;font:600 ${px(13)}/1 inherit;white-space:nowrap`;
+            analyse.appendChild(bildchen("saeulen", "#231704"));
+            const analyseText = document.createElement("span");
+            analyseText.textContent = "Automatische Analyse";
+            analyse.appendChild(analyseText);
+
+            // --- die runden Werkzeuge ---------------------------------
+            const rundKnopf = (zeichen, gefuellt) => {
+              const b2 = document.createElement("button");
+              b2.type = "button";
+              b2.style.cssText =
+                `display:flex;align-items:center;justify-content:center;flex:none;` +
+                `width:${px(29)};height:${px(29)};border-radius:${px(999)};cursor:pointer;border:none;` +
+                (gefuellt
+                  ? "background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;"
+                  : "background:transparent;color:rgba(255,255,255,.62);");
+              b2.appendChild(bildchen(zeichen, gefuellt ? "#231704" : "#fff"));
+              return b2;
+            };
+
+            const strich = document.createElement("span");
+            strich.style.cssText =
+              `width:1px;height:${px(18)};background:rgba(255,255,255,.12);margin:0 ${px(3)};flex:none`;
+
+            // --- Verhalten: nur die beiden echten Schalter -------------
+            const feldZeigen = (name, an) => {
+              feldKnopf.__text.textContent = name;
+              feldKnopf.style.background = an ? GOLD : "rgba(255,255,255,.04)";
+              feldKnopf.style.borderColor = an ? GOLD : "rgba(255,255,255,.12)";
+              feldKnopf.style.color = an ? "#231704" : "#fff";
+              feldKnopf.style.fontWeight = an ? "700" : "500";
+            };
 
             feldKnopf.addEventListener("click", (ev) => {
               ev.preventDefault();
@@ -3461,9 +4095,7 @@ class Session {
               const i = FELDER.findIndex((f) => f.schluessel === RF.sortierung.feld);
               const naechste = FELDER[(i + 1) % FELDER.length];
               RF.sortierung.feld = naechste.schluessel;
-              feldKnopf.textContent = `Sortierung: ${naechste.name}`;
-              feldKnopf.style.background = naechste.schluessel ? "rgba(234,192,136,.18)" : "rgba(255,255,255,.07)";
-              feldKnopf.style.borderColor = naechste.schluessel ? "rgba(234,192,136,.45)" : "rgba(255,255,255,.13)";
+              feldZeigen(naechste.schluessel ? naechste.name : "Deaktiviert", !!naechste.schluessel);
               RF.sortierungAnwenden();
             });
 
@@ -3471,17 +4103,74 @@ class Session {
               ev.preventDefault();
               ev.stopPropagation();
               RF.sortierung.richtung = RF.sortierung.richtung === "ab" ? "auf" : "ab";
-              richtungKnopf.textContent = RF.sortierung.richtung === "ab" ? "Absteigend" : "Aufsteigend";
+              richtungKnopf.__text.textContent = RF.sortierung.richtung === "ab" ? "Absteigend" : "Aufsteigend";
               RF.sortierungAnwenden();
             });
+            richtungKnopf.__text.textContent = RF.sortierung.richtung === "ab" ? "Absteigend" : "Aufsteigend";
 
-            leiste.append(marke, feldKnopf, richtungKnopf, stand);
-            RF.leisteStand = stand;
+            // Gruppen statt einer Reihe gleicher Abstaende -- genau wie in
+            // der Vorlage: der hervorgehobene Knopf und der gefuellte
+            // Schichten-Knopf gehoeren zusammen, die drei schlichten
+            // Werkzeuge stehen dicht daneben, und die letzten beiden
+            // sitzen abgetrennt in einem eigenen Rahmen.
+            const gruppe = (abstand) => {
+              const g = document.createElement("div");
+              g.style.cssText = `display:flex;align-items:center;gap:${px(abstand)};flex:none`;
+              return g;
+            };
+
+            const rechts = gruppe(5);
+            rechts.style.marginLeft = "auto";
+            analyse.style.marginLeft = "0";
+            const werkzeuge = gruppe(1);
+            werkzeuge.append(rundKnopf("saeulen"), rundKnopf("stift"), rundKnopf("raster"));
+            rechts.append(analyse, rundKnopf("schichten", true), werkzeuge);
+
+            const letzte = gruppe(1);
+            letzte.style.cssText +=
+              `;padding:${px(2)};border-radius:${px(999)};border:1px solid rgba(255,255,255,.10)`;
+            letzte.append(rundKnopf("runter"), rundKnopf("rauf"));
+
+            leiste.append(kopf, feldKnopf, richtungKnopf, datumKnopf, rechts, strich, letzte);
+            // Der Stand haengt jetzt unter der Leiste, weil rechts kein
+            // Platz mehr ist -- die Vorlage hat ihn dort auch nicht.
+            RF.leisteStand = null;
           }
           if (leiste.nextElementSibling !== behaelter) behaelter.parentElement.insertBefore(leiste, behaelter);
           if (RF.leisteStand && RF.stand) {
             RF.leisteStand.textContent = `${RF.stand.beschriftet} von ${RF.stand.kacheln} Kacheln mit Daten`;
           }
+        };
+
+        // Nur zum Nachsehen (10.10.2026): im Reels-Reiter fand die Schicht
+        // null Kacheln. Hier wird Stufe fuer Stufe gezaehlt, woran es
+        // scheitert -- Link, Groesse oder Bild. Fliegt danach raus.
+        RF.warum = function () {
+          const links = [...document.querySelectorAll("a[href]")];
+          const aufBeitrag = links.filter((a) => /\/(p|reel)\//.test(a.getAttribute("href") || ""));
+          const kacheln = aufBeitrag.filter((a) => {
+            const r = a.getBoundingClientRect();
+            if (r.width < 120 || r.height < 120) return false;
+            const i = a.querySelector("img");
+            if (i && i.complete && i.naturalWidth > 0) return true;
+            for (const kind of a.children) {
+              const hg = getComputedStyle(kind).backgroundImage;
+              if (hg && hg !== "none" && hg.includes("url(")) return true;
+            }
+            return false;
+          });
+          const codes = kacheln.map((a) => {
+            const m = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
+            return m ? m[1] : null;
+          });
+          const fehlen = codes.filter((c) => c && !RF.daten.has(c));
+          return {
+            aufBeitrag: aufBeitrag.length,
+            kacheln: kacheln.length,
+            bekannt: RF.daten.size,
+            ohneZahlen: fehlen.length,
+            beispieleOhneZahlen: fehlen.slice(0, 5),
+          };
         };
 
         RF.aufbau = function () {
@@ -3594,6 +4283,7 @@ class Session {
       }, daten)
       .catch(() => null);
     if (stand) this.profilSchichtStand = stand;
+    console.log(`[forschung] gefuettert mit ${daten.length} -> ${JSON.stringify(stand)}`);
   }
 
   async profilBedienen(art, x, y) {
@@ -3902,7 +4592,17 @@ class Session {
       .catch((e) => console.log(`[profil] doppelte Punktdichte nicht moeglich: ${e?.message}`));
 
     await cdp
-      .send("Page.startScreencast", { format: "jpeg", quality: 72, everyNthFrame: 1 })
+      // Qualitaet 92 statt 72.
+      //
+      // Die Aufloesung war nie das Problem: mit doppelter Punktdichte
+      // gehen 3840 Bildpunkte raus, Emres Flaeche zeigt rund 2860. Was die
+      // Seite billig aussehen liess, war die Komprimierung -- 72 macht
+      // Schrift matschig und ruhige Flaechen fleckig (10.10.2026 von ihm
+      // gemeldet, hier nachgemessen).
+      //
+      // Der Preis sind groessere Bilder. Das faellt nicht ins Gewicht: der
+      // Strom laeuft ueber den eigenen Rechner, nicht uebers Netz.
+      .send("Page.startScreencast", { format: "jpeg", quality: 92, everyNthFrame: 1 })
       .catch(() => {});
     console.log(`[profil] session ${this.id}: Bildstrom laeuft.`);
     return true;
@@ -3933,6 +4633,13 @@ class Session {
     if (this.profilNetzCdp) {
       await this.profilNetzCdp.detach().catch(() => {});
       this.profilNetzCdp = null;
+    }
+    clearInterval(this.forschungPuls);
+    this.forschungPuls = null;
+    if (this.profilHilfsSeite) {
+      const h = this.profilHilfsSeite;
+      this.profilHilfsSeite = null;
+      await h.close().catch(() => {});
     }
     this.profilBeitraege = null;
     this.profilSchichtStand = null;
