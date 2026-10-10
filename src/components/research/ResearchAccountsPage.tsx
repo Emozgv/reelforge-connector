@@ -239,21 +239,20 @@ function mostRecentlyOpened(accounts: ResearchAccount[]): ResearchAccount | null
   );
 }
 
-const STATUS_LABEL: Record<ResearchAccount["status"], string> = {
-  connecting: "Connecting…",
-  active: "Active",
-  needs_attention: "Needs attention",
-  disconnected: "Disconnected",
-};
-const STATUS_DOT: Record<ResearchAccount["status"], string> = {
-  connecting: "bg-amber-400 animate-pulse",
-  active: "bg-emerald-400 pulse-live",
-  needs_attention: "bg-amber-400",
-  disconnected: "bg-neutral-600",
-};
-const STATUS_DOT_PULSE_COLOR: Partial<Record<ResearchAccount["status"], string>> = {
-  active: "rgba(52,211,153,0.55)",
-};
+// Der Verbindungszustand des Accounts faerbte frueher den Punkt am Chip.
+// Seit dem 10.10.2026 zeigt der Punkt stattdessen, ob gerade jemand auf dem
+// Account forscht. Ein Account, der Aufmerksamkeit braucht, ist weiterhin
+// daran zu erkennen, dass neben ihm der Reconnect-Pfeil erscheint.
+
+// Laeuft auf diesem Account gerade eine Research-Sitzung? Die Sperre liegt
+// auf dem Server und wird waehrend einer Sitzung immer wieder verlaengert;
+// beim Beenden gibt ReelForge sie frei. Abgelaufen heisst also: niemand ist
+// mehr drin.
+function istLive(a: ResearchAccount): boolean {
+  if (!a.liveLockExpiresAt) return false;
+  const bis = new Date(a.liveLockExpiresAt).getTime();
+  return Number.isFinite(bis) && bis > Date.now();
+}
 
 // Connector Status chip's reachability, derived straight from the same
 // LiveSessionStatus the player already uses for its own "Connector needs to
@@ -760,6 +759,15 @@ export function ResearchAccountsPage({
     else setBeginn(null);
   }, [liveSession.status]);
 
+  // Startet oder beendet man selbst eine Sitzung, soll der Punkt am Chip
+  // sofort umspringen und nicht erst beim naechsten Nachsehen. Fuer die
+  // anderen im Workspace erledigt das der regelmaessige Blick in
+  // useResearchAccounts.
+  useEffect(() => {
+    void researchAccountsStore.refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveSession.status]);
+
   // Einmal pro Sekunde neu zeichnen, damit die Dauer mitlaeuft. Nur solange
   // eine Sitzung steht -- sonst taeten wir das rund um die Uhr.
   useEffect(() => {
@@ -924,11 +932,25 @@ export function ResearchAccountsPage({
             >
               <PlatformIcon platform={a.platform} size={12} />
               <span className="text-[12.5px]">{a.label}</span>
-              <span
-                className={["w-2 h-2 rounded-full shrink-0", STATUS_DOT[a.status]].join(" ")}
-                title={STATUS_LABEL[a.status]}
-                style={{ ["--pulse-live-color" as string]: STATUS_DOT_PULSE_COLOR[a.status] }}
-              />
+              {/* Der Punkt sagt EINE Sache: laeuft gerade eine Research-Sitzung
+                  auf diesem Account? Gruen heisst "jemand ist gerade drin",
+                  rot "frei". Die Auskunft kommt vom Server, deshalb sieht
+                  eine Kollegin im anderen Land dasselbe wie du -- und sie
+                  erkennt, dass der Account gerade benutzt wird.
+                  (Von Emre am 10.10.2026 so festgelegt; vorher stand hier
+                  der Verbindungszustand des Accounts.) */}
+              {(() => {
+                const besetzt = istLive(a);
+                return (
+                  <span
+                    className={["w-2 h-2 rounded-full shrink-0", besetzt ? "bg-emerald-400 pulse-live" : "bg-rose-500"].join(" ")}
+                    title={besetzt
+                      ? `In use${a.liveLockLabel ? ` by ${a.liveLockLabel}` : ""} right now`
+                      : "No research session running"}
+                    style={besetzt ? { ["--pulse-live-color" as string]: "rgba(52,211,153,0.55)" } : undefined}
+                  />
+                );
+              })()}
               {(a.status === "needs_attention" || a.status === "disconnected") && (
                 <button
                   onClick={async (e) => {

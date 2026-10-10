@@ -516,6 +516,17 @@ export function SwipeResearchPlayer({
   // Mitarbeiter den Ton selbst anmacht. Die Verweildauer zaehlt Instagram
   // unabhaengig davon.
   const [stumm, setStumm] = useState(true);
+  // ... und JEDE neue Sitzung faengt wieder stumm an.
+  //
+  // Der Player bleibt beim Beenden stehen, er wird nicht neu aufgebaut --
+  // also trug er den Tonschalter der vorigen Sitzung einfach weiter. Wer
+  // einmal laut gestellt hatte, bekam die naechste Sitzung sofort mit Ton,
+  // ohne den Knopf zu druecken (am 10.10.2026 von Emre gemeldet; auf der
+  // Senderseite war nachweislich alles in Ordnung, 33 von 33 Messpunkten
+  // mit lebendiger Tonspur).
+  useEffect(() => {
+    setStumm(true);
+  }, [sitzung?.sessionId]);
   // Haelt Instagrams Reel gerade an? Kommt vom Connector zurueck, nicht
   // geraten -- er liest nach dem Tipp nach, was Instagram daraus gemacht hat.
   const [pausiert, setPausiert] = useState(false);

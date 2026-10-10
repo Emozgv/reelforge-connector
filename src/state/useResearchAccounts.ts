@@ -18,12 +18,22 @@ interface ResearchAccountRow {
   action_status: string | null;
   action_error: string | null;
   action_completed_at: string | null;
+  // Wer gerade live auf diesem Account ist. Steht auf dem Server, also
+  // sieht es jeder im Workspace -- nicht nur, wer die Sitzung gestartet hat.
+  live_lock_label: string | null;
+  live_lock_expires_at: string | null;
 }
 
 // Up to 5 per Creator per platform — same cap style as the 5-reference-photo
 // limit on Creators, enforced client-side (and authoritatively, again, by
 // connect-research-account server-side).
 export const MAX_RESEARCH_ACCOUNTS_PER_PLATFORM = 5;
+
+// Wie oft nachgesehen wird, ob jemand im Workspace gerade eine
+// Research-Sitzung laufen hat. Zehn Sekunden: schnell genug, dass eine
+// Kollegin es praktisch sofort sieht, und selten genug, dass es nicht ins
+// Gewicht faellt.
+const LIVE_PUNKT_POLL_MS = 10_000;
 
 function fromRow(row: ResearchAccountRow): ResearchAccount {
   return {
@@ -42,6 +52,8 @@ function fromRow(row: ResearchAccountRow): ResearchAccount {
     actionStatus: row.action_status === "done" || row.action_status === "failed" ? row.action_status : undefined,
     actionError: row.action_error ?? undefined,
     actionCompletedAt: row.action_completed_at ?? undefined,
+    liveLockLabel: row.live_lock_label ?? undefined,
+    liveLockExpiresAt: row.live_lock_expires_at ?? undefined,
   };
 }
 
@@ -115,6 +127,41 @@ export function useResearchAccounts(workspaceId: string | undefined) {
     return () => {
       active = false;
     };
+  }, [workspaceId]);
+
+  // Der Punkt am Account-Chip soll zeigen, ob GERADE jemand auf dem Account
+  // forscht -- auch wenn das eine Kollegin in einem anderen Land ist. Dafuer
+  // muss die Liste von selbst nachsehen, sonst erfuehre man davon erst beim
+  // naechsten Seitenwechsel.
+  //
+  // Neu gezeichnet wird nur, wenn sich wirklich etwas aendert. Der
+  // Herzschlag einer laufenden Sitzung schiebt die Ablaufzeit der Sperre
+  // staendig weiter -- wuerde man darauf reagieren, zeichnete die Seite
+  // waehrend des Reel-Schauens alle paar Sekunden neu, ohne dass sich fuer
+  // den Betrachter etwas aendert.
+  useEffect(() => {
+    if (!workspaceId) return;
+    const fingerabdruck = (liste: ResearchAccount[]) =>
+      liste
+        .map((a) => {
+          const { liveLockExpiresAt, ...rest } = a;
+          const live = !!liveLockExpiresAt && new Date(liveLockExpiresAt).getTime() > Date.now();
+          return JSON.stringify({ ...rest, live });
+        })
+        .join("|");
+
+    const t = window.setInterval(async () => {
+      const { data } = await supabase
+        .schema("client_os")
+        .from("research_accounts")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: true });
+      if (!data) return;
+      const next = (data as ResearchAccountRow[]).map(fromRow);
+      setAccounts((prev) => (fingerabdruck(prev) === fingerabdruck(next) ? prev : next));
+    }, LIVE_PUNKT_POLL_MS);
+    return () => window.clearInterval(t);
   }, [workspaceId]);
 
   function countFor(creatorId: string, platform: Platform): number {

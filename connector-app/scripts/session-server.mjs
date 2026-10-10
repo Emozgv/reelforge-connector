@@ -1292,7 +1292,8 @@ function parseCommentLines(lines) {
       j++;
     }
     const text = textParts.join(" ").trim();
-    if (text) comments.push({ id: `${username}-${i}`, username, text, postedAt: null, likeCount });
+    // avatar: der abgelesene Bildschirmtext traegt kein Bild (10.10.2026).
+    if (text) comments.push({ id: `${username}-${i}`, username, text, postedAt: null, likeCount, avatar: null, verifiziert: false });
     i = j > i ? j : i + 1;
   }
   return comments;
@@ -2590,7 +2591,7 @@ class Session {
   // already-known current reel rather than this.current(), so a slow
   // fetch that resolves after the VA has already moved on can't silently
   // attach comments to the wrong reel — the client checks the id itself.
-  async comments(reelId, sourceUrl, abMarke) {
+  async comments(reelId, sourceUrl, abMarke, sortierung) {
     if (!sourceUrl) return { available: false, comments: [] };
 
     // SCHNELLER WEG (09.10.2026, Emres Idee): Kommentare ueber Instagrams
@@ -2603,21 +2604,65 @@ class Session {
     // als saubere Daten statt als abgelesenen Bildschirmtext.
     //
     // Klappt sie nicht, bleibt der alte Weg darunter unveraendert stehen.
-    const bekannt =
+    // Der schnelle Weg braucht zweierlei: Instagrams Nummer zum Reel und
+    // eine stehende Buehne. Beides ist beim Sitzungsstart einen Moment lang
+    // noch nicht da -- und genau dann sprang frueher sofort der alte
+    // Ableseweg ein. Der liefert Kommentare ohne Profilbild, ohne Alter und
+    // ohne Nachladen; beim ersten Reel einer Sitzung sah man das (von Emre
+    // am 10.10.2026 gemeldet).
+    //
+    // Jetzt wird gewartet, statt etwas Schlechteres zu tun. Erst wenn nach
+    // 15 Sekunden immer noch nichts da ist, greift der alte Weg -- so von
+    // Emre festgelegt.
+    const KOMMENTARE_FRIST_MS = 15_000;
+    const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+    const nachschlagen = () =>
       this.history.find((r) => r.id === reelId) ??
       this.pending.find((r) => r.id === reelId) ??
       this.katalog.get(reelId) ??
       null;
+
+    let bekannt = nachschlagen();
+    if (!bekannt?.pk || !this.buehneSteht) {
+      const beginn = Date.now();
+      while ((!bekannt?.pk || !this.buehneSteht) && Date.now() - beginn < KOMMENTARE_FRIST_MS) {
+        await warte(150);
+        bekannt = nachschlagen();
+      }
+      const gedauert = Date.now() - beginn;
+      if (bekannt?.pk && this.buehneSteht) {
+        console.log(`[kommentare] ${reelId}: ${gedauert}ms gewartet, dann schneller Weg.`);
+      } else {
+        console.log(`[kommentare] ${reelId}: nach ${gedauert}ms immer noch nichts (pk=${bekannt?.pk ?? "fehlt"}, buehneSteht=${this.buehneSteht}) -- alter Ableseweg.`);
+      }
+    }
+    // "For you" ist Instagrams Normalfall -- ohne Zusatz. Die beiden
+    // anderen bekommen einen Zusatz mit; ob Instagram genau darauf hoert,
+    // ist noch nicht gemessen (siehe Hinweis weiter unten).
+    const sortParam =
+      sortierung === "neueste" ? "sort_order=recent" :
+      sortierung === "meta-verified" ? "sort_order=meta_verified" :
+      null;
+
     if (bekannt?.pk && this.buehneSteht) {
       const schnell = await this.page
-        .evaluate(async ({ nr, abMarke }) => {
+        .evaluate(async ({ nr, abMarke, sortParam }) => {
           try {
             // Instagram gibt zu jeder Antwort eine Marke mit, ab der die
             // naechsten Kommentare beginnen. Damit laesst sich beim Scrollen
             // nachladen, genau wie Instagram es selbst tut (09.10.2026).
-            const adresse = abMarke
-              ? `/api/v1/media/${nr}/comments/?min_id=${encodeURIComponent(abMarke)}`
-              : `/api/v1/media/${nr}/comments/`;
+            const teile = [];
+            if (abMarke) teile.push(`min_id=${encodeURIComponent(abMarke)}`);
+            // Instagrams eigene Sortierung. "For you" ist der Normalfall und
+            // braucht keinen Zusatz -- genau das holen wir schon immer.
+            // BELEGT am 10.10.2026, gleiches Reel, Sekunden auseinander:
+            // For you brachte 5 von 15 Kommentaren mit blauem Haken,
+            // Meta Verified 12 von 12. Newest liefert sichtbar die
+            // juengsten. Alle drei wirken also wirklich.
+            // Beim Nachladen gilt das nur, solange Instagram noch passende
+            // hat -- danach fuellt es mit gewoehnlichen auf.
+            if (sortParam) teile.push(sortParam);
+            const adresse = `/api/v1/media/${nr}/comments/${teile.length ? `?${teile.join("&")}` : ""}`;
             const r = await fetch(adresse, {
               headers: { "X-IG-App-ID": "936619743392459" },
               credentials: "include",
@@ -2637,19 +2682,46 @@ class Session {
                 text: typeof c.text === "string" ? c.text : "",
                 likeCount: typeof c.comment_like_count === "number" ? c.comment_like_count : null,
                 postedAt: typeof c.created_at === "number" ? c.created_at : null,
+                // Das Profilbild liegt der Antwort bei und wurde hier
+                // frueher einfach weggeworfen (10.10.2026, Emres Frage).
+                // Die Adresse ist befristet wie alle Instagram-Bilder --
+                // fuer die laufende Sitzung reicht das, denn die Kommentare
+                // werden ohnehin nur jetzt angezeigt und nicht archiviert.
+                avatar: typeof c.user?.profile_pic_url === "string" ? c.user.profile_pic_url : null,
+                // Das blaue Haekchen. Liegt derselben Antwort bei und macht
+                // ueberhaupt erst nachpruefbar, wen Instagram bei
+                // "Meta Verified" zurueckgibt (10.10.2026, Emres Einwand:
+                // ohne Haeckchen laesst sich nicht beweisen, dass der
+                // Filter wirklich greift).
+                verifiziert: c.user?.is_verified === true,
               })).filter((c) => c.text && c.username),
             };
           } catch (e) { return { fehler: String(e?.message ?? e) }; }
-        }, { nr: bekannt.pk, abMarke })
+        }, { nr: bekannt.pk, abMarke, sortParam })
         .catch((e) => ({ fehler: String(e?.message ?? e) }));
       // Wichtig: "keine Kommentare" ist kein Fehlschlag. Ein Reel ohne
       // Kommentare liefert eine leere Liste -- faellt man darauf zurueck,
       // oeffnet ReelForge eine zweite Seite fuer nichts. Nur ein echter
       // Fehler fuehrt zum alten Weg (Emres Einwand, 09.10.2026).
       if (Array.isArray(schnell?.kommentare)) {
-        console.log(`[kommentare] ${reelId}: ${schnell.kommentare.length} ueber die Adresse geholt${schnell.naechste ? ", weitere vorhanden" : ""}.`);
+        // MESSUNG (10.10.2026): die ersten Nummern mitschreiben. Nur daran
+        // laesst sich sehen, ob eine andere Sortierung wirklich eine andere
+        // Reihenfolge bringt -- oder ob Instagram den Zusatz ignoriert.
+        const erste = schnell.kommentare.slice(0, 3).map((k) => k.id).join(",");
+        const haken = schnell.kommentare.filter((k) => k.verifiziert).length;
+        console.log(`[kommentare] ${reelId}: ${schnell.kommentare.length} ueber die Adresse geholt${schnell.naechste ? ", weitere vorhanden" : ""} | sortierung=${sortierung ?? "fuer-dich"} | verifiziert=${haken}/${schnell.kommentare.length} | erste=${erste}`);
         return { available: true, comments: schnell.kommentare, reelId, naechste: schnell.naechste ?? null };
       }
+
+      // Scheitert es MIT Sortierung, liegt es sehr wahrscheinlich am
+      // unbewiesenen Zusatz. Dann lieber einmal ohne ihn nachfragen, als
+      // eine zweite Instagram-Seite zu oeffnen -- das kostet Sekunden.
+      if (sortParam) {
+        console.log(`[kommentare] ${reelId}: mit sortierung=${sortierung} fehlgeschlagen (${schnell?.fehler ?? "?"}) -- einmal ohne Sortierung.`);
+        const ohne = await this.comments(reelId, sourceUrl, abMarke, null);
+        return { ...ohne, sortierungUnwirksam: true };
+      }
+
       console.log(`[kommentare] ${reelId}: schneller Weg fehlgeschlagen (${schnell?.fehler ?? "?"}) -- zweite Seite wird geoeffnet.`);
     }
 
@@ -2961,7 +3033,7 @@ const server = http.createServer(async (req, res) => {
     const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
 
@@ -3024,7 +3096,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, result);
       }
       if (action === "comments") {
-        const result = await session.comments(reelId, sourceUrl, wert ?? null);
+        const result = await session.comments(reelId, sourceUrl, wert ?? null, sortierung ?? null);
         if (!result.available) console.error(`[comments] session ${id} unavailable for reel ${reelId ?? "(unknown)"}: ${result.error ?? "no comments response captured"}`);
         return json(res, 200, result);
       }

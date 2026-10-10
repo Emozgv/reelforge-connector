@@ -55,12 +55,22 @@ const UPDATE_PRECHECK_MAX_MS = 1600;
 const NEXT_RETRY_TOTAL_MS = 90_000;
 const NEXT_RETRY_GAP_MS = 500;
 
+// Instagrams eigene Kommentar-Sortierung, dieselben drei Moeglichkeiten,
+// die Instagram Web oben im Kommentarfenster anbietet.
+export type KommentarSortierung = "fuer-dich" | "neueste" | "meta-verified";
+
 export interface LiveComment {
   id: string;
   username: string | null;
   text: string;
   postedAt: number | null;
   likeCount: number | null;
+  // Instagrams Profilbild des Kommentierenden. Nur bei Kommentaren, die
+  // ueber Instagrams eigene Adresse kommen -- der alte Weg liest
+  // Bildschirmtext ab und hat kein Bild. Dann bleibt der Platzhalter.
+  avatar?: string | null;
+  // Blaues Haekchen neben dem Namen, so wie Instagram es zeigt.
+  verifiziert?: boolean;
 }
 
 interface RawLiveReel {
@@ -1036,7 +1046,10 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       sourceUrl: string,
       // Fortsetzungsmarke fuers Nachladen beim Scrollen -- null heisst "von
       // vorn".
-      abMarke?: string | null
+      abMarke?: string | null,
+      // Instagrams eigene Kommentar-Sortierung (For you / Newest /
+      // Meta Verified). Leer heisst: Instagrams Normalfall, also "For you".
+      sortierung?: KommentarSortierung | null
     ): Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string; naechste?: string | null }> => {
       const session = sessionRef.current;
       if (!session) return { available: false, comments: [], reelId, error: "No active research session." };
@@ -1044,7 +1057,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionSecret: session.sessionSecret, reelId, sourceUrl, wert: abMarke ?? null }),
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, reelId, sourceUrl, wert: abMarke ?? null, sortierung: sortierung ?? null }),
         });
         const body = await res.json();
         return {

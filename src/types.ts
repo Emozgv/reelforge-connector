@@ -315,6 +315,14 @@ export interface ResearchAccount {
   // Set only when submit-research-account-session verified a real
   // authenticated session — the actual "genuinely connected" proof.
   sessionVerifiedAt?: string;
+  // Wer gerade eine Research-Sitzung auf diesem Account laufen hat, und bis
+  // wann die Sperre gilt. Beides kommt vom Server, ist also fuer ALLE im
+  // Workspace dasselbe -- daran haengt der gruene Punkt am Account-Chip.
+  // Die Sperre selbst wird hier nur gelesen, nie gesetzt: ihr Ablauf
+  // (start-research-live-session / Herzschlag / release-research-account-lock)
+  // bleibt unberuehrt.
+  liveLockLabel?: string;
+  liveLockExpiresAt?: string;
   // The most recent real action attempted on the account's actual session
   // (currently only "like") — set when Connector reports back whether it
   // genuinely verified the action took effect on the real platform, not
