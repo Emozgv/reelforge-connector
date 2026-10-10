@@ -3023,7 +3023,16 @@ class Session {
         // auf den normalen Feed und zurueck --, nur vollstaendig statt
         // einmal. Und es braucht dafuer KEINE Anfrage bei Instagram, kann
         // also auch nicht mit 429 abgewiesen werden.
-        await this.profilVorladen(seite, `${name} (Raster)`);
+        // Nur kurz anlesen.
+        //
+        // Als das Vorladen gebaut wurde, gab es den Hintergrund-Tab noch
+        // nicht -- damals MUSSTE hier alles geholt werden, und fuenf
+        // Runden waren 5,2 Sekunden Wartezeit beim Oeffnen. Inzwischen
+        // laedt der Hintergrund-Tab weiter, waehrend der Mitarbeiter schon
+        // schaut (10.10.2026 gemessen: von 37 auf 49 vollstaendige Kacheln
+        // in drei Sekunden). Damit ist das lange Vorladen hier
+        // ueberfluessig geworden.
+        await this.profilVorladen(seite, `${name} (Raster)`, 2);
 
         // Danach noch die Reels-Liste direkt erfragen, falls Instagram
         // gerade mit uns redet. Tut es das nicht, ist nichts verloren --
@@ -3037,11 +3046,10 @@ class Session {
         if (ueberholt() || seite.isClosed()) return { ok: false, fehler: "Cancelled.", lauf: meinLauf };
 
         await this.profilSchichtEinsetzen(seite);
-        // Hier reichen zwei Runden. Im Reels-Reiter geht es nur noch
-        // darum, dass Kacheln dastehen -- die Zahlen hat das Raster oben
-        // schon geliefert. Fuenf Runden waren 2,4 Sekunden Wartezeit fuer
-        // nichts.
-        await this.profilVorladen(seite, name, 2);
+        // Hier reicht eine Runde. Im Reels-Reiter geht es nur noch darum,
+        // dass Kacheln dastehen -- die Zahlen hat das Raster oben schon
+        // geliefert, und der Rest kommt im Hintergrund nach.
+        await this.profilVorladen(seite, name, 1);
         await this.profilSchichtFuettern();
         console.log(`[forschung] ${name}: Schilder ${JSON.stringify(this.profilSchichtStand ?? null)}`);
         // Ab hier im Hintergrund weitersammeln -- ohne darauf zu warten.
