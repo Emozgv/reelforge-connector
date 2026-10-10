@@ -22,6 +22,9 @@
 // tab (crash, force-quit, forgot) never leaves a real logged-in browser
 // context running forever.
 import http from "node:http";
+import { appendFileSync, readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 
@@ -164,6 +167,43 @@ async function starteBrowser(optionen = {}) {
 // Ohne --autoplay-policy spielt Instagram nur stumm; der Schalter hebt die
 // Sperre auf, damit das Reel mit Ton laeuft.
 // ===========================================================================
+// Welches Reel kam wann, in welcher Sitzung?
+//
+// Emre hatte den Eindruck, ueber mehrere Neustarts hinweg dieselben Reels zu
+// sehen (10.10.2026). Innerhalb EINER Sitzung faellt eine Wiederholung schon
+// auf ([trace-dup]) -- ueber Sitzungsgrenzen hinweg wusste bisher niemand
+// etwas. Deshalb dieses schlichte Heft: eine Zeile je ausgeliefertem Reel,
+// ueber Neustarts hinweg. Es beantwortet die Frage, ohne irgendetwas am Feed
+// zu aendern.
+const REEL_HEFT = path.join(path.dirname(fileURLToPath(import.meta.url)), "reel-verlauf.jsonl");
+const reelFrueher = new Map();
+try {
+  if (existsSync(REEL_HEFT)) {
+    for (const zeile of readFileSync(REEL_HEFT, "utf8").split("\n")) {
+      if (!zeile.trim()) continue;
+      const e = JSON.parse(zeile);
+      if (!reelFrueher.has(e.reel)) reelFrueher.set(e.reel, e);
+    }
+    console.log(`[reel-heft] ${reelFrueher.size} frueher gesehene Reels geladen.`);
+  }
+} catch (err) {
+  console.log(`[reel-heft] nicht lesbar (${err?.message}) -- faengt neu an.`);
+}
+
+function reelNotieren(sitzung, reel) {
+  try {
+    const frueher = reelFrueher.get(reel);
+    if (frueher && frueher.sitzung !== sitzung) {
+      console.log(`[reel-wiederholung] ${reel} kam schon am ${frueher.zeit} in Sitzung ${frueher.sitzung} -- jetzt wieder in ${sitzung}.`);
+    }
+    const eintrag = { reel, sitzung, zeit: new Date().toISOString() };
+    if (!frueher) reelFrueher.set(reel, eintrag);
+    appendFileSync(REEL_HEFT, JSON.stringify(eintrag) + "\n");
+  } catch {
+    /* Mitschreiben darf den Feed nie aufhalten. */
+  }
+}
+
 const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required"];
 
 // Haelt ReelForge das Reel an, solange ein Profil offen ist?
@@ -2542,6 +2582,7 @@ class Session {
     // session — exactly the moment Archive is supposed to pick it up.
     // Fire-and-forget: never lets a slow/failed archive write hold up the
     // live feed the VA is actually looking at.
+    reelNotieren(this.id, reel.id);
     void archiveLiveReel(this, reel);
     this.maybePrefetch();
     return { reel, fresh: true };
@@ -2837,6 +2878,41 @@ class Session {
     }
   }
 
+  // Was liegt drueben unter einer Stelle?
+  //
+  // Zum Mitlesen, nicht zum Steuern: beschreibt in Alltagssprache, was der
+  // Zeiger gerade beruehrt. Ohne das sah ich im Protokoll nur Zahlenpaare
+  // und musste raten, worauf Emre eigentlich war -- genau daran ist die
+  // Ecken-Sache (Zeiger auf 1,1 = Instagrams Seitenleiste) zu lange
+  // unentdeckt geblieben (10.10.2026).
+  async profilWasIstDa(x, y) {
+    if (!this.profilSeite || this.profilSeite.isClosed()) return "kein Profil offen";
+    return await this.profilSeite
+      .evaluate(
+        ([px, py]) => {
+          const beruehrt = document.querySelectorAll(":hover").length;
+          const el = document.elementFromPoint(px, py);
+          if (!el) return `nichts (draussen) | beruehrt: ${beruehrt}`;
+          const kachel = el.closest('a[href*="/p/"], a[href*="/reel/"]');
+          if (kachel) {
+            const code = (kachel.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
+            const alle = [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')];
+            return `Kachel ${alle.indexOf(kachel) + 1}/${alle.length} (${code ? code[1] : "?"}) | beruehrt: ${beruehrt}`;
+          }
+          const leiste = el.closest("nav");
+          if (leiste) {
+            const link = el.closest("a");
+            return `Seitenleiste${link ? ` -- ${(link.innerText || link.getAttribute("aria-label") || "").trim().slice(0, 28)}` : ""} | beruehrt: ${beruehrt}`;
+          }
+          const knopf = el.closest('a[href], button, [role="button"]');
+          const wort = (knopf?.innerText || knopf?.getAttribute("aria-label") || el.tagName).trim().slice(0, 32);
+          return `${knopf ? "Knopf" : "Flaeche"} ${wort.replace(/\s+/g, " ")} | beruehrt: ${beruehrt}`;
+        },
+        [x, y]
+      )
+      .catch((e) => `nicht lesbar (${e?.message?.slice(0, 40)})`);
+  }
+
   async profilBedienen(art, x, y) {
     if (!this.profilSeite || this.profilSeite.isClosed()) return { ok: false, fehler: "No profile is open." };
     try {
@@ -2847,16 +2923,91 @@ class Session {
         // Das deckelte das Scrollen auf gut zwei Schritte pro Sekunde und
         // war die zweite Haelfte des Ruckelns (10.10.2026).
         await this.profilSeite.mouse.wheel(0, Number(y) || 0);
+        // Scrollen kommt im Schwall. Eine Zeile je Rad-Schritt waere
+        // unlesbar, deshalb nur eine Bilanz je Sekunde.
+        this.scrollSumme = (this.scrollSumme || 0) + (Number(y) || 0);
+        this.scrollSchritte = (this.scrollSchritte || 0) + 1;
+        if (Date.now() - (this.scrollGemeldet || 0) > 1000) {
+          this.scrollGemeldet = Date.now();
+          console.log(
+            `[profil-spur] gescrollt: ${this.scrollSchritte} Schritte, ${Math.round(this.scrollSumme)} Punkte ${this.scrollSumme > 0 ? "runter" : "hoch"}`
+          );
+          this.scrollSumme = 0;
+          this.scrollSchritte = 0;
+        }
+        return { ok: true };
+      }
+      if (art === "schweben") {
+        // Mausbewegung durchreichen.
+        //
+        // Ohne sie steht der Zeiger drueben still, und Instagram hat keinen
+        // Anlass, beim Drueberfahren Likes und Kommentare einzublenden --
+        // bei uns passierte beim Schweben also nichts.
+        //
+        // Bewusst ohne Warten und ohne Bild: der laufende Bildstrom zeigt
+        // das Ergebnis, und Mausbewegungen kommen viel zu oft, um jede
+        // einzeln zu quittieren.
+        //
+        // Eine negative Stelle heisst "die Maus ist weg" -- siehe unten.
+        const weg = Number(x) < 0 || Number(y) < 0;
+
+        if (weg) {
+          // Die Maus hat das Bild verlassen: Zeiger drueben aus dem Fenster
+          // heraus. NICHT in eine Ecke -- oben links liegt Instagrams
+          // Seitenleiste, und die klappt beim Drueberfahren auf (so stand
+          // es hier zuerst, und bei jedem Weggehen ging die Leiste auf).
+          //
+          // Dass Instagrams Einblendung danach trotzdem stehen bleibt,
+          // liegt nicht hieran: sie bleibt auch mitten im Bild stehen,
+          // wenn man einen Beitrag auf- und zumacht. Ein Versuch, den
+          // Zeiger wie eine echte Maus erst ueber den Rand wandern zu
+          // lassen, hat daran nichts geaendert und ist wieder raus
+          // (10.10.2026).
+          const zielX = (this.profilBreite || 1040) + 200;
+          const zielY = (this.profilHoehe || 712) + 200;
+          await this.profilSeite.mouse.move(zielX, zielY);
+          this.schwebtAuf = null;
+          console.log(`[profil-spur] Maus raus -- Zeiger auf ${zielX},${zielY} | danach drueben: ${await this.profilWasIstDa(zielX, zielY)}`);
+
+          return { ok: true };
+        }
+
+        const zielX = Number(x) || 0;
+        const zielY = Number(y) || 0;
+        await this.profilSeite.mouse.move(zielX, zielY);
+
+        // Beim Schweben NICHT jede Bewegung melden -- eine Maus meldet sich
+        // hundertmal je Sekunde. Nur, wenn sich aendert, WORAUF sie liegt.
+        if (Date.now() - (this.schwebeGeprueft || 0) > 350) {
+          this.schwebeGeprueft = Date.now();
+          const da = await this.profilWasIstDa(zielX, zielY);
+          const kurz = da.split(" | ")[0];
+          if (kurz !== this.schwebtAuf) {
+            this.schwebtAuf = kurz;
+            console.log(`[profil-spur] Maus auf ${zielX},${zielY} -- ${da}`);
+          }
+        }
         return { ok: true };
       }
       if (art === "klick") {
+        // Erst nachsehen, worauf geklickt wird -- hinterher ist die Seite
+        // womoeglich eine andere und die Stelle sagt nichts mehr aus.
+        const vorher = this.profilSeite.url();
+        console.log(`[profil-spur] KLICK auf ${x},${y} -- ${await this.profilWasIstDa(Number(x) || 0, Number(y) || 0)}`);
         await this.profilSeite.mouse.click(Number(x) || 0, Number(y) || 0);
         // Ein Klick kann eine neue Seite laden (Reiter, Highlight, Beitrag).
         await sleep(1400);
+        const nachher = this.profilSeite.url();
+        console.log(
+          nachher === vorher
+            ? `[profil-spur] nach dem Klick: dieselbe Seite (${nachher.replace("https://www.instagram.com", "")})`
+            : `[profil-spur] nach dem Klick: neue Seite ${nachher.replace("https://www.instagram.com", "")}`
+        );
       } else if (art === "zurueck") {
         // (Zurueck laedt eine andere Seite -- hier lohnt das Warten.)
         await this.profilSeite.goBack({ waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => {});
         await sleep(1200);
+        console.log(`[profil-spur] zurueck -- jetzt auf ${this.profilSeite.url().replace("https://www.instagram.com", "")}`);
       }
       await this.page.bringToFront().catch(() => {});
       const bild = await this.profilBild();

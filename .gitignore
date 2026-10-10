@@ -31,3 +31,4 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+connector-app/reel-verlauf.jsonl

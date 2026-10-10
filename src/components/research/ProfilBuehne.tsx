@@ -36,7 +36,7 @@ export function ProfilBuehne({
   strom: (onBild: (bild: string) => void, signal: AbortSignal) => Promise<void>;
   ton: () => Promise<{ ok: boolean; angebot?: string; error?: string }>;
   tonAntwort: (sdp: string) => Promise<void>;
-  bedienen: (art: "scrollen" | "klick" | "zurueck", x?: number, y?: number) => Promise<{ ok: boolean; bild?: string; error?: string }>;
+  bedienen: (art: "scrollen" | "klick" | "zurueck" | "schweben", x?: number, y?: number) => Promise<{ ok: boolean; bild?: string; error?: string }>;
   schliessen: (lauf?: string | null) => Promise<void>;
 }) {
   const [bild, setBild] = useState<string | null>(null);
@@ -61,6 +61,15 @@ export function ProfilBuehne({
   // neueren an und die Seite spraenge zurueck.
   const offenesScrollen = useRef(0);
   const scrollLaeuft = useRef(false);
+
+  // Mausbewegung nach drueben -- aber nicht jede einzelne.
+  //
+  // Eine Maus meldet sich hundertmal je Sekunde. Jede davon einzeln
+  // hinueberzuschicken waere Unsinn: es genuegt, WO der Zeiger zuletzt war.
+  // Deshalb immer nur eine Meldung unterwegs; was waehrenddessen passiert,
+  // ueberschreibt nur die gemerkte Position.
+  const letzteMaus = useRef<{ x: number; y: number } | null>(null);
+  const mausLaeuft = useRef(false);
 
   // Das Mausrad muss von Hand abgefangen werden.
   //
@@ -154,7 +163,7 @@ export function ProfilBuehne({
   // was in der Schlange stand -- es lief nach und ruckelte
   // (10.10.2026 von Emre genau so beschrieben). Jetzt hoert es auf, wenn er
   // aufhoert.
-  async function tun(art: "scrollen" | "klick" | "zurueck", x = 0, y = 0) {
+  async function tun(art: "scrollen" | "klick" | "zurueck" | "schweben", x = 0, y = 0) {
     if (art === "scrollen") {
       offenesScrollen.current += y;
       if (scrollLaeuft.current) return;
@@ -201,6 +210,19 @@ export function ProfilBuehne({
   async function zumachen() {
     onSchliessen();
     await schliessen(kennungRef.current);
+  }
+
+  async function mausAbarbeiten() {
+    mausLaeuft.current = true;
+    try {
+      while (letzteMaus.current) {
+        const { x, y } = letzteMaus.current;
+        letzteMaus.current = null;
+        await bedienen("schweben", x, y).catch(() => {});
+      }
+    } finally {
+      mausLaeuft.current = false;
+    }
   }
 
   async function scrollAbarbeiten() {
@@ -301,6 +323,25 @@ export function ProfilBuehne({
                 const x = ((e.clientX - k.left) / k.width) * groesseRef.current.w;
                 const y = ((e.clientY - k.top) / k.height) * groesseRef.current.h;
                 void tun("klick", Math.round(x), Math.round(y));
+              }}
+              // Verlaesst die Maus das Bild, sagen wir das nach drueben.
+              // Sonst bleibt Instagram bei der zuletzt beruehrten Kachel
+              // haengen und zeigt ihre Zahlen weiter, auch wenn man laengst
+              // woanders ist: wir schicken sonst nur, WO die Maus ist --
+              // nie, dass sie weg ist. Die minus eins ist das Zeichen
+              // dafuer; wohin der Zeiger drueben wirklich faehrt,
+              // entscheidet der Connector.
+              onMouseLeave={() => {
+                letzteMaus.current = { x: -1, y: -1 };
+                if (!mausLaeuft.current) void mausAbarbeiten();
+              }}
+              onMouseMove={(e) => {
+                const k = e.currentTarget.getBoundingClientRect();
+                letzteMaus.current = {
+                  x: Math.round(((e.clientX - k.left) / k.width) * groesseRef.current.w),
+                  y: Math.round(((e.clientY - k.top) / k.height) * groesseRef.current.h),
+                };
+                if (!mausLaeuft.current) void mausAbarbeiten();
               }}
               className="w-full h-full object-cover object-top cursor-pointer select-none"
             />

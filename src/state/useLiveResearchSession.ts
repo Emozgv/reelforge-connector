@@ -1174,7 +1174,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   }, []);
 
   const profilBedienen = useCallback(
-    async (art: "scrollen" | "klick" | "zurueck", x = 0, y = 0): Promise<{ ok: boolean; bild?: string; error?: string }> => {
+    async (art: "scrollen" | "klick" | "zurueck" | "schweben", x = 0, y = 0): Promise<{ ok: boolean; bild?: string; error?: string }> => {
       const session = sessionRef.current;
       if (!session) return { ok: false, error: "No active research session." };
       try {
