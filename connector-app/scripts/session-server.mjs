@@ -165,6 +165,26 @@ async function starteBrowser(optionen = {}) {
 // Sperre auf, damit das Reel mit Ton laeuft.
 // ===========================================================================
 const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required"];
+
+// Haelt ReelForge das Reel an, solange ein Profil offen ist?
+//
+// Am 10.10.2026 erst aus, dann wieder an.
+//
+// AUS, weil Emre direkt nach dem Einbau meldete, der Ton im Research laufe
+// nicht mehr richtig. Verdaechtigt hatte ich B.tonAnklemmen: laesst
+// Instagram ein Reel neu anlaufen, stirbt die Tonspur aus captureStream().
+//
+// WIEDER AN, weil kurz darauf im Protokoll ein anderer Fehler auftauchte,
+// der denselben Eindruck erzeugt: Das Reel wurde angehalten und NIE wieder
+// gestartet (ReelForge baut die Profil-Flaeche doppelt auf, das zweite
+// Anhalten merkte sich faelschlich "lief vorher nicht"). Dann hoert man
+// natuerlich nichts -- weil das Reel steht, nicht weil der Ton kaputt ist.
+// Dieser Fehler ist seitdem behoben.
+//
+// Zu pruefen bleibt, ob der Ton nach dem Zurueckkommen wirklich wieder da
+// ist. Falls nicht, war die erste Vermutung doch richtig -- dann hier
+// wieder auf false.
+const PROFIL_HAELT_REEL_AN = true;
 // Normales Rechnerfenster, nicht Handybreite.
 //
 // 08.10.2026: Mit 420 Pixeln Breite liefert Instagram das schmale Layout --
@@ -2701,7 +2721,19 @@ class Session {
     // der Ladekringel stand schon da, und dahinter lief die Musik des
     // Reels weiter (10.10.2026 von Emre gemeldet). Ausdruecklich anhalten,
     // nicht umschalten.
-    if (this.buehneSteht) {
+    // ZURUECKGENOMMEN am 10.10.2026.
+    //
+    // Das Reel beim Profilbesuch anzuhalten war gut gemeint -- aber Emre
+    // meldete sofort, dass der Ton im Research danach nicht mehr so lief
+    // wie vorher. Unser eigener Code warnt genau davor (siehe
+    // B.tonAnklemmen): laesst Instagram ein Reel neu anlaufen, stirbt die
+    // Tonspur aus captureStream(), obwohl das Element dasselbe bleibt.
+    // Anhalten und Fortsetzen loest genau das aus.
+    //
+    // Der Ton im Research ist wichtiger als die Stille waehrend eines
+    // Profilbesuchs. B.anhalten/B.fortsetzen bleiben stehen, damit das
+    // spaeter mit einem sauberen Weg nachgeholt werden kann.
+    if (PROFIL_HAELT_REEL_AN && this.buehneSteht) {
       const erg = await this.page.evaluate(() => window.__buehne.anhalten()).catch(() => null);
       // "Lief es vorher?" nur beim ERSTEN Anhalten merken.
       //
@@ -2728,6 +2760,25 @@ class Session {
       await this.profilStromStoppen();
       seite = await this.context.newPage();
       (this.profilTabs ??= new Set()).add(seite);
+
+      // ZURUECKGENOMMEN am 10.10.2026, noch am selben Tag.
+      //
+      // Hier stand eine Wache, die jedes Video drueben stumm hielt, plus
+      // eine CSS-Regel, die Instagrams eigenen Lautsprecher ausblendete.
+      // Beides zusammen liess das Profil quaelend langsam laden -- die
+      // Ausblend-Regel muss der Browser bei jeder Stilberechnung ueber die
+      // ganze Seite pruefen, und eine Instagram-Seite berechnet dauernd neu.
+      //
+      // Emre hat es sofort bemerkt und zugleich den besseren Einwand
+      // gebracht: so verhaelt sich sonst niemand auf Instagram. Ein
+      // falscher Knopfdruck ist leichter zu ertragen als eine Seite, die
+      // nicht laedt.
+      //
+      // Was bleibt: Instagrams Lautsprecher ist sichtbar und zeigt den
+      // Zustand SEINES Players, nicht unseren. Wird er gedrueckt, haelt das
+      // Video drueben an (am 08.10.2026 auf der Buehne gemessen). Wer das
+      // spaeter angehen will, braucht einen Weg ohne dauerhafte Last --
+      // zum Beispiel einmalig nach dem Laden statt in einer Dauerschleife.
       this.profilSeite = seite;
       this.profilKennung = meinLauf;
       // ALLE anderen Profil-Tabs zumachen, nicht nur den zuletzt bekannten.
@@ -2814,6 +2865,130 @@ class Session {
       console.error(`[profil] session ${this.id}: ${art} FEHLER ${err?.message}`);
       return { ok: false, fehler: err?.message ?? "Something went wrong on the profile." };
     }
+  }
+
+  // Ton von der Profilseite.
+  //
+  // Das Bild kommt als Bildfolge -- da ist kein Ton drin. Der wird deshalb
+  // getrennt geholt, mit genau demselben Griff, den die Buehne seit Wochen
+  // benutzt: der Ton wird NICHT am Element abgegriffen (Instagrams Player
+  // ist stumm, und Entstummen haelt die Wiedergabe an), sondern ueber
+  // captureStream(). Dahinter eine feste Tonleitung, in die immer nur
+  // umgesteckt wird, welches Video gerade spielt.
+  async profilTonStarten() {
+    if (!this.profilSeite || this.profilSeite.isClosed()) return { fehler: "No profile is open." };
+    const erg = await this.profilSeite.evaluate(() => {
+      const P = (window.__profilTon ??= {});
+
+      P.bus = () => {
+        if (P._bus) return P._bus;
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ziel = ctx.createMediaStreamDestination();
+        P._bus = { ctx, ziel, spur: ziel.stream.getAudioTracks()[0] ?? null };
+        return P._bus;
+      };
+
+      // Welches Video spielt gerade und ist im Bild?
+      P.videoImBild = () => {
+        const alle = [...document.querySelectorAll("video")];
+        const sichtbar = alle.filter((v) => {
+          const r = v.getBoundingClientRect();
+          return r.width > 40 && r.height > 40 && r.bottom > 0 && r.top < innerHeight;
+        });
+        return sichtbar.find((v) => !v.paused) ?? sichtbar[0] ?? null;
+      };
+
+      P.anklemmen = async (v) => {
+        const bus = P.bus();
+        if (!bus.spur || !v) return false;
+        try { if (bus.ctx.state === "suspended") await bus.ctx.resume(); } catch { /* egal */ }
+        // Schon angeklemmt UND die Spur lebt noch? Dann nichts tun.
+        if (P.quelle === v && P.eingang && P.eingang.readyState === "live") return true;
+        let strom;
+        try { strom = v.captureStream ? v.captureStream() : v.mozCaptureStream(); }
+        catch { return false; }
+        const spur = strom.getAudioTracks()[0];
+        if (!spur) return false;
+        try { P.knoten?.disconnect(); } catch { /* egal */ }
+        const quelle = bus.ctx.createMediaStreamSource(new MediaStream([spur]));
+        quelle.connect(bus.ziel);
+        P.knoten = quelle;
+        P.quelle = v;
+        P.eingang = spur;
+        return true;
+      };
+
+      // Auf der Profilseite wechseln Videos staendig (Story weiter, anderer
+      // Beitrag). Deshalb regelmaessig nachsehen und umstecken, statt die
+      // Verbindung neu aufzubauen.
+      P.wachen = () => {
+        if (P.wache) return;
+        P.wache = setInterval(() => {
+          const v = P.videoImBild();
+          if (v && (v !== P.quelle || !P.eingang || P.eingang.readyState !== "live")) void P.anklemmen(v);
+        }, 700);
+      };
+
+      P.starte = async () => {
+        const bus = P.bus();
+        if (!bus.spur) return { fehler: "Keine Tonleitung moeglich." };
+        const pc = new RTCPeerConnection();
+        pc.addTrack(bus.spur, bus.ziel.stream);
+        const angebot = await pc.createOffer();
+        await pc.setLocalDescription(angebot);
+        await new Promise((fertig) => {
+          if (pc.iceGatheringState === "complete") return fertig();
+          const sehen = () => { if (pc.iceGatheringState === "complete") { pc.removeEventListener("icegatheringstatechange", sehen); fertig(); } };
+          pc.addEventListener("icegatheringstatechange", sehen);
+          setTimeout(fertig, 1500);
+        });
+        P.pc = pc;
+        void P.anklemmen(P.videoImBild());
+        P.wachen();
+        return { ok: true, angebot: pc.localDescription.sdp };
+      };
+
+      P.antwort = async (sdp) => {
+        if (!P.pc) return { fehler: "Keine Tonverbindung." };
+        if (P.pc.signalingState !== "have-local-offer") return { ok: true, uebergangen: P.pc.signalingState };
+        await P.pc.setRemoteDescription({ type: "answer", sdp });
+        // MESSUNG (10.10.2026): Ob die Verbindung WIRKLICH zustande kommt.
+        //
+        // Vorher meldete der Connector "Tonleitung steht", sobald das
+        // Angebot gemacht war -- auch wenn danach nie etwas zustande kam.
+        // Genau so war es: die Antwort kam ohne Verbindungsadressen, es
+        // blieb still, und im Protokoll stand trotzdem alles in Ordnung.
+        P.pc.addEventListener("connectionstatechange", () => {
+          P.stand = P.pc.connectionState;
+        });
+        // Hat die Antwort ueberhaupt Adressen dabei?
+        P.adressenInAntwort = (sdp.match(/a=candidate/g) ?? []).length;
+        return { ok: true, adressen: P.adressenInAntwort };
+      };
+
+      return P.starte();
+    }).catch((e) => ({ fehler: String(e?.message ?? e) }));
+
+    if (erg?.ok) console.log(`[profil] Tonangebot gemacht -- ob es wirklich traegt, sagt erst die naechste Zeile.`);
+    else console.log(`[profil] Ton nicht moeglich: ${erg?.fehler ?? "?"}`);
+    return erg;
+  }
+
+  async profilTonAntwort(sdp) {
+    if (!this.profilSeite || this.profilSeite.isClosed()) return { fehler: "No profile is open." };
+    const erg = await this.profilSeite
+      .evaluate((s) => window.__profilTon.antwort(s), sdp)
+      .catch((e) => ({ fehler: String(e?.message ?? e) }));
+    console.log(`[profil] Ton-Antwort angenommen: ${erg?.ok ? "ja" : "NEIN (" + (erg?.fehler ?? "?") + ")"} | Adressen in der Antwort: ${erg?.adressen ?? "?"}`);
+    // Kurz nachsehen, ob die Verbindung wirklich steht -- "Angebot gemacht"
+    // allein hat uns schon einmal getaeuscht.
+    setTimeout(async () => {
+      const stand = await this.profilSeite
+        ?.evaluate(() => window.__profilTon?.pc?.connectionState ?? "-")
+        .catch(() => "-");
+      console.log(`[profil] Tonverbindung nach 3s: ${stand}`);
+    }, 3000);
+    return erg;
   }
 
   // Laufendes Bild der Profilseite.
@@ -2926,7 +3101,7 @@ class Session {
     await this.profilTabsAufraeumen(null);
     // ... und wieder laufen lassen -- aber nur, wenn es vorher auch lief.
     // Hatte der Mitarbeiter das Reel selbst angehalten, bleibt es angehalten.
-    if (seite && this.buehneSteht && this.reelDurchProfilAngehalten) {
+    if (PROFIL_HAELT_REEL_AN && seite && this.buehneSteht && this.reelDurchProfilAngehalten) {
       if (this.reelLiefVorProfil !== false) {
         await this.page.evaluate(() => window.__buehne.fortsetzen()).catch(() => null);
         console.log(`[profil] Reel laeuft wieder.`);
@@ -3643,7 +3818,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-strom|profil-bedienen|profil-schliessen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-strom|profil-ton|profil-ton-antwort|profil-bedienen|profil-schliessen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
       const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung, breite, hoehe, x, y } = await readBody(req);
@@ -3735,6 +3910,14 @@ const server = http.createServer(async (req, res) => {
         if (!lief) { res.end(); return; }
         req.on("close", () => { void session.profilStromStoppen(); });
         return;
+      }
+      if (action === "profil-ton") {
+        const erg = await session.profilTonStarten();
+        return erg?.ok ? json(res, 200, erg) : json(res, 502, { error: erg?.fehler ?? "No audio." });
+      }
+      if (action === "profil-ton-antwort") {
+        const erg = await session.profilTonAntwort(sdp);
+        return erg?.ok ? json(res, 200, erg) : json(res, 502, { error: erg?.fehler ?? "No audio." });
       }
       if (action === "profil-bedienen") {
         const erg = await session.profilBedienen(art, x, y);

@@ -1091,6 +1091,8 @@ export function ResearchAccountsPage({
                 onSchliessen={() => setProfilName(null)}
                 oeffnen={liveSession.profilOeffnen}
                 strom={liveSession.profilStrom}
+                ton={liveSession.profilTon}
+                tonAntwort={liveSession.profilTonAntwort}
                 bedienen={liveSession.profilBedienen}
                 schliessen={liveSession.profilSchliessen}
               />

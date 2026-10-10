@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, AlertTriangle, Volume2, VolumeX } from "lucide-react";
 
 // Die zweite Buehne: Instagrams echte Profilseite, ohne den Feed anzufassen.
 //
@@ -25,6 +25,8 @@ export function ProfilBuehne({
   onSchliessen,
   oeffnen,
   strom,
+  ton,
+  tonAntwort,
   bedienen,
   schliessen,
 }: {
@@ -32,6 +34,8 @@ export function ProfilBuehne({
   onSchliessen: () => void;
   oeffnen: (username: string, breite: number, hoehe: number) => Promise<{ ok: boolean; bild?: string; lauf?: string; error?: string }>;
   strom: (onBild: (bild: string) => void, signal: AbortSignal) => Promise<void>;
+  ton: () => Promise<{ ok: boolean; angebot?: string; error?: string }>;
+  tonAntwort: (sdp: string) => Promise<void>;
   bedienen: (art: "scrollen" | "klick" | "zurueck", x?: number, y?: number) => Promise<{ ok: boolean; bild?: string; error?: string }>;
   schliessen: (lauf?: string | null) => Promise<void>;
 }) {
@@ -48,6 +52,10 @@ export function ProfilBuehne({
   // Kennung der drueben offenen Seite -- nur damit laesst sie sich gezielt
   // schliessen.
   const kennungRef = useRef<string | null>(null);
+  // Ton: eigene Leitung, weil die Bildfolge keinen traegt.
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const tonPcRef = useRef<RTCPeerConnection | null>(null);
+  const [stumm, setStumm] = useState(true);
   // Verhindert, dass sich Bedienungen ueberholen: waehrend eine laeuft,
   // wird keine zweite abgeschickt. Sonst kaeme ein aelteres Bild nach einem
   // neueren an und die Seite spraenge zurueck.
@@ -100,6 +108,9 @@ export function ProfilBuehne({
       }
       setFehler(null);
       if (a.bild) setBild(a.bild);
+      // Tonleitung aufbauen. Scheitert sie, bleibt das Profil nutzbar --
+      // nur eben stumm.
+      void tonAufbauen();
       // Ab jetzt laeuft das Bild von selbst weiter.
       void strom((b) => {
         if (weg) { URL.revokeObjectURL(b); return; }
@@ -124,6 +135,8 @@ export function ProfilBuehne({
     return () => {
       weg = true;
       abbruch.abort();
+      tonPcRef.current?.close();
+      tonPcRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
@@ -150,6 +163,35 @@ export function ProfilBuehne({
     }
     const a = await bedienen(art, x, y).catch(() => null);
     if (a && !a.ok && a.error) setFehler(a.error);
+  }
+
+  async function tonAufbauen() {
+    const a = await ton().catch(() => null);
+    if (!a?.ok || !a.angebot) return;
+    const pc = new RTCPeerConnection();
+    tonPcRef.current = pc;
+    pc.ontrack = (ev) => {
+      const el = audioRef.current;
+      if (el && el.srcObject !== ev.streams[0]) {
+        el.srcObject = ev.streams[0];
+        void el.play().catch(() => {});
+      }
+    };
+    await pc.setRemoteDescription({ type: "offer", sdp: a.angebot });
+    await pc.setLocalDescription(await pc.createAnswer());
+    // WARTEN, bis die Verbindungsadressen gesammelt sind -- genau wie die
+    // Buehne es tut.
+    //
+    // Ohne das ging die Antwort ohne Adressen raus, der Connector sendete
+    // ins Leere und es blieb still: "Tonleitung steht" im Protokoll, aber
+    // kein Ton (10.10.2026 von Emre gemeldet). Beide Enden sitzen auf
+    // demselben Rechner, das Sammeln dauert Millisekunden.
+    await new Promise<void>((fertig) => {
+      if (pc.iceGatheringState === "complete") return fertig();
+      pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && fertig());
+      window.setTimeout(fertig, 3000);
+    });
+    await tonAntwort(pc.localDescription?.sdp ?? "");
   }
 
   // Zumachen heisst: drueben die Seite schliessen und dann erst die Flaeche
@@ -179,20 +221,64 @@ export function ProfilBuehne({
       ref={flaecheRef}
       className="absolute inset-0 z-30 rounded-xl overflow-hidden border border-[#1a130b] bg-[#060607] overscroll-contain"
     >
-      {/* Nur der Weg zurueck. "Previous page", das Kreuz und der
-          Instagram-Name standen hier und wurden am 10.10.2026 von Emre
-          gestrichen -- der Name steht ohnehin auf der Seite darunter, und
-          zwei Wege zum Schliessen braucht niemand. */}
-      <div className="absolute top-0 left-0 right-0 z-20 h-11 px-3 flex items-center bg-gradient-to-b from-black/85 to-transparent">
+      {/* Links der Weg zurueck, rechts der Ton -- und dazwischen ein
+          Hinweis mit Pfeil darauf.
+          Grund: Instagrams eigener Lautsprecher ist auf der Seite sichtbar,
+          zeigt aber den Zustand SEINES Players. Unser Ton wird davor
+          abgegriffen -- sein Knopf bewirkt hier also nichts. Ohne Hinweis
+          drueckt jemand darauf, hoert keinen Unterschied und haelt den Ton
+          fuer kaputt.
+          Hier stand zuerst "freezes the video". Das war am 08.10.2026 auf
+          der BUEHNE gemessen, nicht auf der Profilseite -- und Emre hat es
+          am 10.10.2026 ausprobiert: nichts passierte. Eine Warnung, die
+          nicht zutrifft, ist schlechter als keine, deshalb steht jetzt da,
+          was belegt ist.
+          Ausblenden haben wir versucht und wieder verworfen -- es machte
+          die Seite quaelend langsam. */}
+      {/* Rechts derselbe Randabstand wie beim Fenster darunter (20 Punkte).
+          Vorher waren es 12 -- der Tonknopf stand damit naeher am Rand als
+          alles andere und klebte optisch (10.10.2026 von Emre bemerkt). */}
+      <div className="absolute top-0 left-0 right-0 z-20 h-14 pl-3 pr-5 flex items-center bg-gradient-to-b from-black/90 via-black/60 to-transparent">
         <button
           type="button"
           onClick={() => void zumachen()}
-          className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-[12.5px] text-neutral-200 hover:text-white hover:bg-white/[0.08] transition-colors"
+          className="h-9 px-2.5 rounded-lg flex items-center gap-1.5 text-[12.5px] text-neutral-200 hover:text-white hover:bg-white/[0.08] transition-colors"
         >
           <ArrowLeft size={14} />
           Back to the reel
         </button>
+
+        <div className="ml-auto flex items-center gap-2.5">
+          {/* Zwei Zeilen wie urspruenglich -- aber um 7 Punkte nach unten
+              geschoben, damit die ERSTE Zeile auf derselben Hoehe steht wie
+              "Back to the reel" links.
+              Gemessen am 10.10.2026: mittig gesetzt lag die erste Zeile auf
+              41, die linke Beschriftung auf 48. Der Block als Ganzes war
+              also mittig, die Zeilen aber nicht auf einer Linie. */}
+          <p className="text-right text-[11.5px] leading-tight text-neutral-300 translate-y-[7px]">
+            Sound is controlled here
+            <span className="block text-[10.5px] text-neutral-500">
+              Instagram&rsquo;s own sound icon has no effect here
+            </span>
+          </p>
+          <ArrowRight size={16} className="text-[#D39448] shrink-0" />
+          <button
+            type="button"
+            onClick={() => setStumm((v) => !v)}
+            title={stumm ? "Turn sound on" : "Turn sound off"}
+            className={[
+              "h-10 w-10 rounded-full flex items-center justify-center shrink-0 transition-colors",
+              stumm
+                ? "bg-[#D39448] text-[#020508] hover:brightness-110"
+                : "bg-white/[0.12] text-white hover:bg-white/[0.18]",
+            ].join(" ")}
+          >
+            {stumm ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </button>
+        </div>
       </div>
+
+      <audio ref={audioRef} autoPlay muted={stumm} className="hidden" />
 
       {/* Das Bild der echten Profilseite. Ein Klick darauf wird an derselben
           Stelle drueben ausgefuehrt -- das Bild ist genau so gross gerendert
@@ -203,7 +289,7 @@ export function ProfilBuehne({
           Bild"). Jetzt sitzt es als ruhiges Fenster in der Mitte, mit Luft
           ringsum -- und weil mit doppelter Punktdichte gezeichnet wird,
           bleibt es dabei scharf. */}
-      <div ref={fensterRef} className="absolute inset-0 pt-11 pb-5 px-5 flex justify-center">
+      <div ref={fensterRef} className="absolute inset-0 pt-14 pb-5 px-5 flex justify-center">
         <div className="w-full max-w-[1040px] h-full rounded-xl overflow-hidden bg-black shadow-[0_18px_60px_-12px_rgba(0,0,0,0.9)]">
           {bild && (
             <img

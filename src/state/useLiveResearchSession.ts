@@ -1141,6 +1141,38 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     []
   );
 
+  // Ton von der Profilseite. Das Bild traegt keinen -- es ist eine
+  // Bildfolge. Der Ton kommt deshalb ueber eine eigene Leitung, genau wie
+  // bei der Buehne.
+  const profilTon = useCallback(
+    async (): Promise<{ ok: boolean; angebot?: string; error?: string }> => {
+      const session = sessionRef.current;
+      if (!session) return { ok: false, error: "No active research session." };
+      try {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-ton`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret }),
+        });
+        const body = await res.json();
+        return { ok: !!body.ok, angebot: body.angebot, error: body.error };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : "Couldn't start audio." };
+      }
+    },
+    []
+  );
+
+  const profilTonAntwort = useCallback(async (sdp: string): Promise<void> => {
+    const session = sessionRef.current;
+    if (!session) return;
+    await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-ton-antwort`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionSecret: session.sessionSecret, sdp }),
+    }).catch(() => {});
+  }, []);
+
   const profilBedienen = useCallback(
     async (art: "scrollen" | "klick" | "zurueck", x = 0, y = 0): Promise<{ ok: boolean; bild?: string; error?: string }> => {
       const session = sessionRef.current;
@@ -1362,6 +1394,8 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     antwortenLaden,
     profilOeffnen,
     profilStrom,
+    profilTon,
+    profilTonAntwort,
     profilBedienen,
     profilSchliessen,
     follow,
