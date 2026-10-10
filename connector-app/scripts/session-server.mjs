@@ -3062,6 +3062,10 @@ class Session {
         void this.profilNachladen(name, meinLauf);
         const warum = await seite.evaluate(() => window.__rfForschung?.warum()).catch(() => null);
         console.log(`[forschung] ${name}: Kachelsuche ${JSON.stringify(warum)}`);
+        const behaelter = await seite.evaluate(() => window.__rfForschung?.behaelterPruefen()).catch(() => null);
+        console.log(`[forschung] ${name}: Behaelter ${JSON.stringify(behaelter)}`);
+        const masse = await seite.evaluate(() => window.__rfForschung?.massePruefen()).catch(() => null);
+        console.log(`[forschung] ${name}: Masse ${JSON.stringify(masse)}`);
       }
 
       const bild = await this.profilBild();
@@ -3717,9 +3721,24 @@ class Session {
               (farbig
                 ? // Die Rate sitzt oben als schmaleres, farbiges Band ueber
                   // die volle Breite des Stapels -- wie in der Vorlage.
-                  `background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;` +
-                  `font-weight:800;font-size:${pxS(12)};`
-                : "background:rgba(17,17,20,.86);color:#fff;border:1px solid rgba(255,255,255,.08);");
+                  `background:linear-gradient(180deg,rgba(234,192,136,.94),rgba(211,148,72,.94));` +
+                  `color:#231704;font-weight:800;font-size:${pxS(12)};`
+                : // Durchscheinend, damit das Bild darunter lesbar bleibt.
+                  //
+                  // OHNE Weichzeichner. Ein backdrop-filter sah schoen aus,
+                  // brachte aber die Seite zum Erliegen: bei 50 Kacheln mal
+                  // sieben Pillen sind das 350 Flaechen, die der Browser bei
+                  // jedem Bild neu berechnen muss. Instagrams Bilder kamen
+                  // danach gar nicht mehr durch, nur noch graue Pillen im
+                  // Leeren (10.10.2026, von Emre sofort gemeldet -- dasselbe
+                  // Muster wie bei der :has()-Regel am Nachmittag).
+                  //
+                  // Stattdessen: etwas mehr Deckkraft und ein Schatten auf
+                  // der Schrift. Kostet nichts und bleibt auf hellen Bildern
+                  // lesbar.
+                  "background:rgba(17,17,20,.68);color:#fff;" +
+                  "border:1px solid rgba(255,255,255,.10);" +
+                  "text-shadow:0 1px 2px rgba(0,0,0,.6);");
             z.append(...kinder);
             return z;
           };
@@ -3729,7 +3748,10 @@ class Session {
             s.setAttribute("viewBox", "0 0 16 16");
             s.setAttribute("width", pxS(12.5));
             s.setAttribute("height", pxS(12.5));
-            s.setAttribute("fill", "currentColor");
+            // Das Herz in Instagram-Rosa, alles andere weiss. Die Zahl
+            // daneben bleibt weiss -- faerbt man beides, kippt die Zeile
+            // optisch und das Schild wird unruhig.
+            s.setAttribute("fill", name === "herz" ? "#FF4D6D" : "currentColor");
             s.style.cssText = "flex:none";
             s.innerHTML = ZEICHEN[name];
             return s;
@@ -3874,6 +3896,7 @@ class Session {
           RF.zuletztGezeichnet = Date.now();
           try { RF.leisteSetzen(); } catch { /* Darstellung darf nie stoeren */ }
           try { RF.sortierungAnwenden(); } catch { /* dito */ }
+          try { RF.zeitraumAnwenden(); } catch { /* dito */ }
         };
 
         // ---------------------------------------------------------------
@@ -3909,15 +3932,22 @@ class Session {
         //
         // Ohne Sortierung wird gar nichts angefasst: dann ist es blankes
         // Instagram.
-        RF.sortierung = { feld: null, richtung: "ab" };
+        RF.sortierung = { feld: null, name: "Deaktiviert", nurReels: false, richtung: "ab" };
 
+        // Die sieben Eintraege aus Emres Vorlage, in genau dieser
+        // Reihenfolge und mit genau diesen Namen (10.10.2026).
+        //
+        // "nurReels" heisst: nur Kacheln, die auf ein Reel zeigen, werden
+        // mitsortiert; Bilder und Karussells wandern ans Ende. Das ist der
+        // Unterschied zwischen den beiden Datums-Eintraegen.
         const FELDER = [
-          { schluessel: null, name: "Aus" },
-          { schluessel: "aufrufe", name: "Aufrufe" },
-          { schluessel: "likes", name: "Likes" },
+          { schluessel: null, name: "Deaktiviert" },
+          { schluessel: "likes", name: '"Gefällt mir"' },
           { schluessel: "kommentare", name: "Kommentare" },
-          { schluessel: "eng", name: "Engagement" },
-          { schluessel: "zeitpunkt", name: "Datum" },
+          { schluessel: "reposts", name: "Weiterverbreitungen" },
+          { schluessel: "zeitpunkt", name: "Upload-Datum · Beiträge" },
+          { schluessel: "zeitpunkt", name: "Upload-Datum · Reels", nurReels: true },
+          { schluessel: "aufrufe", name: "Aufrufe · Reels", nurReels: true },
         ];
 
         const wertVon = (b, feld) => {
@@ -3927,6 +3957,73 @@ class Session {
             return ((b.likes ?? 0) + (b.kommentare ?? 0)) / b.aufrufe;
           }
           return typeof b[feld] === "number" ? b[feld] : null;
+        };
+
+        // Nur zum Nachsehen (10.10.2026): Vier Versuche, Instagrams Raster
+        // umzusortieren, haben das Layout zerlegt. Verdacht: der Behaelter,
+        // den wir umbauen, ist zu weit oben -- und enthaelt neben den
+        // Kacheln auch Profilkopf, Reiter oder unsere eigene Leiste. Diese
+        // Zeile sagt, was wirklich drin steckt. Fliegt danach raus.
+        // Nur zum Nachsehen (10.10.2026): Emre bestaetigt, dass richtig
+        // sortiert wird -- nur die Darstellung kippt. Also liegt es allein
+        // an der Groesse. Diese Zeile sagt, WIE Instagram die Breite einer
+        // Kachel bestimmt. Genau das habe ich in fuenf Versuchen nie
+        // gemessen, und genau daran sind alle fuenf gescheitert.
+        RF.massePruefen = function () {
+          const { kacheln, behaelter } = behaelterFinden();
+          if (!behaelter || !kacheln.length) return { fehler: "nichts da" };
+          const reihen = [...behaelter.children];
+          const lies = (el) => {
+            const s = getComputedStyle(el);
+            const r = el.getBoundingClientRect();
+            return {
+              anzeige: s.display,
+              flex: `${s.flexGrow}/${s.flexShrink}/${s.flexBasis}`,
+              breite: `${s.width}|${Math.round(r.width)}`,
+              hoehe: `${s.height}|${Math.round(r.height)}`,
+              verhaeltnis: s.aspectRatio,
+              min: s.minWidth,
+            };
+          };
+          const traegerVon = (a2) => {
+            let n = a2;
+            while (n.parentElement && n.parentElement.parentElement !== behaelter) n = n.parentElement;
+            return n;
+          };
+          const ersteReihe = reihen[0];
+          const letzteReihe = reihen[reihen.length - 1];
+          return {
+            reihen: reihen.length,
+            kachelnJeReihe: reihen.map((r) => r.children.length),
+            reiheErste: lies(ersteReihe),
+            reiheLetzte: lies(letzteReihe),
+            traegerErster: lies(traegerVon(kacheln[0])),
+            traegerLetzter: lies(traegerVon(kacheln[kacheln.length - 1])),
+            kachelErste: lies(kacheln[0]),
+          };
+        };
+
+        RF.behaelterPruefen = function () {
+          const { kacheln, behaelter } = behaelterFinden();
+          if (!behaelter) return { fehler: "kein Behaelter" };
+          const kinder = [...behaelter.children];
+          const mitKachel = kinder.filter((k) => k.querySelector('a[href*="/p/"], a[href*="/reel/"]')).length;
+          const s = getComputedStyle(behaelter);
+          return {
+            kacheln: kacheln.length,
+            behaelter: behaelter.tagName,
+            kinder: kinder.length,
+            kinderMitKacheln: mitKachel,
+            kinderOhneKacheln: kinder.length - mitKachel,
+            anzeige: s.display,
+            richtung: s.flexDirection,
+            // Was steht in den Kindern OHNE Kacheln? Das sind die
+            // Fremdkoerper, die beim Umbau mitgerissen wuerden.
+            fremd: kinder
+              .filter((k) => !k.querySelector('a[href*="/p/"], a[href*="/reel/"]'))
+              .slice(0, 3)
+              .map((k) => `${k.tagName}:${(k.innerText || "").trim().slice(0, 30).replace(/\s+/g, " ")}`),
+          };
         };
 
         function behaelterFinden() {
@@ -3940,73 +4037,96 @@ class Session {
           return { kacheln, behaelter };
         }
 
-        RF.sortierungAufheben = function () {
-          const { behaelter } = behaelterFinden();
-          if (behaelter && behaelter.dataset.rfUmgestellt) {
-            behaelter.style.display = behaelter.dataset.rfDisplay || "";
-            behaelter.style.gridTemplateColumns = "";
-            behaelter.style.gap = "";
-            delete behaelter.dataset.rfUmgestellt;
-            delete behaelter.dataset.rfDisplay;
-          }
-          for (const el of document.querySelectorAll("[data-rf-reihe]")) {
-            el.style.display = el.dataset.rfReiheDisplay || "";
-            delete el.dataset.rfReihe;
-            delete el.dataset.rfReiheDisplay;
-          }
-          for (const el of document.querySelectorAll("[data-rf-ordnung]")) {
-            el.style.order = "";
-            delete el.dataset.rfOrdnung;
-          }
-        };
+        // ===============================================================
+        // Zeitraum-Filter
+        // ===============================================================
+        //
+        // Blendet Kacheln aus, deren Upload-Datum ausserhalb des gewaehlten
+        // Bereichs liegt. Ausgeblendet wird ueber display:none auf dem
+        // Traeger -- derselbe schonende Weg wie beim Sortieren: kein Knoten
+        // wird umgehaengt, nichts von Instagram entfernt, und ein Klick auf
+        // "All time" stellt alles wieder her.
+        //
+        // Kacheln, zu denen wir (noch) kein Datum haben, bleiben SICHTBAR.
+        // Sie wegzublenden waere eine Behauptung ueber etwas, das wir nicht
+        // wissen -- und waehrend das Nachladen laeuft, waere das staendig
+        // falsch.
+        RF.zeitraum = { von: null, bis: null };
 
-        RF.sortierungAnwenden = function () {
-          const feld = RF.sortierung.feld;
-          if (!feld) {
-            RF.sortierungAufheben();
-            return;
-          }
-          const { kacheln, behaelter } = behaelterFinden();
-          if (!behaelter || kacheln.length < 2) return;
-
-          let abstand = "4px";
-          for (const kind of behaelter.children) {
-            const g = getComputedStyle(kind).columnGap;
-            if (g && g !== "normal") { abstand = g; break; }
-          }
-          if (!behaelter.dataset.rfUmgestellt) {
-            behaelter.dataset.rfDisplay = behaelter.style.display || "";
-            behaelter.dataset.rfUmgestellt = "1";
-          }
-          behaelter.style.display = "grid";
-          behaelter.style.gridTemplateColumns = `repeat(${RF.spalten() || 4}, minmax(0, 1fr))`;
-          behaelter.style.gap = abstand;
-
-          for (const kind of behaelter.children) {
-            if (kind.dataset.rfReihe) continue;
-            kind.dataset.rfReihe = "1";
-            kind.dataset.rfReiheDisplay = kind.style.display || "";
-            kind.style.display = "contents";
-          }
-
-          // Die Zuordnung laeuft ueber den Code im Link -- genau wie bei den
-          // Schildern, nie ueber die Position.
-          const liste = kacheln.map((a) => {
-            const treffer = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
-            const code = treffer ? treffer[1] : null;
+        RF.zeitraumAnwenden = function () {
+          const { von, bis } = RF.zeitraum;
+          for (const a of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
+            const r = a.getBoundingClientRect();
+            if (r.width < 120 && r.height < 120 && !a.dataset.rfVersteckt) continue;
             let traeger = a;
-            while (traeger.parentElement && !traeger.parentElement.dataset.rfReihe) traeger = traeger.parentElement;
-            return { traeger, wert: wertVon(code ? RF.daten.get(code) : null, feld) };
-          });
-          // Ohne Wert ans Ende -- nie raten, nie mit null mitsortieren.
-          const mitWert = liste.filter((e) => e.wert !== null);
-          const ohneWert = liste.filter((e) => e.wert === null);
-          mitWert.sort((x, y) => (RF.sortierung.richtung === "auf" ? x.wert - y.wert : y.wert - x.wert));
-          [...mitWert, ...ohneWert].forEach((e, i) => {
-            e.traeger.dataset.rfOrdnung = "1";
-            e.traeger.style.order = String(i);
-          });
+            while (traeger.parentElement && !traeger.parentElement.dataset.rfReihe && traeger.parentElement !== document.body) {
+              if (traeger.parentElement.children.length > 1) break;
+              traeger = traeger.parentElement;
+            }
+            if (!von && !bis) {
+              if (traeger.dataset.rfVersteckt) {
+                traeger.style.display = traeger.dataset.rfVerstecktDisplay || "";
+                delete traeger.dataset.rfVersteckt;
+                delete traeger.dataset.rfVerstecktDisplay;
+              }
+              continue;
+            }
+            const m = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
+            const b = m ? RF.daten.get(m[1]) : null;
+            // Ohne Datum: sichtbar lassen, nichts behaupten.
+            const drin = !b || !b.zeitpunkt || ((!von || b.zeitpunkt >= von) && (!bis || b.zeitpunkt <= bis));
+            if (drin) {
+              if (traeger.dataset.rfVersteckt) {
+                traeger.style.display = traeger.dataset.rfVerstecktDisplay || "";
+                delete traeger.dataset.rfVersteckt;
+                delete traeger.dataset.rfVerstecktDisplay;
+              }
+            } else if (!traeger.dataset.rfVersteckt) {
+              traeger.dataset.rfVersteckt = "1";
+              traeger.dataset.rfVerstecktDisplay = traeger.style.display || "";
+              traeger.style.display = "none";
+            }
+          }
         };
+
+        // KEIN Umsortieren mehr.
+        //
+        // Drei Anlaeufe, Instagrams Raster umzustellen, sind gescheitert:
+        // mit display:contents verloren die Kacheln ihre Groesse, zuletzt
+        // blieb eine einzige Kachel ueber die volle Breite stehen. Jeder
+        // Versuch hat das Layout zerlegt (10.10.2026).
+        //
+        // Deshalb fassen wir Instagrams Raster gar nicht mehr an. Gefiltert
+        // wird nur noch: was nicht passt, wird ausgeblendet -- das aendert
+        // keine Groesse und keine Reihenfolge. Sortieren kann spaeter
+        // wiederkommen, aber nur mit einem Weg, der das Raster in Ruhe
+        // laesst.
+        // Sortieren ist AUS -- vorerst.
+        //
+        // Sieben Anlaeufe am 10.10.2026, sieben Mal kippte die Darstellung.
+        // Das Sortieren selbst war dabei immer richtig; nur die Groesse der
+        // Kacheln ging verloren. Was gemessen ist und beim naechsten Anlauf
+        // nicht neu erraten werden muss:
+        //
+        //   Behaelter: display:flex, column, Kinder = Reihen, nichts Fremdes
+        //   Reihe:     display:flex, Breite 1421, Hoehe 441
+        //   Traeger:   flex: 1 0 0%, Breite 283 (= 1/5 der Reihe), Hoehe 441
+        //   Kachel:    <a> display:inline, Breite auto, Hoehe auto
+        //
+        // Die Kachel hat also SELBST keine Groesse: Breite = ein Fuenftel
+        // der Reihe, Hoehe = Hoehe der Reihe. Wer die Reihen aufloest,
+        // nimmt ihr beides. Versucht und gescheitert sind:
+        //   1.-3. Raster + display:contents (Kachel verliert Breite+Hoehe)
+        //   4.    Kacheln zwischen Reihen umhaengen
+        //   5.    dasselbe mit gemessenem Seitenverhaeltnis
+        //   6.    Flex-Umbruch + festes Fuenftel  (Hoehe fiel auf null)
+        //   7.    dasselbe + aspectRatio          (wieder verzerrt)
+        //
+        // Der naechste Anlauf sollte NICHT wieder an Instagrams Reihen
+        // drehen, sondern beim <a> ansetzen -- das ist das einzige Element,
+        // das bisher nie angefasst wurde.
+        RF.sortierungAufheben = function () {};
+        RF.sortierungAnwenden = function () {};
 
         // ===============================================================
         // Die Research-Leiste ueber dem Raster
@@ -4023,18 +4143,12 @@ class Session {
             // abgetrennt durch einen feinen Strich. Nur die Farben sind
             // unsere: neutrales Schwarz statt Weiss, Gold statt Blau.
             //
-            // ACHTUNG: Datumsbereich, Automatische Analyse und die
-            // Werkzeuge rechts sind bisher NUR DARSTELLUNG -- dahinter
-            // liegt noch keine Funktion. Emre wollte die Leiste zuerst
-            // vollstaendig sehen und danach entscheiden, was bleibt.
+            // ACHTUNG: Der Datumsbereich ist bisher NUR DARSTELLUNG --
+            // dahinter liegt noch keine Funktion. Sortierung und Richtung
+            // arbeiten.
             const WERKZEUG = {
-              kalender: '<path d="M5 1.5v1.2h6V1.5h1.5v1.2H13A1.5 1.5 0 0 1 14.5 4.2v8.3A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.2A1.5 1.5 0 0 1 3 2.7h.5V1.5zM3 6.4v6.1h10V6.4z"/>',
-              saeulen: '<path d="M2 9h2.4v5H2zM6.8 5h2.4v9H6.8zM11.6 2H14v12h-2.4z"/>',
-              schichten: '<path d="M8 1.5 15 5.2 8 8.9 1 5.2zM1 8l7 3.7L15 8l-1.9-1L8 9.6 2.9 7zM1 10.8l7 3.7 7-3.7-1.9-1L8 12.4l-5.1-2.6z"/>',
-              stift: '<path d="M8 1.5a2.3 2.3 0 0 1 2.3 2.3v3.4a2.3 2.3 0 0 1-4.6 0V3.8A2.3 2.3 0 0 1 8 1.5zM3.6 7.2h1.5a2.9 2.9 0 0 0 5.8 0h1.5a4.4 4.4 0 0 1-3.6 4.3v1.6h2v1.4H5.2v-1.4h2v-1.6a4.4 4.4 0 0 1-3.6-4.3z"/>',
-              raster: '<path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/>',
-              runter: '<path d="M7.3 1.5h1.4v8.2l3-3 1 1L8 12.4 3.3 7.7l1-1 3 3zM2.5 13h11v1.4h-11z"/>',
-              rauf: '<path d="M8 1.6l4.7 4.7-1 1-3-3V12.5H7.3V4.3l-3 3-1-1zM2.5 13.6h11V15h-11z"/>',
+              kalender:
+                '<path d="M5 1.5v1.2h6V1.5h1.5v1.2H13A1.5 1.5 0 0 1 14.5 4.2v8.3A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.2A1.5 1.5 0 0 1 3 2.7h.5V1.5zM3 6.4v6.1h10V6.4z"/>',
             };
 
             const bildchen = (name, farbe) => {
@@ -4052,7 +4166,12 @@ class Session {
             leiste.id = "rf-leiste";
             leiste.style.cssText =
               `display:flex;align-items:center;gap:${px(7)};flex-wrap:nowrap;` +
-              `max-width:100%;overflow:hidden;` +
+              // KEIN overflow:hidden -- das schnitt die Klappmenues ab, die
+              // unter der Leiste haengen. Sie oeffneten sich, waren aber
+              // unsichtbar (10.10.2026: "passiert nix, wenn ich drauf
+              // klicke"). Noetig war es nur fuer die vielen Knoepfe von
+              // frueher, und die sind weg.
+              "max-width:100%;" +
               `margin:${px(9)} 0;padding:${px(6)} ${px(11)};border-radius:${px(13)};` +
               "background:#0b0b0d;border:1px solid rgba(255,255,255,.08);" +
               `box-shadow:0 ${px(4)} ${px(14)} rgba(0,0,0,.35);` +
@@ -4078,9 +4197,14 @@ class Session {
             kopf.append(zeichen, marke);
 
             // --- die Pillen -------------------------------------------
+            // Bewusst ein DIV, kein BUTTON.
+            //
+            // In den Schaltern haengen Klappmenues mit eigenen Knoepfen --
+            // und ein <button> im <button> ist nicht erlaubt. Chrome
+            // rendert es, verschluckt aber Klicks darin (10.10.2026).
             const pilleKnopf = (text, zeichen) => {
-              const b2 = document.createElement("button");
-              b2.type = "button";
+              const b2 = document.createElement("div");
+              b2.setAttribute("role", "button");
               b2.style.cssText =
                 `display:flex;align-items:center;gap:${px(6)};flex:none;` +
                 `padding:0 ${px(13)};height:${px(29)};border-radius:${px(999)};cursor:pointer;` +
@@ -4091,98 +4215,381 @@ class Session {
               s.textContent = text;
               b2.appendChild(s);
               b2.__text = s;
+              // Ein kleiner Pfeil nach unten macht sichtbar, dass sich
+              // etwas aufklappt (Emres Wunsch, 10.10.2026).
+              b2.__pfeil = () => {
+                const pf = document.createElement("span");
+                pf.textContent = "\u25BE";
+                pf.style.cssText = `font-size:${px(10)};opacity:.55;margin-left:${px(1)}`;
+                b2.appendChild(pf);
+              };
               return b2;
+            };
+
+            // Ein Klappmenue -- EIN Bauplan fuer beide Knoepfe.
+            //
+            // Aufbau genau wie in Emres Vorlage (10.10.2026): der Knopf
+            // oeffnet eine Liste darunter, der gewaehlte Eintrag ist
+            // gefuellt hervorgehoben, ein Klick daneben schliesst sie.
+            // Bewusst als gemeinsame Funktion: die Richtung soll sich
+            // exakt so verhalten wie die Sortierung, nicht so aehnlich.
+            const machKlappmenue = (knopf, auswahl, istGewaehlt, beiWahl) => {
+              knopf.style.position = "relative";
+              const menue = document.createElement("div");
+              menue.style.cssText =
+                `position:absolute;top:calc(100% + ${px(6)});left:0;z-index:40;display:none;` +
+                `min-width:${px(200)};padding:${px(6)};border-radius:${px(14)};` +
+                "background:#0f0f12;border:1px solid rgba(255,255,255,.12);" +
+                `box-shadow:0 ${px(14)} ${px(36)} rgba(0,0,0,.55);` +
+                `font:500 ${px(13)}/1 inherit;text-align:left`;
+
+              const zeilen = auswahl.map((e) => {
+                const z = document.createElement("div");
+                z.textContent = e.name;
+                z.style.cssText =
+                  `padding:${px(9)} ${px(14)};border-radius:${px(10)};cursor:pointer;white-space:nowrap`;
+                z.addEventListener("mouseenter", () => {
+                  if (!istGewaehlt(e)) z.style.background = "rgba(255,255,255,.07)";
+                });
+                z.addEventListener("mouseleave", () => {
+                  if (!istGewaehlt(e)) z.style.background = "transparent";
+                });
+                z.addEventListener("click", (ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  beiWahl(e);
+                  menue.style.display = "none";
+                  zeigen();
+                  RF.sortierungAnwenden();
+                });
+                menue.appendChild(z);
+                return z;
+              });
+
+              const zeigen = () => {
+                auswahl.forEach((e, i) => {
+                  const g = istGewaehlt(e);
+                  zeilen[i].style.background = g ? GOLD : "transparent";
+                  zeilen[i].style.color = g ? "#231704" : "rgba(255,255,255,.88)";
+                  zeilen[i].style.fontWeight = g ? "700" : "500";
+                  if (g) knopf.__text.textContent = e.name;
+                });
+              };
+
+              knopf.appendChild(menue);
+              knopf.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const auf = menue.style.display !== "none";
+                // Erst alle schliessen, dann dieses oeffnen -- sonst
+                // stehen zwei Listen uebereinander.
+                for (const m of leiste.querySelectorAll("[data-rf-menue]")) m.style.display = "none";
+                menue.style.display = auf ? "none" : "block";
+              });
+              menue.dataset.rfMenue = "1";
+              zeigen();
+              return zeigen;
             };
 
             const feldKnopf = pilleKnopf("Deaktiviert");
-            const richtungKnopf = pilleKnopf("Aufsteigend");
-            const datumKnopf = pilleKnopf("Beliebiges Datum", "kalender");
+            feldKnopf.__pfeil();
+            machKlappmenue(
+              feldKnopf,
+              FELDER,
+              (f) => RF.sortierung.name === f.name,
+              (f) => {
+                RF.sortierung.feld = f.schluessel;
+                RF.sortierung.name = f.name;
+                RF.sortierung.nurReels = f.nurReels === true;
+                const an = !!f.schluessel;
+                feldKnopf.style.background = an ? "rgba(234,192,136,.16)" : "rgba(255,255,255,.045)";
+                feldKnopf.style.borderColor = an ? "rgba(234,192,136,.5)" : "rgba(255,255,255,.10)";
+              }
+            );
 
-            // --- der hervorgehobene Knopf (bei ihnen blau) -------------
-            const analyse = document.createElement("button");
-            analyse.type = "button";
-            analyse.style.cssText =
-              `display:flex;align-items:center;gap:${px(6)};margin-left:auto;flex:none;` +
-              `padding:0 ${px(14)};height:${px(29)};border-radius:${px(999)};cursor:pointer;` +
-              "background:linear-gradient(180deg,#EAC088,#D39448);border:1px solid rgba(0,0,0,.2);" +
-              `color:#231704;font:600 ${px(13)}/1 inherit;white-space:nowrap`;
-            analyse.appendChild(bildchen("saeulen", "#231704"));
-            const analyseText = document.createElement("span");
-            analyseText.textContent = "Automatische Analyse";
-            analyse.appendChild(analyseText);
+            // Klick daneben schliesst jede offene Liste. Ein Zuhoerer fuer
+            // alle, nichts das staendig rechnet.
+            document.addEventListener(
+              "click",
+              () => {
+                for (const m of leiste.querySelectorAll("[data-rf-menue]")) m.style.display = "none";
+              },
+              true
+            );
 
-            // --- die runden Werkzeuge ---------------------------------
-            const rundKnopf = (zeichen, gefuellt) => {
-              const b2 = document.createElement("button");
-              b2.type = "button";
+            const RICHTUNGEN = [
+              { name: "Aufsteigend", wert: "auf" },
+              { name: "Absteigend", wert: "ab" },
+            ];
+            const richtungKnopf = pilleKnopf("Absteigend");
+            richtungKnopf.__pfeil();
+            machKlappmenue(
+              richtungKnopf,
+              RICHTUNGEN,
+              (r) => RF.sortierung.richtung === r.wert,
+              (r) => {
+                RF.sortierung.richtung = r.wert;
+              }
+            );
+            // ===========================================================
+            // Der Datumsbereich -- Aufbau eins zu eins nach Emres Vorlage
+            // (10.10.2026), Beschriftung auf Englisch.
+            // ===========================================================
+            const datumKnopf = pilleKnopf("Any date", "kalender");
+            datumKnopf.style.position = "relative";
+
+            const tafel = document.createElement("div");
+            tafel.dataset.rfMenue = "1";
+            tafel.style.cssText =
+              `position:absolute;top:calc(100% + ${px(6)});right:0;z-index:40;display:none;` +
+              `width:${px(330)};padding:${px(16)};border-radius:${px(16)};` +
+              "background:#0f0f12;border:1px solid rgba(255,255,255,.12);" +
+              `box-shadow:0 ${px(16)} ${px(44)} rgba(0,0,0,.6);` +
+              `font:500 ${px(13)}/1.2 inherit;text-align:left;color:#fff`;
+            tafel.addEventListener("click", (ev) => ev.stopPropagation());
+
+            const ueber = document.createElement("div");
+            ueber.textContent = "CUSTOM RANGE";
+            ueber.style.cssText =
+              `font-size:${px(10)};letter-spacing:.14em;font-weight:700;color:rgba(255,255,255,.42)`;
+            const titel = document.createElement("div");
+            titel.textContent = "Filter by upload date";
+            titel.style.cssText = `margin-top:${px(5)};font-size:${px(16)};font-weight:700`;
+
+            // --- Schnellbereiche --------------------------------------
+            const TAG = 86400;
+            const SCHNELL = [
+              { name: "Today", tage: 1 },
+              { name: "7 days", tage: 7 },
+              { name: "30 days", tage: 30 },
+              { name: "90 days", tage: 90 },
+              { name: "180 days", tage: 180 },
+              { name: "1 year", tage: 365 },
+              { name: "All time", tage: null },
+            ];
+            const schnellReihe = document.createElement("div");
+            schnellReihe.style.cssText =
+              `display:flex;flex-wrap:wrap;gap:${px(8)};margin-top:${px(14)}`;
+
+            // --- Kalender ---------------------------------------------
+            let blatt = new Date();
+            blatt.setDate(1);
+            let von = null; // Date oder null
+            let bis = null;
+
+            const kalender = document.createElement("div");
+            kalender.style.cssText =
+              `margin-top:${px(14)};padding:${px(10)};border-radius:${px(12)};` +
+              "background:rgba(255,255,255,.04)";
+
+            const kopfZeile = document.createElement("div");
+            kopfZeile.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:${px(8)}`;
+            const pfeil = (zeichen, schritt) => {
+              const b2 = document.createElement("div");
+              b2.setAttribute("role", "button");
+              b2.textContent = zeichen;
               b2.style.cssText =
-                `display:flex;align-items:center;justify-content:center;flex:none;` +
-                `width:${px(29)};height:${px(29)};border-radius:${px(999)};cursor:pointer;border:none;` +
-                (gefuellt
-                  ? "background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;"
-                  : "background:transparent;color:rgba(255,255,255,.62);");
-              b2.appendChild(bildchen(zeichen, gefuellt ? "#231704" : "#fff"));
+                `width:${px(26)};height:${px(26)};border-radius:${px(999)};cursor:pointer;flex:none;` +
+                `display:flex;align-items:center;justify-content:center;` +
+                "background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);" +
+                `color:#fff;font:600 ${px(14)}/1 inherit`;
+              b2.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                blatt = new Date(blatt.getFullYear(), blatt.getMonth() + schritt, 1);
+                malen();
+              });
               return b2;
             };
+            const monatText = document.createElement("div");
+            monatText.style.cssText = `font-weight:700;font-size:${px(14)}`;
+            kopfZeile.append(pfeil("\u2039", -1), monatText, pfeil("\u203A", 1));
 
-            const strich = document.createElement("span");
-            strich.style.cssText =
-              `width:1px;height:${px(18)};background:rgba(255,255,255,.12);margin:0 ${px(3)};flex:none`;
+            const wochenZeile = document.createElement("div");
+            wochenZeile.style.cssText =
+              `display:grid;grid-template-columns:repeat(7,1fr);gap:${px(2)};margin-top:${px(10)};` +
+              `font-size:${px(11)};color:rgba(255,255,255,.45);text-align:center`;
+            for (const w of ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]) {
+              const z = document.createElement("div");
+              z.textContent = w;
+              wochenZeile.appendChild(z);
+            }
 
-            // --- Verhalten: nur die beiden echten Schalter -------------
-            const feldZeigen = (name, an) => {
-              feldKnopf.__text.textContent = name;
-              feldKnopf.style.background = an ? GOLD : "rgba(255,255,255,.04)";
-              feldKnopf.style.borderColor = an ? GOLD : "rgba(255,255,255,.12)";
-              feldKnopf.style.color = an ? "#231704" : "#fff";
-              feldKnopf.style.fontWeight = an ? "700" : "500";
+            const tageGitter = document.createElement("div");
+            tageGitter.style.cssText =
+              `display:grid;grid-template-columns:repeat(7,1fr);gap:${px(2)};margin-top:${px(4)}`;
+            kalender.append(kopfZeile, wochenZeile, tageGitter);
+
+            // --- Fuss --------------------------------------------------
+            const fuss = document.createElement("div");
+            fuss.style.cssText =
+              `display:flex;align-items:center;gap:${px(8)};margin-top:${px(14)}`;
+            const hinweis = document.createElement("div");
+            hinweis.style.cssText = `flex:1;font-size:${px(12)};color:rgba(255,255,255,.55)`;
+            const kleinKnopf = (text, betont) => {
+              const b2 = document.createElement("div");
+              b2.setAttribute("role", "button");
+              b2.textContent = text;
+              b2.style.cssText =
+                `padding:0 ${px(16)};height:${px(32)};border-radius:${px(999)};cursor:pointer;flex:none;` +
+                `display:flex;align-items:center;justify-content:center;` +
+                (betont
+                  ? "background:linear-gradient(180deg,#EAC088,#D39448);border:1px solid rgba(0,0,0,.2);color:#231704;"
+                  : "background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#fff;") +
+                `font:600 ${px(13)}/1 inherit`;
+              return b2;
             };
+            const abbrechen = kleinKnopf("Cancel", false);
+            const anwenden = kleinKnopf("Apply", true);
+            fuss.append(hinweis, abbrechen, anwenden);
 
-            feldKnopf.addEventListener("click", (ev) => {
+            tafel.append(ueber, titel, schnellReihe, kalender, fuss);
+            datumKnopf.appendChild(tafel);
+
+            // --- Verhalten ---------------------------------------------
+            const MONATE = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+            const kurzDatum = (d) =>
+              `${MONATE[d.getMonth()].slice(0, 3)} ${d.getDate()}, ${d.getFullYear()}`;
+            const gleicherTag = (a2, b2) =>
+              a2 && b2 && a2.getFullYear() === b2.getFullYear() && a2.getMonth() === b2.getMonth() && a2.getDate() === b2.getDate();
+
+            function knopfBeschriften() {
+              if (von && bis) datumKnopf.__text.textContent = `${kurzDatum(von)} – ${kurzDatum(bis)}`;
+              else if (von) datumKnopf.__text.textContent = `From ${kurzDatum(von)}`;
+              else datumKnopf.__text.textContent = "Any date";
+              const an = !!(von || bis);
+              datumKnopf.style.background = an ? "rgba(234,192,136,.16)" : "rgba(255,255,255,.045)";
+              datumKnopf.style.borderColor = an ? "rgba(234,192,136,.5)" : "rgba(255,255,255,.10)";
+            }
+
+            function malen() {
+              monatText.textContent = `${MONATE[blatt.getMonth()]} ${blatt.getFullYear()}`;
+              tageGitter.textContent = "";
+              const ersterTag = new Date(blatt.getFullYear(), blatt.getMonth(), 1).getDay();
+              const start = new Date(blatt.getFullYear(), blatt.getMonth(), 1 - ersterTag);
+              for (let i = 0; i < 42; i++) {
+                const tag = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+                const fremd = tag.getMonth() !== blatt.getMonth();
+                const istVon = gleicherTag(tag, von);
+                const istBis = gleicherTag(tag, bis);
+                const dazwischen = von && bis && tag > von && tag < bis;
+                const z = document.createElement("div");
+                z.setAttribute("role", "button");
+                z.textContent = String(tag.getDate());
+                z.style.cssText =
+                  `height:${px(32)};border-radius:${px(9)};cursor:pointer;border:1px solid transparent;` +
+                  `display:flex;align-items:center;justify-content:center;` +
+                  `font:600 ${px(13)}/1 inherit;` +
+                  (istVon || istBis
+                    ? "background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;"
+                    : dazwischen
+                      ? "background:rgba(234,192,136,.16);color:#fff;"
+                      : `background:transparent;color:${fremd ? "rgba(255,255,255,.26)" : "rgba(255,255,255,.88)"};`);
+                z.addEventListener("click", (ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  if (!von || (von && bis)) {
+                    von = tag;
+                    bis = null;
+                  } else if (tag < von) {
+                    von = tag;
+                  } else {
+                    bis = tag;
+                  }
+                  malen();
+                });
+                tageGitter.appendChild(z);
+              }
+              // Wie in der Vorlage: sobald ein Bereich steht, wird oben der
+              // Bereich selbst zur Ueberschrift und unten links steht
+              // "Custom range" statt der Anleitung.
+              titel.textContent =
+                von && bis ? `${kurzDatum(von)} – ${kurzDatum(bis)}` : von ? `From ${kurzDatum(von)}` : "Filter by upload date";
+              hinweis.textContent = !von
+                ? "Start: pick a start date"
+                : !bis
+                  ? "End: pick an end date"
+                  : "Custom range";
+              anwenden.style.opacity = von ? "1" : ".45";
+              anwenden.style.pointerEvents = von ? "auto" : "none";
+            }
+
+            for (const s of SCHNELL) {
+              const b2 = document.createElement("div");
+              b2.setAttribute("role", "button");
+              b2.textContent = s.name;
+              b2.style.cssText =
+                `flex:1 1 ${px(92)};padding:${px(10)} ${px(8)};border-radius:${px(10)};cursor:pointer;text-align:center;` +
+                "background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);" +
+                `color:#fff;font:600 ${px(12.5)}/1.2 inherit`;
+              b2.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (s.tage === null) {
+                  von = null;
+                  bis = null;
+                  RF.zeitraum = { von: null, bis: null };
+                } else {
+                  const jetzt = new Date();
+                  bis = jetzt;
+                  von = new Date(jetzt.getTime() - (s.tage - 1) * TAG * 1000);
+                  von.setHours(0, 0, 0, 0);
+                  RF.zeitraum = { von: Math.floor(von.getTime() / 1000), bis: Math.floor(bis.getTime() / 1000) };
+                  blatt = new Date(von.getFullYear(), von.getMonth(), 1);
+                }
+                malen();
+                knopfBeschriften();
+                RF.zeitraumAnwenden();
+                tafel.style.display = "none";
+              });
+              schnellReihe.appendChild(b2);
+            }
+
+            abbrechen.addEventListener("click", (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
-              const i = FELDER.findIndex((f) => f.schluessel === RF.sortierung.feld);
-              const naechste = FELDER[(i + 1) % FELDER.length];
-              RF.sortierung.feld = naechste.schluessel;
-              feldZeigen(naechste.schluessel ? naechste.name : "Deaktiviert", !!naechste.schluessel);
-              RF.sortierungAnwenden();
+              tafel.style.display = "none";
             });
 
-            richtungKnopf.addEventListener("click", (ev) => {
+            anwenden.addEventListener("click", (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
-              RF.sortierung.richtung = RF.sortierung.richtung === "ab" ? "auf" : "ab";
-              richtungKnopf.__text.textContent = RF.sortierung.richtung === "ab" ? "Absteigend" : "Aufsteigend";
-              RF.sortierungAnwenden();
+              if (!von) return;
+              const a2 = new Date(von);
+              a2.setHours(0, 0, 0, 0);
+              const e2 = new Date(bis ?? von);
+              e2.setHours(23, 59, 59, 0);
+              RF.zeitraum = { von: Math.floor(a2.getTime() / 1000), bis: Math.floor(e2.getTime() / 1000) };
+              knopfBeschriften();
+              RF.zeitraumAnwenden();
+              tafel.style.display = "none";
             });
-            richtungKnopf.__text.textContent = RF.sortierung.richtung === "ab" ? "Absteigend" : "Aufsteigend";
 
-            // Gruppen statt einer Reihe gleicher Abstaende -- genau wie in
-            // der Vorlage: der hervorgehobene Knopf und der gefuellte
-            // Schichten-Knopf gehoeren zusammen, die drei schlichten
-            // Werkzeuge stehen dicht daneben, und die letzten beiden
-            // sitzen abgetrennt in einem eigenen Rahmen.
-            const gruppe = (abstand) => {
-              const g = document.createElement("div");
-              g.style.cssText = `display:flex;align-items:center;gap:${px(abstand)};flex:none`;
-              return g;
-            };
+            datumKnopf.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              const auf = tafel.style.display !== "none";
+              for (const m of leiste.querySelectorAll("[data-rf-menue]")) m.style.display = "none";
+              tafel.style.display = auf ? "none" : "block";
+              if (!auf) malen();
+            });
 
-            const rechts = gruppe(5);
-            rechts.style.marginLeft = "auto";
-            analyse.style.marginLeft = "0";
-            const werkzeuge = gruppe(1);
-            werkzeuge.append(rundKnopf("saeulen"), rundKnopf("stift"), rundKnopf("raster"));
-            rechts.append(analyse, rundKnopf("schichten", true), werkzeuge);
+            malen();
+            knopfBeschriften();
 
-            const letzte = gruppe(1);
-            letzte.style.cssText +=
-              `;padding:${px(2)};border-radius:${px(999)};border:1px solid rgba(255,255,255,.10)`;
-            letzte.append(rundKnopf("runter"), rundKnopf("rauf"));
+            // Links der Name, rechts die drei Schalter -- sonst nichts.
+            //
+            // Die Knoepfe aus der Vorlage (Automatische Analyse, die vier
+            // runden Werkzeuge, Herunter- und Hochladen) sind raus: sie
+            // sahen aus wie Funktionen, waren aber nur Bild. Emre wollte
+            // sie weg (10.10.2026) -- ein Knopf, der nichts tut, ist eine
+            // Luege.
+            const schalter = document.createElement("div");
+            schalter.style.cssText =
+              `display:flex;align-items:center;gap:${px(7)};margin-left:auto;flex:none`;
+            schalter.append(datumKnopf);
 
-            leiste.append(kopf, feldKnopf, richtungKnopf, datumKnopf, rechts, strich, letzte);
-            // Der Stand haengt jetzt unter der Leiste, weil rechts kein
-            // Platz mehr ist -- die Vorlage hat ihn dort auch nicht.
+            leiste.append(kopf, schalter);
             RF.leisteStand = null;
           }
           if (leiste.nextElementSibling !== behaelter) behaelter.parentElement.insertBefore(leiste, behaelter);
