@@ -1277,6 +1277,9 @@ export function ResearchAccountsPage({
                   else void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform);
                 }}
                 active={active}
+                // Solange die Profil-Buehne offen ist, sollen die Pfeiltasten
+                // dort wirken und nicht hier hinten im Reel-Strom.
+                tastenAus={!!profilName}
                 />
               </div>
             </div>

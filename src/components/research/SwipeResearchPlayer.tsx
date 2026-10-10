@@ -198,6 +198,9 @@ function SwipeSlide({
             <button
               type="button"
               onClick={onFollowClick}
+              // "Following" ist ein Endzustand, kein Schalter: Instagram
+              // bietet im Reel-Strom selbst kein Entfolgen an (11.10.2026 --
+              // einmal gebaut und wieder verworfen, siehe session-server.mjs).
               disabled={followStatus === "pending" || followStatus === "following"}
               className={[
                 "text-[11px] font-medium disabled:cursor-default",
@@ -464,6 +467,7 @@ export function SwipeResearchPlayer({
   onRetryWake,
   onRefreshSession,
   active,
+  tastenAus,
   sitzung,
   onLiveReel,
 }: {
@@ -505,6 +509,13 @@ export function SwipeResearchPlayer({
   // itself stays mounted across navigation now (see App.tsx), so this is
   // what gates video playback and the arrow-key shortcuts instead.
   active: boolean;
+  // Liegt die Profil-Buehne darueber, gehoeren die Pfeiltasten IHR.
+  //
+  // Emre hat es am 10.10.2026 gemeldet: Story oder Highlight auf dem Profil
+  // offen, Pfeiltaste gedrueckt -- und im Hintergrund sprang der Reel-Strom
+  // weiter und fing an zu laufen. Zwei Fenster, eine Tastatur. Das Abspielen
+  // selbst bleibt unberuehrt, nur die Tasten schweigen.
+  tastenAus?: boolean;
 }) {
   const connecting = account.status === "connecting";
   const wheelAccum = useRef(0);
@@ -699,7 +710,7 @@ export function SwipeResearchPlayer({
     // screen (see App.tsx) — without this, its arrow-key shortcuts would
     // keep firing globally the whole time, stealing keystrokes meant for
     // wherever the VA actually navigated to.
-    if (!active) return;
+    if (!active || tastenAus) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "ArrowDown" || e.key === "ArrowRight") {
         e.preventDefault();
@@ -713,7 +724,7 @@ export function SwipeResearchPlayer({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPrev, loading, active]);
+  }, [hasPrev, loading, active, tastenAus]);
 
   function handleWheel(e: React.WheelEvent) {
     // Don't accumulate momentum while locked out — otherwise a fast flick's

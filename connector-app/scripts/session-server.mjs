@@ -1225,6 +1225,12 @@ const BUEHNE_SKRIPT = () => {
     return { ok: false, fehler: "Der Folgen-Knopf hat nicht reagiert." };
   };
 
+  // Entfolgen gibt es hier BEWUSST nicht.
+  //
+  // Im Reel-Strom blendet Instagram den Folgen-Knopf weg, sobald man folgt
+  // (10.10.2026 gemessen). Es gibt also nichts zu druecken. Entfolgt wird
+  // auf dem Profil. Gebaut und wieder verworfen, siehe oben.
+
   // Das Reel anhalten und wieder laufen lassen.
   //
   // Bewusst KEIN Antippen: Antippen schaltet um, und wer nicht weiss, wie
@@ -1646,6 +1652,20 @@ async function followTikTok(page) {
 }
 
 const FOLLOW_HANDLER = { instagram: followInstagram, tiktok: followTikTok };
+
+// Entfolgen gibt es BEWUSST nicht (11.10.2026).
+//
+// Gebaut war es schon -- ueber das Profil, weil Instagram den Knopf im
+// Reel-Strom wegblendet, sobald man folgt. Dort fuehrt es aber durch ein
+// Menue ("Add to favorites / Mute / Restrict / Unfollow"), das sich bei
+// jedem Aufbau anders verhaelt, und es hat mehrfach nicht getroffen.
+//
+// Emre hat es gestoppt, mit dem entscheidenden Argument: Instagram selbst
+// bietet im Reel-Strom kein Entfolgen an. Einen Weg drumherum zu bauen
+// heisst, gegen die Plattform zu arbeiten statt mit ihr -- und ein Knopf,
+// der es verspricht und dann scheitert, ist schlimmer als keiner.
+//
+
 
 // A genuine platform block — not a ReelForge-only blacklist. Runs on the
 // creator's real profile page (not the reel), because that's where
@@ -3765,11 +3785,13 @@ class Session {
           const r = rate(b);
           if (r) stapel.appendChild(pille([textEl(r)], true));
 
+          // Reihenfolge nach Emres Ansage (10.10.2026): Likes, Aufrufe,
+          // Kommentare, Reposts -- danach erst Laenge, Datum, Uhrzeit.
           const zeilen = [
             ["herz", kurz(b.likes)],
+            ["auge", kurz(b.aufrufe)],
             ["sprechblase", kurz(b.kommentare)],
             ["teilen", kurz(b.reposts)],
-            ["auge", kurz(b.aufrufe)],
             ["uhr", dauerText(b.dauer)],
             ["kalender", datumText(b.zeitpunkt)],
             ["uhr", uhrzeitText(b.zeitpunkt)],
@@ -3895,8 +3917,6 @@ class Session {
           RF.stand = { kacheln, beschriftet, bekannt: RF.daten.size };
           RF.zuletztGezeichnet = Date.now();
           try { RF.leisteSetzen(); } catch { /* Darstellung darf nie stoeren */ }
-          try { RF.sortierungAnwenden(); } catch { /* dito */ }
-          try { RF.zeitraumAnwenden(); } catch { /* dito */ }
         };
 
         // ---------------------------------------------------------------
@@ -3917,216 +3937,33 @@ class Session {
         };
 
         // ===============================================================
-        // Sortieren -- ohne Instagrams Aufbau anzufassen
+        // Sortieren und Datumsfilter: AUSGEBAUT (10.10.2026)
         // ===============================================================
         //
-        // Gemessen am 10.10.2026: Instagrams Raster ist KEIN flaches
-        // Raster, sondern ein Stapel von Reihen. Kacheln zwischen Reihen
-        // umzuhaengen waere der naheliegende Weg -- und der gefaehrlichste:
-        // React baut staendig neu auf, und umgehaengte Knoten sind genau
-        // die Stelle, an der Zahlen auf der falschen Kachel landen.
+        // Beides hat das Raster angefasst, und beides ist daran
+        // gescheitert, dass Instagram sein Raster selbst besitzt:
         //
-        // Deshalb wird NICHTS umgehaengt. Die Reihen bekommen nur
-        // display:contents, der Behaelter wird fuer diese Zeit ein Raster,
-        // jede Kachel bekommt eine Ordnungszahl. Reine Darstellung.
+        //   Sortieren -- sieben Versuche, jedes Mal zerfiel die
+        //   Kachelgroesse. Gemessen: das Raster ist ein Stapel von Reihen,
+        //   die Kachel ist flex:1 0 0%, ihre Breite also "Reihe geteilt
+        //   durch Anzahl sichtbarer Kacheln". Jeder Eingriff aendert sie.
         //
-        // Ohne Sortierung wird gar nichts angefasst: dann ist es blankes
-        // Instagram.
-        RF.sortierung = { feld: null, name: "Deaktiviert", nurReels: false, richtung: "ab" };
-
-        // Die sieben Eintraege aus Emres Vorlage, in genau dieser
-        // Reihenfolge und mit genau diesen Namen (10.10.2026).
+        //   Datumsfilter -- filterte richtig, aber display:none machte die
+        //   Seite kuerzer, Instagram baute daraufhin seine Reihen neu auf,
+        //   und zwischen Neuaufbau und naechstem Durchgang war kurz wieder
+        //   alles sichtbar. Der Puls zeigte das Raster im Sekundentakt
+        //   zwischen 3 und 260 Kacheln springen -- das sichtbare Flackern.
         //
-        // "nurReels" heisst: nur Kacheln, die auf ein Reel zeigen, werden
-        // mitsortiert; Bilder und Karussells wandern ans Ende. Das ist der
-        // Unterschied zwischen den beiden Datums-Eintraegen.
-        const FELDER = [
-          { schluessel: null, name: "Deaktiviert" },
-          { schluessel: "likes", name: '"Gefällt mir"' },
-          { schluessel: "kommentare", name: "Kommentare" },
-          { schluessel: "reposts", name: "Weiterverbreitungen" },
-          { schluessel: "zeitpunkt", name: "Upload-Datum · Beiträge" },
-          { schluessel: "zeitpunkt", name: "Upload-Datum · Reels", nurReels: true },
-          { schluessel: "aufrufe", name: "Aufrufe · Reels", nurReels: true },
-        ];
-
-        const wertVon = (b, feld) => {
-          if (!b) return null;
-          if (feld === "eng") {
-            if (!b.aufrufe || b.aufrufe <= 0) return null;
-            return ((b.likes ?? 0) + (b.kommentare ?? 0)) / b.aufrufe;
-          }
-          return typeof b[feld] === "number" ? b[feld] : null;
-        };
-
-        // Nur zum Nachsehen (10.10.2026): Vier Versuche, Instagrams Raster
-        // umzusortieren, haben das Layout zerlegt. Verdacht: der Behaelter,
-        // den wir umbauen, ist zu weit oben -- und enthaelt neben den
-        // Kacheln auch Profilkopf, Reiter oder unsere eigene Leiste. Diese
-        // Zeile sagt, was wirklich drin steckt. Fliegt danach raus.
-        // Nur zum Nachsehen (10.10.2026): Emre bestaetigt, dass richtig
-        // sortiert wird -- nur die Darstellung kippt. Also liegt es allein
-        // an der Groesse. Diese Zeile sagt, WIE Instagram die Breite einer
-        // Kachel bestimmt. Genau das habe ich in fuenf Versuchen nie
-        // gemessen, und genau daran sind alle fuenf gescheitert.
-        RF.massePruefen = function () {
-          const { kacheln, behaelter } = behaelterFinden();
-          if (!behaelter || !kacheln.length) return { fehler: "nichts da" };
-          const reihen = [...behaelter.children];
-          const lies = (el) => {
-            const s = getComputedStyle(el);
-            const r = el.getBoundingClientRect();
-            return {
-              anzeige: s.display,
-              flex: `${s.flexGrow}/${s.flexShrink}/${s.flexBasis}`,
-              breite: `${s.width}|${Math.round(r.width)}`,
-              hoehe: `${s.height}|${Math.round(r.height)}`,
-              verhaeltnis: s.aspectRatio,
-              min: s.minWidth,
-            };
-          };
-          const traegerVon = (a2) => {
-            let n = a2;
-            while (n.parentElement && n.parentElement.parentElement !== behaelter) n = n.parentElement;
-            return n;
-          };
-          const ersteReihe = reihen[0];
-          const letzteReihe = reihen[reihen.length - 1];
-          return {
-            reihen: reihen.length,
-            kachelnJeReihe: reihen.map((r) => r.children.length),
-            reiheErste: lies(ersteReihe),
-            reiheLetzte: lies(letzteReihe),
-            traegerErster: lies(traegerVon(kacheln[0])),
-            traegerLetzter: lies(traegerVon(kacheln[kacheln.length - 1])),
-            kachelErste: lies(kacheln[0]),
-          };
-        };
-
-        RF.behaelterPruefen = function () {
-          const { kacheln, behaelter } = behaelterFinden();
-          if (!behaelter) return { fehler: "kein Behaelter" };
-          const kinder = [...behaelter.children];
-          const mitKachel = kinder.filter((k) => k.querySelector('a[href*="/p/"], a[href*="/reel/"]')).length;
-          const s = getComputedStyle(behaelter);
-          return {
-            kacheln: kacheln.length,
-            behaelter: behaelter.tagName,
-            kinder: kinder.length,
-            kinderMitKacheln: mitKachel,
-            kinderOhneKacheln: kinder.length - mitKachel,
-            anzeige: s.display,
-            richtung: s.flexDirection,
-            // Was steht in den Kindern OHNE Kacheln? Das sind die
-            // Fremdkoerper, die beim Umbau mitgerissen wuerden.
-            fremd: kinder
-              .filter((k) => !k.querySelector('a[href*="/p/"], a[href*="/reel/"]'))
-              .slice(0, 3)
-              .map((k) => `${k.tagName}:${(k.innerText || "").trim().slice(0, 30).replace(/\s+/g, " ")}`),
-          };
-        };
-
-        function behaelterFinden() {
-          const kacheln = [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')].filter((x) => {
-            const r = x.getBoundingClientRect();
-            return r.width >= 120 && r.height >= 120;
-          });
-          if (kacheln.length < 2) return { kacheln: [], behaelter: null };
-          let behaelter = kacheln[0].parentElement;
-          while (behaelter && !kacheln.every((k) => behaelter.contains(k))) behaelter = behaelter.parentElement;
-          return { kacheln, behaelter };
-        }
-
-        // ===============================================================
-        // Zeitraum-Filter
-        // ===============================================================
+        // visibility:hidden statt display:none haette das Layout in Ruhe
+        // gelassen, haette aber Luecken hinterlassen. Emre hat beides
+        // verworfen und entschieden: raus (10.10.2026).
         //
-        // Blendet Kacheln aus, deren Upload-Datum ausserhalb des gewaehlten
-        // Bereichs liegt. Ausgeblendet wird ueber display:none auf dem
-        // Traeger -- derselbe schonende Weg wie beim Sortieren: kein Knoten
-        // wird umgehaengt, nichts von Instagram entfernt, und ein Klick auf
-        // "All time" stellt alles wieder her.
+        // Was BLEIBT, weil es beweisbar funktioniert: die Kennzahlen auf
+        // den Kacheln. Sie fassen Instagrams Aufbau nicht an -- sie legen
+        // sich nur darueber.
         //
-        // Kacheln, zu denen wir (noch) kein Datum haben, bleiben SICHTBAR.
-        // Sie wegzublenden waere eine Behauptung ueber etwas, das wir nicht
-        // wissen -- und waehrend das Nachladen laeuft, waere das staendig
-        // falsch.
-        RF.zeitraum = { von: null, bis: null };
-
-        RF.zeitraumAnwenden = function () {
-          const { von, bis } = RF.zeitraum;
-          for (const a of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
-            const r = a.getBoundingClientRect();
-            if (r.width < 120 && r.height < 120 && !a.dataset.rfVersteckt) continue;
-            let traeger = a;
-            while (traeger.parentElement && !traeger.parentElement.dataset.rfReihe && traeger.parentElement !== document.body) {
-              if (traeger.parentElement.children.length > 1) break;
-              traeger = traeger.parentElement;
-            }
-            if (!von && !bis) {
-              if (traeger.dataset.rfVersteckt) {
-                traeger.style.display = traeger.dataset.rfVerstecktDisplay || "";
-                delete traeger.dataset.rfVersteckt;
-                delete traeger.dataset.rfVerstecktDisplay;
-              }
-              continue;
-            }
-            const m = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
-            const b = m ? RF.daten.get(m[1]) : null;
-            // Ohne Datum: sichtbar lassen, nichts behaupten.
-            const drin = !b || !b.zeitpunkt || ((!von || b.zeitpunkt >= von) && (!bis || b.zeitpunkt <= bis));
-            if (drin) {
-              if (traeger.dataset.rfVersteckt) {
-                traeger.style.display = traeger.dataset.rfVerstecktDisplay || "";
-                delete traeger.dataset.rfVersteckt;
-                delete traeger.dataset.rfVerstecktDisplay;
-              }
-            } else if (!traeger.dataset.rfVersteckt) {
-              traeger.dataset.rfVersteckt = "1";
-              traeger.dataset.rfVerstecktDisplay = traeger.style.display || "";
-              traeger.style.display = "none";
-            }
-          }
-        };
-
-        // KEIN Umsortieren mehr.
-        //
-        // Drei Anlaeufe, Instagrams Raster umzustellen, sind gescheitert:
-        // mit display:contents verloren die Kacheln ihre Groesse, zuletzt
-        // blieb eine einzige Kachel ueber die volle Breite stehen. Jeder
-        // Versuch hat das Layout zerlegt (10.10.2026).
-        //
-        // Deshalb fassen wir Instagrams Raster gar nicht mehr an. Gefiltert
-        // wird nur noch: was nicht passt, wird ausgeblendet -- das aendert
-        // keine Groesse und keine Reihenfolge. Sortieren kann spaeter
-        // wiederkommen, aber nur mit einem Weg, der das Raster in Ruhe
-        // laesst.
-        // Sortieren ist AUS -- vorerst.
-        //
-        // Sieben Anlaeufe am 10.10.2026, sieben Mal kippte die Darstellung.
-        // Das Sortieren selbst war dabei immer richtig; nur die Groesse der
-        // Kacheln ging verloren. Was gemessen ist und beim naechsten Anlauf
-        // nicht neu erraten werden muss:
-        //
-        //   Behaelter: display:flex, column, Kinder = Reihen, nichts Fremdes
-        //   Reihe:     display:flex, Breite 1421, Hoehe 441
-        //   Traeger:   flex: 1 0 0%, Breite 283 (= 1/5 der Reihe), Hoehe 441
-        //   Kachel:    <a> display:inline, Breite auto, Hoehe auto
-        //
-        // Die Kachel hat also SELBST keine Groesse: Breite = ein Fuenftel
-        // der Reihe, Hoehe = Hoehe der Reihe. Wer die Reihen aufloest,
-        // nimmt ihr beides. Versucht und gescheitert sind:
-        //   1.-3. Raster + display:contents (Kachel verliert Breite+Hoehe)
-        //   4.    Kacheln zwischen Reihen umhaengen
-        //   5.    dasselbe mit gemessenem Seitenverhaeltnis
-        //   6.    Flex-Umbruch + festes Fuenftel  (Hoehe fiel auf null)
-        //   7.    dasselbe + aspectRatio          (wieder verzerrt)
-        //
-        // Der naechste Anlauf sollte NICHT wieder an Instagrams Reihen
-        // drehen, sondern beim <a> ansetzen -- das ist das einzige Element,
-        // das bisher nie angefasst wurde.
-        RF.sortierungAufheben = function () {};
-        RF.sortierungAnwenden = function () {};
+        // Die Leiste bleibt als Rahmen stehen, ohne Schalter. Dort soll
+        // spaeter etwas anderes hin.
 
         // ===============================================================
         // Die Research-Leiste ueber dem Raster
@@ -4136,32 +3973,14 @@ class Session {
           if (!behaelter || !behaelter.parentElement) return;
           let leiste = document.getElementById("rf-leiste");
           if (!leiste) {
-            // Die Leiste ist Stueck fuer Stueck nach Emres Vorlage gebaut
-            // (10.10.2026, Bild 3): flacher, stark abgerundeter Balken;
-            // links ein Punkt und der Name, daneben die Schalter als
-            // vollrunde Pillen, rechts die Werkzeuge als runde Knoepfe,
-            // abgetrennt durch einen feinen Strich. Nur die Farben sind
-            // unsere: neutrales Schwarz statt Weiss, Gold statt Blau.
+            // Die Leiste ist nach Emres Vorlage gebaut (10.10.2026,
+            // Bild 3): flacher, stark abgerundeter Balken, links unser
+            // Zeichen und der Name. Nur die Farben sind unsere: neutrales
+            // Schwarz statt Weiss, Gold statt Blau.
             //
-            // ACHTUNG: Der Datumsbereich ist bisher NUR DARSTELLUNG --
-            // dahinter liegt noch keine Funktion. Sortierung und Richtung
-            // arbeiten.
-            const WERKZEUG = {
-              kalender:
-                '<path d="M5 1.5v1.2h6V1.5h1.5v1.2H13A1.5 1.5 0 0 1 14.5 4.2v8.3A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.2A1.5 1.5 0 0 1 3 2.7h.5V1.5zM3 6.4v6.1h10V6.4z"/>',
-            };
-
-            const bildchen = (name, farbe) => {
-              const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-              s.setAttribute("viewBox", "0 0 16 16");
-              s.setAttribute("width", px(13));
-              s.setAttribute("height", px(13));
-              s.setAttribute("fill", farbe || "currentColor");
-              s.style.cssText = "flex:none";
-              s.innerHTML = WERKZEUG[name];
-              return s;
-            };
-
+            // Die Schalter, die hier einmal standen, sind ausgebaut (siehe
+            // oben). Die Leiste bleibt als Rahmen -- spaeter soll hier
+            // etwas anderes hinein.
             leiste = document.createElement("div");
             leiste.id = "rf-leiste";
             leiste.style.cssText =
@@ -4196,400 +4015,14 @@ class Session {
             marke.style.cssText = `color:#fff;font-weight:700;font-size:${px(11.5)};letter-spacing:.01em;white-space:nowrap`;
             kopf.append(zeichen, marke);
 
-            // --- die Pillen -------------------------------------------
-            // Bewusst ein DIV, kein BUTTON.
+            // Die Schalter sind raus (10.10.2026).
             //
-            // In den Schaltern haengen Klappmenues mit eigenen Knoepfen --
-            // und ein <button> im <button> ist nicht erlaubt. Chrome
-            // rendert es, verschluckt aber Klicks darin (10.10.2026).
-            const pilleKnopf = (text, zeichen) => {
-              const b2 = document.createElement("div");
-              b2.setAttribute("role", "button");
-              b2.style.cssText =
-                `display:flex;align-items:center;gap:${px(6)};flex:none;` +
-                `padding:0 ${px(13)};height:${px(29)};border-radius:${px(999)};cursor:pointer;` +
-                "background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.10);" +
-                `color:rgba(255,255,255,.92);font:600 ${px(13)}/1 inherit;white-space:nowrap`;
-              if (zeichen) b2.appendChild(bildchen(zeichen));
-              const s = document.createElement("span");
-              s.textContent = text;
-              b2.appendChild(s);
-              b2.__text = s;
-              // Ein kleiner Pfeil nach unten macht sichtbar, dass sich
-              // etwas aufklappt (Emres Wunsch, 10.10.2026).
-              b2.__pfeil = () => {
-                const pf = document.createElement("span");
-                pf.textContent = "\u25BE";
-                pf.style.cssText = `font-size:${px(10)};opacity:.55;margin-left:${px(1)}`;
-                b2.appendChild(pf);
-              };
-              return b2;
-            };
+            // Sortierung, Richtung und Datumsbereich haengen alle am
+            // Raster -- und das gehoert Instagram (siehe oben). Ein Knopf,
+            // der nichts tut, ist eine Luege, also steht hier lieber
+            // nichts. Die Leiste selbst bleibt als Rahmen stehen.
 
-            // Ein Klappmenue -- EIN Bauplan fuer beide Knoepfe.
-            //
-            // Aufbau genau wie in Emres Vorlage (10.10.2026): der Knopf
-            // oeffnet eine Liste darunter, der gewaehlte Eintrag ist
-            // gefuellt hervorgehoben, ein Klick daneben schliesst sie.
-            // Bewusst als gemeinsame Funktion: die Richtung soll sich
-            // exakt so verhalten wie die Sortierung, nicht so aehnlich.
-            const machKlappmenue = (knopf, auswahl, istGewaehlt, beiWahl) => {
-              knopf.style.position = "relative";
-              const menue = document.createElement("div");
-              menue.style.cssText =
-                `position:absolute;top:calc(100% + ${px(6)});left:0;z-index:40;display:none;` +
-                `min-width:${px(200)};padding:${px(6)};border-radius:${px(14)};` +
-                "background:#0f0f12;border:1px solid rgba(255,255,255,.12);" +
-                `box-shadow:0 ${px(14)} ${px(36)} rgba(0,0,0,.55);` +
-                `font:500 ${px(13)}/1 inherit;text-align:left`;
-
-              const zeilen = auswahl.map((e) => {
-                const z = document.createElement("div");
-                z.textContent = e.name;
-                z.style.cssText =
-                  `padding:${px(9)} ${px(14)};border-radius:${px(10)};cursor:pointer;white-space:nowrap`;
-                z.addEventListener("mouseenter", () => {
-                  if (!istGewaehlt(e)) z.style.background = "rgba(255,255,255,.07)";
-                });
-                z.addEventListener("mouseleave", () => {
-                  if (!istGewaehlt(e)) z.style.background = "transparent";
-                });
-                z.addEventListener("click", (ev) => {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  beiWahl(e);
-                  menue.style.display = "none";
-                  zeigen();
-                  RF.sortierungAnwenden();
-                });
-                menue.appendChild(z);
-                return z;
-              });
-
-              const zeigen = () => {
-                auswahl.forEach((e, i) => {
-                  const g = istGewaehlt(e);
-                  zeilen[i].style.background = g ? GOLD : "transparent";
-                  zeilen[i].style.color = g ? "#231704" : "rgba(255,255,255,.88)";
-                  zeilen[i].style.fontWeight = g ? "700" : "500";
-                  if (g) knopf.__text.textContent = e.name;
-                });
-              };
-
-              knopf.appendChild(menue);
-              knopf.addEventListener("click", (ev) => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                const auf = menue.style.display !== "none";
-                // Erst alle schliessen, dann dieses oeffnen -- sonst
-                // stehen zwei Listen uebereinander.
-                for (const m of leiste.querySelectorAll("[data-rf-menue]")) m.style.display = "none";
-                menue.style.display = auf ? "none" : "block";
-              });
-              menue.dataset.rfMenue = "1";
-              zeigen();
-              return zeigen;
-            };
-
-            const feldKnopf = pilleKnopf("Deaktiviert");
-            feldKnopf.__pfeil();
-            machKlappmenue(
-              feldKnopf,
-              FELDER,
-              (f) => RF.sortierung.name === f.name,
-              (f) => {
-                RF.sortierung.feld = f.schluessel;
-                RF.sortierung.name = f.name;
-                RF.sortierung.nurReels = f.nurReels === true;
-                const an = !!f.schluessel;
-                feldKnopf.style.background = an ? "rgba(234,192,136,.16)" : "rgba(255,255,255,.045)";
-                feldKnopf.style.borderColor = an ? "rgba(234,192,136,.5)" : "rgba(255,255,255,.10)";
-              }
-            );
-
-            // Klick daneben schliesst jede offene Liste. Ein Zuhoerer fuer
-            // alle, nichts das staendig rechnet.
-            document.addEventListener(
-              "click",
-              () => {
-                for (const m of leiste.querySelectorAll("[data-rf-menue]")) m.style.display = "none";
-              },
-              true
-            );
-
-            const RICHTUNGEN = [
-              { name: "Aufsteigend", wert: "auf" },
-              { name: "Absteigend", wert: "ab" },
-            ];
-            const richtungKnopf = pilleKnopf("Absteigend");
-            richtungKnopf.__pfeil();
-            machKlappmenue(
-              richtungKnopf,
-              RICHTUNGEN,
-              (r) => RF.sortierung.richtung === r.wert,
-              (r) => {
-                RF.sortierung.richtung = r.wert;
-              }
-            );
-            // ===========================================================
-            // Der Datumsbereich -- Aufbau eins zu eins nach Emres Vorlage
-            // (10.10.2026), Beschriftung auf Englisch.
-            // ===========================================================
-            const datumKnopf = pilleKnopf("Any date", "kalender");
-            datumKnopf.style.position = "relative";
-
-            const tafel = document.createElement("div");
-            tafel.dataset.rfMenue = "1";
-            tafel.style.cssText =
-              `position:absolute;top:calc(100% + ${px(6)});right:0;z-index:40;display:none;` +
-              `width:${px(330)};padding:${px(16)};border-radius:${px(16)};` +
-              "background:#0f0f12;border:1px solid rgba(255,255,255,.12);" +
-              `box-shadow:0 ${px(16)} ${px(44)} rgba(0,0,0,.6);` +
-              `font:500 ${px(13)}/1.2 inherit;text-align:left;color:#fff`;
-            tafel.addEventListener("click", (ev) => ev.stopPropagation());
-
-            const ueber = document.createElement("div");
-            ueber.textContent = "CUSTOM RANGE";
-            ueber.style.cssText =
-              `font-size:${px(10)};letter-spacing:.14em;font-weight:700;color:rgba(255,255,255,.42)`;
-            const titel = document.createElement("div");
-            titel.textContent = "Filter by upload date";
-            titel.style.cssText = `margin-top:${px(5)};font-size:${px(16)};font-weight:700`;
-
-            // --- Schnellbereiche --------------------------------------
-            const TAG = 86400;
-            const SCHNELL = [
-              { name: "Today", tage: 1 },
-              { name: "7 days", tage: 7 },
-              { name: "30 days", tage: 30 },
-              { name: "90 days", tage: 90 },
-              { name: "180 days", tage: 180 },
-              { name: "1 year", tage: 365 },
-              { name: "All time", tage: null },
-            ];
-            const schnellReihe = document.createElement("div");
-            schnellReihe.style.cssText =
-              `display:flex;flex-wrap:wrap;gap:${px(8)};margin-top:${px(14)}`;
-
-            // --- Kalender ---------------------------------------------
-            let blatt = new Date();
-            blatt.setDate(1);
-            let von = null; // Date oder null
-            let bis = null;
-
-            const kalender = document.createElement("div");
-            kalender.style.cssText =
-              `margin-top:${px(14)};padding:${px(10)};border-radius:${px(12)};` +
-              "background:rgba(255,255,255,.04)";
-
-            const kopfZeile = document.createElement("div");
-            kopfZeile.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:${px(8)}`;
-            const pfeil = (zeichen, schritt) => {
-              const b2 = document.createElement("div");
-              b2.setAttribute("role", "button");
-              b2.textContent = zeichen;
-              b2.style.cssText =
-                `width:${px(26)};height:${px(26)};border-radius:${px(999)};cursor:pointer;flex:none;` +
-                `display:flex;align-items:center;justify-content:center;` +
-                "background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);" +
-                `color:#fff;font:600 ${px(14)}/1 inherit`;
-              b2.addEventListener("click", (ev) => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                blatt = new Date(blatt.getFullYear(), blatt.getMonth() + schritt, 1);
-                malen();
-              });
-              return b2;
-            };
-            const monatText = document.createElement("div");
-            monatText.style.cssText = `font-weight:700;font-size:${px(14)}`;
-            kopfZeile.append(pfeil("\u2039", -1), monatText, pfeil("\u203A", 1));
-
-            const wochenZeile = document.createElement("div");
-            wochenZeile.style.cssText =
-              `display:grid;grid-template-columns:repeat(7,1fr);gap:${px(2)};margin-top:${px(10)};` +
-              `font-size:${px(11)};color:rgba(255,255,255,.45);text-align:center`;
-            for (const w of ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]) {
-              const z = document.createElement("div");
-              z.textContent = w;
-              wochenZeile.appendChild(z);
-            }
-
-            const tageGitter = document.createElement("div");
-            tageGitter.style.cssText =
-              `display:grid;grid-template-columns:repeat(7,1fr);gap:${px(2)};margin-top:${px(4)}`;
-            kalender.append(kopfZeile, wochenZeile, tageGitter);
-
-            // --- Fuss --------------------------------------------------
-            const fuss = document.createElement("div");
-            fuss.style.cssText =
-              `display:flex;align-items:center;gap:${px(8)};margin-top:${px(14)}`;
-            const hinweis = document.createElement("div");
-            hinweis.style.cssText = `flex:1;font-size:${px(12)};color:rgba(255,255,255,.55)`;
-            const kleinKnopf = (text, betont) => {
-              const b2 = document.createElement("div");
-              b2.setAttribute("role", "button");
-              b2.textContent = text;
-              b2.style.cssText =
-                `padding:0 ${px(16)};height:${px(32)};border-radius:${px(999)};cursor:pointer;flex:none;` +
-                `display:flex;align-items:center;justify-content:center;` +
-                (betont
-                  ? "background:linear-gradient(180deg,#EAC088,#D39448);border:1px solid rgba(0,0,0,.2);color:#231704;"
-                  : "background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#fff;") +
-                `font:600 ${px(13)}/1 inherit`;
-              return b2;
-            };
-            const abbrechen = kleinKnopf("Cancel", false);
-            const anwenden = kleinKnopf("Apply", true);
-            fuss.append(hinweis, abbrechen, anwenden);
-
-            tafel.append(ueber, titel, schnellReihe, kalender, fuss);
-            datumKnopf.appendChild(tafel);
-
-            // --- Verhalten ---------------------------------------------
-            const MONATE = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-            const kurzDatum = (d) =>
-              `${MONATE[d.getMonth()].slice(0, 3)} ${d.getDate()}, ${d.getFullYear()}`;
-            const gleicherTag = (a2, b2) =>
-              a2 && b2 && a2.getFullYear() === b2.getFullYear() && a2.getMonth() === b2.getMonth() && a2.getDate() === b2.getDate();
-
-            function knopfBeschriften() {
-              if (von && bis) datumKnopf.__text.textContent = `${kurzDatum(von)} – ${kurzDatum(bis)}`;
-              else if (von) datumKnopf.__text.textContent = `From ${kurzDatum(von)}`;
-              else datumKnopf.__text.textContent = "Any date";
-              const an = !!(von || bis);
-              datumKnopf.style.background = an ? "rgba(234,192,136,.16)" : "rgba(255,255,255,.045)";
-              datumKnopf.style.borderColor = an ? "rgba(234,192,136,.5)" : "rgba(255,255,255,.10)";
-            }
-
-            function malen() {
-              monatText.textContent = `${MONATE[blatt.getMonth()]} ${blatt.getFullYear()}`;
-              tageGitter.textContent = "";
-              const ersterTag = new Date(blatt.getFullYear(), blatt.getMonth(), 1).getDay();
-              const start = new Date(blatt.getFullYear(), blatt.getMonth(), 1 - ersterTag);
-              for (let i = 0; i < 42; i++) {
-                const tag = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-                const fremd = tag.getMonth() !== blatt.getMonth();
-                const istVon = gleicherTag(tag, von);
-                const istBis = gleicherTag(tag, bis);
-                const dazwischen = von && bis && tag > von && tag < bis;
-                const z = document.createElement("div");
-                z.setAttribute("role", "button");
-                z.textContent = String(tag.getDate());
-                z.style.cssText =
-                  `height:${px(32)};border-radius:${px(9)};cursor:pointer;border:1px solid transparent;` +
-                  `display:flex;align-items:center;justify-content:center;` +
-                  `font:600 ${px(13)}/1 inherit;` +
-                  (istVon || istBis
-                    ? "background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;"
-                    : dazwischen
-                      ? "background:rgba(234,192,136,.16);color:#fff;"
-                      : `background:transparent;color:${fremd ? "rgba(255,255,255,.26)" : "rgba(255,255,255,.88)"};`);
-                z.addEventListener("click", (ev) => {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  if (!von || (von && bis)) {
-                    von = tag;
-                    bis = null;
-                  } else if (tag < von) {
-                    von = tag;
-                  } else {
-                    bis = tag;
-                  }
-                  malen();
-                });
-                tageGitter.appendChild(z);
-              }
-              // Wie in der Vorlage: sobald ein Bereich steht, wird oben der
-              // Bereich selbst zur Ueberschrift und unten links steht
-              // "Custom range" statt der Anleitung.
-              titel.textContent =
-                von && bis ? `${kurzDatum(von)} – ${kurzDatum(bis)}` : von ? `From ${kurzDatum(von)}` : "Filter by upload date";
-              hinweis.textContent = !von
-                ? "Start: pick a start date"
-                : !bis
-                  ? "End: pick an end date"
-                  : "Custom range";
-              anwenden.style.opacity = von ? "1" : ".45";
-              anwenden.style.pointerEvents = von ? "auto" : "none";
-            }
-
-            for (const s of SCHNELL) {
-              const b2 = document.createElement("div");
-              b2.setAttribute("role", "button");
-              b2.textContent = s.name;
-              b2.style.cssText =
-                `flex:1 1 ${px(92)};padding:${px(10)} ${px(8)};border-radius:${px(10)};cursor:pointer;text-align:center;` +
-                "background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);" +
-                `color:#fff;font:600 ${px(12.5)}/1.2 inherit`;
-              b2.addEventListener("click", (ev) => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                if (s.tage === null) {
-                  von = null;
-                  bis = null;
-                  RF.zeitraum = { von: null, bis: null };
-                } else {
-                  const jetzt = new Date();
-                  bis = jetzt;
-                  von = new Date(jetzt.getTime() - (s.tage - 1) * TAG * 1000);
-                  von.setHours(0, 0, 0, 0);
-                  RF.zeitraum = { von: Math.floor(von.getTime() / 1000), bis: Math.floor(bis.getTime() / 1000) };
-                  blatt = new Date(von.getFullYear(), von.getMonth(), 1);
-                }
-                malen();
-                knopfBeschriften();
-                RF.zeitraumAnwenden();
-                tafel.style.display = "none";
-              });
-              schnellReihe.appendChild(b2);
-            }
-
-            abbrechen.addEventListener("click", (ev) => {
-              ev.preventDefault();
-              ev.stopPropagation();
-              tafel.style.display = "none";
-            });
-
-            anwenden.addEventListener("click", (ev) => {
-              ev.preventDefault();
-              ev.stopPropagation();
-              if (!von) return;
-              const a2 = new Date(von);
-              a2.setHours(0, 0, 0, 0);
-              const e2 = new Date(bis ?? von);
-              e2.setHours(23, 59, 59, 0);
-              RF.zeitraum = { von: Math.floor(a2.getTime() / 1000), bis: Math.floor(e2.getTime() / 1000) };
-              knopfBeschriften();
-              RF.zeitraumAnwenden();
-              tafel.style.display = "none";
-            });
-
-            datumKnopf.addEventListener("click", (ev) => {
-              ev.preventDefault();
-              ev.stopPropagation();
-              const auf = tafel.style.display !== "none";
-              for (const m of leiste.querySelectorAll("[data-rf-menue]")) m.style.display = "none";
-              tafel.style.display = auf ? "none" : "block";
-              if (!auf) malen();
-            });
-
-            malen();
-            knopfBeschriften();
-
-            // Links der Name, rechts die drei Schalter -- sonst nichts.
-            //
-            // Die Knoepfe aus der Vorlage (Automatische Analyse, die vier
-            // runden Werkzeuge, Herunter- und Hochladen) sind raus: sie
-            // sahen aus wie Funktionen, waren aber nur Bild. Emre wollte
-            // sie weg (10.10.2026) -- ein Knopf, der nichts tut, ist eine
-            // Luege.
-            const schalter = document.createElement("div");
-            schalter.style.cssText =
-              `display:flex;align-items:center;gap:${px(7)};margin-left:auto;flex:none`;
-            schalter.append(datumKnopf);
-
-            leiste.append(kopf, schalter);
+            leiste.append(kopf);
             RF.leisteStand = null;
           }
           if (leiste.nextElementSibling !== behaelter) behaelter.parentElement.insertBefore(leiste, behaelter);
