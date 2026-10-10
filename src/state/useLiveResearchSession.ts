@@ -1051,6 +1051,127 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     []
   );
 
+  // Zweite Buehne: das Profil eines Creators. Laeuft im Connector auf einer
+  // EIGENEN Seite -- die laufende Buehne traegt Reihenfolge und Historie der
+  // Sitzung und wird dafuer nie navigiert.
+  const profilOeffnen = useCallback(
+    async (username: string, breite: number, hoehe: number): Promise<{ ok: boolean; bild?: string; lauf?: string; error?: string }> => {
+      const session = sessionRef.current;
+      if (!session) return { ok: false, error: "No active research session." };
+      try {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-oeffnen`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, wert: username, breite, hoehe }),
+        });
+        const body = await res.json();
+        return { ok: !!body.ok, bild: body.bild, lauf: body.lauf, error: body.error };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : "Couldn't open this profile." };
+      }
+    },
+    []
+  );
+
+  // Laufendes Bild der Profilseite.
+  //
+  // Der Connector schickt die Bilder als Bilddaten: vier Bytes Laenge,
+  // dann das Bild. Vorher kamen sie als Text, den der Browser bei JEDEM
+  // Bild Zeichen fuer Zeichen zurueckrechnen musste -- bei 20 Bildern je
+  // Sekunde lief das auf demselben Faden, der auch zeichnen soll, und
+  // genau das hat geruckelt (10.10.2026 gemessen).
+  //
+  // Gezeichnet wird hoechstens einmal je Bildwiederholung des Monitors,
+  // und immer nur das neueste Bild. Alles, was in der Zwischenzeit
+  // ankommt, wird uebersprungen: ein Bild, das ohnehin schon veraltet ist,
+  // muss gar nicht erst angezeigt werden.
+  const profilStrom = useCallback(
+    async (onBild: (bild: string) => void, signal: AbortSignal): Promise<void> => {
+      const session = sessionRef.current;
+      if (!session) return;
+      const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-strom`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionSecret: session.sessionSecret }),
+        signal,
+      }).catch(() => null);
+      if (!res?.body) return;
+
+      const leser = res.body.getReader();
+      let puffer = new Uint8Array(0);
+      let neuestes: Uint8Array<ArrayBuffer> | null = null;
+      let gemalt = true;
+
+      const malen = () => {
+        gemalt = true;
+        if (!neuestes || signal.aborted) return;
+        const bild = neuestes;
+        neuestes = null;
+        onBild(URL.createObjectURL(new Blob([bild], { type: "image/jpeg" })));
+      };
+
+      try {
+        for (;;) {
+          const { done, value } = await leser.read();
+          if (done) break;
+          const zusammen = new Uint8Array(puffer.length + value.length);
+          zusammen.set(puffer);
+          zusammen.set(value, puffer.length);
+          puffer = zusammen;
+
+          // Alle vollstaendigen Bilder aus dem Puffer holen -- behalten wird
+          // nur das letzte.
+          for (;;) {
+            if (puffer.length < 4) break;
+            const laenge = new DataView(puffer.buffer, puffer.byteOffset, 4).getUint32(0);
+            if (puffer.length < 4 + laenge) break;
+            neuestes = puffer.slice(4, 4 + laenge) as Uint8Array<ArrayBuffer>;
+            puffer = puffer.slice(4 + laenge);
+          }
+
+          if (neuestes && gemalt) {
+            gemalt = false;
+            requestAnimationFrame(malen);
+          }
+        }
+      } catch {
+        // Abgebrochen (Fenster zu) -- kein Fehler.
+      }
+    },
+    []
+  );
+
+  const profilBedienen = useCallback(
+    async (art: "scrollen" | "klick" | "zurueck", x = 0, y = 0): Promise<{ ok: boolean; bild?: string; error?: string }> => {
+      const session = sessionRef.current;
+      if (!session) return { ok: false, error: "No active research session." };
+      try {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-bedienen`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, art, x, y }),
+        });
+        const body = await res.json();
+        return { ok: !!body.ok, bild: body.bild, error: body.error };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : "Something went wrong on the profile." };
+      }
+    },
+    []
+  );
+
+  // Mit der Kennung des Oeffnens: so macht ein verspaetetes "zu" nicht die
+  // Seite zu, die inzwischen jemand anderes aufgemacht hat.
+  const profilSchliessen = useCallback(async (lauf?: string | null): Promise<void> => {
+    const session = sessionRef.current;
+    if (!session || !lauf) return;
+    await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-schliessen`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionSecret: session.sessionSecret, wert: lauf }),
+    }).catch(() => {});
+  }, []);
+
   // Alle Antworten auf einen Kommentar nachladen ("View all N replies").
   const antwortenLaden = useCallback(
     async (reelId: string, kommentarId: string): Promise<{ available: boolean; comments: LiveComment[] }> => {
@@ -1239,6 +1360,10 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     repost,
     kommentieren,
     antwortenLaden,
+    profilOeffnen,
+    profilStrom,
+    profilBedienen,
+    profilSchliessen,
     follow,
     block,
     fetchComments,

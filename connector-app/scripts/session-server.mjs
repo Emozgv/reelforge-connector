@@ -1106,6 +1106,27 @@ const BUEHNE_SKRIPT = () => {
     return { ok: false, fehler: "Der Folgen-Knopf hat nicht reagiert." };
   };
 
+  // Das Reel anhalten und wieder laufen lassen.
+  //
+  // Bewusst KEIN Antippen: Antippen schaltet um, und wer nicht weiss, wie
+  // es gerade steht, schaltet es womoeglich falsch herum. Hier wird
+  // ausdruecklich angehalten bzw. fortgesetzt -- zweimal anhalten schadet
+  // also nicht.
+  B.anhalten = async () => {
+    const v = B.quelle;
+    if (!v) return { ok: false, fehler: "Kein Reel im Bild." };
+    const liefVorher = !v.paused;
+    try { v.pause(); } catch { /* egal */ }
+    return { ok: true, liefVorher };
+  };
+
+  B.fortsetzen = async () => {
+    const v = B.quelle;
+    if (!v) return { ok: false, fehler: "Kein Reel im Bild." };
+    try { await v.play(); } catch { /* Instagram startet es selbst neu */ }
+    return { ok: true, laeuft: !v.paused };
+  };
+
   B.zustand = () => ({
     verbindung: B.pc?.connectionState ?? "-",
     spuren: B.strom ? `${B.strom.getVideoTracks().length}/${B.strom.getAudioTracks().length}` : "-",
@@ -2222,6 +2243,10 @@ class Session {
     // Wechsels gedrueckt wird, ist weg. Ein Wisch ist kein Auftrag, der
     // abgearbeitet werden muss, sondern eine Geste -- und eine Geste, die
     // ins Leere geht, wiederholt man einfach.
+    // Ein Wisch bringt ein neues Reel -- eine Pause von vorher gilt dafuer
+    // nicht mehr.
+    if (art === "weiter" || art === "zurueck") this.vomNutzerAngehalten = false;
+
     if (art === "weiter" || art === "zurueck") {
       // Instagrams eigenen Pfeil druecken und warten, bis gewechselt ist.
       //
@@ -2367,6 +2392,11 @@ class Session {
         if (pausiert !== vorher) break;
         await sleep(25);
       }
+      // Merken, ob der Mitarbeiter SELBST angehalten hat. Nur das darf
+      // dazu fuehren, dass das Reel nach einem Profilbesuch stehen bleibt
+      // -- "lief gerade nicht" allein reicht nicht, denn das heisst auch
+      // "war noch am Anlaufen" (10.10.2026).
+      this.vomNutzerAngehalten = pausiert === true;
       return { ok: true, pausiert };
     }
     return { ok: false, fehler: "unbekannte Eingabe" };
@@ -2598,6 +2628,316 @@ class Session {
     }
     console.log(`[repost] session ${this.id}: reel=${was.code ?? "?"} FEHLER ${erg.fehler}${erg.gesehen ? ` | Knoepfe im Bild: ${erg.gesehen.join(" | ")}` : ""}`);
     return { reposted: false, error: erg.fehler ?? "Couldn't confirm the repost." };
+  }
+
+  // ---------------------------------------------------------------------
+  // ZWEITE BUEHNE: das Profil eines Creators, ohne den Feed anzufassen.
+  //
+  // Die laufende Buehne DARF dafuer nicht navigiert werden -- sie traegt
+  // Reihenfolge, Historie und Position der Sitzung. Deshalb bekommt das
+  // Profil eine eigene Seite im selben angemeldeten Browser.
+  //
+  // Warum Bilder statt eines Live-Stroms wie beim Reel: ein Reel bewegt
+  // sich 30-mal pro Sekunde, eine Profilseite steht still, bis jemand
+  // scrollt oder klickt. Ein zweiter Live-Strom haette dauerhaft neben dem
+  // Feed gelaufen; ein Bild nach jeder Bedienung kostet nur dann etwas,
+  // wenn wirklich etwas passiert. Faellt das Scrollen zu zaeh aus, laesst
+  // sich immer noch auf einen echten Strom umstellen -- dann wissen wir
+  // wenigstens, wofuer wir ihn brauchen.
+  // ---------------------------------------------------------------------
+  // Wie viele Tabs hat dieser Browser gerade? Soll IMMER 1 sein (die
+  // Buehne), und nur solange ein Profil offen ist 2. Steht etwas anderes
+  // im Protokoll, bleibt irgendwo etwas haengen -- genau das wollte Emre
+  // nachpruefbar haben (10.10.2026).
+  tabs() {
+    try { return this.context.pages().filter((s) => !s.isClosed()).length; } catch { return -1; }
+  }
+
+  // Macht jeden Profil-Tab zu ausser dem, der gerade gelten soll.
+  async profilTabsAufraeumen(behalten) {
+    const offen = [...(this.profilTabs ?? [])];
+    for (const s of offen) {
+      if (s === behalten) continue;
+      this.profilTabs.delete(s);
+      if (!s.isClosed()) await s.close().catch(() => {});
+    }
+    if (behalten && behalten.isClosed()) this.profilTabs.delete(behalten);
+  }
+
+  async profilBild() {
+    if (!this.profilSeite) return null;
+    const roh = await this.profilSeite
+      .screenshot({ type: "jpeg", quality: 72 })
+      .catch(() => null);
+    return roh ? `data:image/jpeg;base64,${roh.toString("base64")}` : null;
+  }
+
+  async profilOeffnen(username, breite, hoehe) {
+    const name = String(username ?? "").replace(/^@/, "").trim();
+    if (!/^[A-Za-z0-9._]{1,40}$/.test(name)) {
+      console.log(`[profil] session ${this.id}: abgelehnt, "${username}" ist kein Profilname.`);
+      return { ok: false, fehler: "Unknown profile." };
+    }
+
+    const w = Math.max(600, Math.min(Number(breite) || 1440, 2000));
+    const h = Math.max(400, Math.min(Number(hoehe) || 900, 1400));
+
+    // Jedes Oeffnen bekommt eine EIGENE frische Seite und eine Kennung.
+    //
+    // Vorher gab es eine gemeinsame Seite und einen Zaehler, den auch das
+    // Schliessen hochgezaehlt hat. Beim ersten Klick baut React die Ansicht
+    // im Entwicklungsmodus absichtlich zweimal auf -- auf, zu, auf. Das
+    // Zumachen des ersten Aufbaus traf dann den zweiten, und der meldete
+    // "Cancelled", obwohl der Mitarbeiter nur einmal geklickt hatte
+    // (10.10.2026 von Emre beim ersten Reel gesehen).
+    //
+    // Jetzt gilt: wer eine Seite oeffnet, arbeitet nur auf seiner eigenen.
+    // Taucht inzwischen eine neuere auf, steigt der aeltere still aus.
+    const meinLauf = String((this.profilLauf = (this.profilLauf ?? 0) + 1));
+    const ueberholt = () => this.profilSeite !== seite;
+
+    // Das Reel SOFORT anhalten -- bevor ueberhaupt eine Seite geoeffnet
+    // wird. Vorher geschah das erst, wenn das Profil fertig geladen war:
+    // der Ladekringel stand schon da, und dahinter lief die Musik des
+    // Reels weiter (10.10.2026 von Emre gemeldet). Ausdruecklich anhalten,
+    // nicht umschalten.
+    if (this.buehneSteht) {
+      const erg = await this.page.evaluate(() => window.__buehne.anhalten()).catch(() => null);
+      // "Lief es vorher?" nur beim ERSTEN Anhalten merken.
+      //
+      // ReelForge oeffnet die Profil-Flaeche beim ersten Mal doppelt, also
+      // kam auch das Anhalten zweimal. Beim zweiten Mal stand das Reel
+      // natuerlich schon -- und ReelForge merkte sich "lief nicht" und
+      // liess es danach angehalten. Im Protokoll fehlte das "Reel laeuft
+      // wieder" (10.10.2026 beim Nachzaehlen der Tabs aufgefallen).
+      if (!this.reelDurchProfilAngehalten) {
+        this.reelDurchProfilAngehalten = true;
+        // Entscheidend ist NICHT, ob es gerade lief, sondern ob der
+        // Mitarbeiter es selbst angehalten hat. "Lief nicht" heisst sonst
+        // auch "war noch am Anlaufen" -- und dann kam er zurueck und das
+        // Reel stand still, ohne dass er etwas angehalten hatte.
+        this.reelLiefVorProfil = this.vomNutzerAngehalten !== true;
+        console.log(`[profil] Reel angehalten (vom Nutzer pausiert: ${this.vomNutzerAngehalten === true}).`);
+      } else {
+        console.log(`[profil] Reel war schon durch uns angehalten -- Merker bleibt.`);
+      }
+    }
+
+    let seite = null;
+    try {
+      await this.profilStromStoppen();
+      seite = await this.context.newPage();
+      (this.profilTabs ??= new Set()).add(seite);
+      this.profilSeite = seite;
+      this.profilKennung = meinLauf;
+      // ALLE anderen Profil-Tabs zumachen, nicht nur den zuletzt bekannten.
+      //
+      // Vorher stand hier "schliesse this.profilSeite von vorhin". Beim
+      // ersten Klick baut React die Ansicht zweimal auf, und beide
+      // Oeffnungsvorgaenge lasen dieses Feld, BEVOR einer von ihnen es
+      // gesetzt hatte -- beide sahen "nichts da" und machten nichts zu. Der
+      // erste Tab blieb liegen: im Protokoll "Tabs offen: 3" statt 2
+      // (10.10.2026, Emre wollte genau das nachgeprueft haben).
+      await this.profilTabsAufraeumen(seite);
+      // Ab hier NUR noch ueber die oertliche Variable arbeiten.
+      //
+      // Vorher stand hier this.profilSeite.goto(...). Schloss der
+      // Mitarbeiter das Fenster, waehrend ein Oeffnen noch lief, setzte
+      // profilSchliessen() das Feld auf null -- und der laufende Vorgang
+      // fiel mit "Cannot read properties of null (reading 'goto')" auf die
+      // Nase (10.10.2026 von Emre gemeldet: Profil auf, zu, wieder auf).
+      await seite.setViewportSize({ width: w, height: h }).catch(() => {});
+      this.profilBreite = w;
+      this.profilHoehe = h;
+
+      // Instagram leitet beim Oeffnen eines Profils intern weiter; die erste
+      // Navigation wird dadurch abgebrochen und Playwright meldet
+      // ERR_ABORTED, obwohl die Seite danach normal laedt. Deshalb: auf
+      // "commit" warten statt auf das fertige Dokument, und einen
+      // Fehlschlag einmal wiederholen.
+      const hin = () => seite.goto(`https://www.instagram.com/${name}/`, { waitUntil: "commit", timeout: 30000 });
+      try {
+        await hin();
+      } catch (ersterFehler) {
+        if (ueberholt() || seite.isClosed()) { console.log(`[profil] ${name}: waehrend des Ladens abgebrochen.`); return { ok: false, fehler: "Cancelled.", lauf: meinLauf }; }
+        console.log(`[profil] ${name}: erster Versuch abgebrochen (${String(ersterFehler?.message ?? "").split("\n")[0]}) -- einmal nachfassen.`);
+        await sleep(600);
+        await hin();
+      }
+
+      if (ueberholt() || seite.isClosed()) { console.log(`[profil] ${name}: ueberholt, steige aus.`); return { ok: false, fehler: "Cancelled.", lauf: meinLauf }; }
+
+      // Die Buehne gehoert wieder nach vorn, sonst drosselt Chrome ihre
+      // Wiedergabe -- dasselbe, was nebenseite() schon tut.
+      await this.page.bringToFront().catch(() => {});
+      await sleep(1800);
+      if (ueberholt() || seite.isClosed()) return { ok: false, fehler: "Cancelled.", lauf: meinLauf };
+
+      const bild = await this.profilBild();
+      if (!bild) {
+        console.error(`[profil] session ${this.id}: ${name} -- kein Bild von der Seite bekommen.`);
+        return { ok: false, fehler: "Couldn't capture the profile.", lauf: meinLauf };
+      }
+      console.log(`[profil] session ${this.id}: ${name} geoeffnet (${w}x${h}), Kennung ${meinLauf} | Tabs offen: ${this.tabs()}`);
+      return { ok: true, bild, username: name, lauf: meinLauf };
+    } catch (err) {
+      console.error(`[profil] session ${this.id}: ${name} FEHLER ${err?.message} | Seite ${seite ? (seite.isClosed() ? "geschlossen" : "offen") : "fehlt"}, ueberholt=${ueberholt()} | Tabs offen: ${this.tabs()}`);
+      return { ok: false, fehler: err?.message ?? "Couldn't open this profile.", lauf: meinLauf };
+    }
+  }
+
+  async profilBedienen(art, x, y) {
+    if (!this.profilSeite || this.profilSeite.isClosed()) return { ok: false, fehler: "No profile is open." };
+    try {
+      if (art === "scrollen") {
+        // Kein Warten und kein Bild danach: der laufende Bildstrom zeigt das
+        // Ergebnis ohnehin. Hier standen frueher 420 ms Pause plus ein
+        // Bildschirmfoto -- aus der Zeit, als es den Strom noch nicht gab.
+        // Das deckelte das Scrollen auf gut zwei Schritte pro Sekunde und
+        // war die zweite Haelfte des Ruckelns (10.10.2026).
+        await this.profilSeite.mouse.wheel(0, Number(y) || 0);
+        return { ok: true };
+      }
+      if (art === "klick") {
+        await this.profilSeite.mouse.click(Number(x) || 0, Number(y) || 0);
+        // Ein Klick kann eine neue Seite laden (Reiter, Highlight, Beitrag).
+        await sleep(1400);
+      } else if (art === "zurueck") {
+        // (Zurueck laedt eine andere Seite -- hier lohnt das Warten.)
+        await this.profilSeite.goBack({ waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => {});
+        await sleep(1200);
+      }
+      await this.page.bringToFront().catch(() => {});
+      const bild = await this.profilBild();
+      return bild ? { ok: true, bild } : { ok: false, fehler: "Couldn't capture the profile." };
+    } catch (err) {
+      console.error(`[profil] session ${this.id}: ${art} FEHLER ${err?.message}`);
+      return { ok: false, fehler: err?.message ?? "Something went wrong on the profile." };
+    }
+  }
+
+  // Laufendes Bild der Profilseite.
+  //
+  // Chrome kann eine Seite von sich aus als Bildfolge ausgeben (Screencast)
+  // -- dieselbe Technik, mit der Entwicklerwerkzeuge eine Seite aus der
+  // Ferne zeigen. Das ist KEINE Tab-Aufnahme mit Ton, sondern nur das Bild;
+  // der Ton kommt getrennt, ueber denselben Griff wie bei der Buehne.
+  //
+  // Die Bilder gehen als Strom an die App: eine Antwort, die offen bleibt,
+  // Zeile fuer Zeile ein Bild. Kein zweiter Kanal noetig.
+  async profilStromStarten(res) {
+    if (!this.profilSeite || this.profilSeite.isClosed()) return false;
+    await this.profilStromStoppen();
+
+    const cdp = await this.context.newCDPSession(this.profilSeite).catch(() => null);
+    if (!cdp) return false;
+    this.profilCdp = cdp;
+    this.profilRes = res;
+
+    // MESSUNG: wie viele Bilder gehen wirklich raus und wie gross sind sie?
+    // Ohne das waeren "es ruckelt" und "es liegt an deinem Browser" beides
+    // nur Behauptungen (10.10.2026, Emre wollte Protokolle zum Nachlesen).
+    let zaehler = 0;
+    let bytes = 0;
+    const seit = Date.now();
+    this.profilTakt = setInterval(() => {
+      if (!zaehler) return;
+      const s = (Date.now() - seit) / 1000;
+      console.log(`[profil] Bildstrom: ${zaehler} Bilder in ${s.toFixed(0)}s (${(zaehler / s).toFixed(1)}/s), im Schnitt ${Math.round(bytes / zaehler / 1024)} KB.`);
+    }, 5000);
+
+    cdp.on("Page.screencastFrame", async (bild) => {
+      // Bestaetigen MUSS sein, sonst schickt Chrome nach wenigen Bildern
+      // nichts mehr.
+      cdp.send("Page.screencastFrameAck", { sessionId: bild.sessionId }).catch(() => {});
+      if (this.profilRes !== res || res.writableEnded) return;
+      // Als echte Bilddaten, nicht als Text.
+      //
+      // Chrome liefert das Bild base64-kodiert. Schickten wir es so weiter,
+      // musste der Browser drueben jedes Bild Zeichen fuer Zeichen
+      // zurueckrechnen -- bei 20 Bildern je Sekunde und ~111 KB je Bild
+      // waren das Millionen Schritte pro Sekunde auf demselben Faden, der
+      // auch zeichnen soll. Genau das hat geruckelt (10.10.2026 gemessen).
+      // Jetzt: vier Bytes Laenge, dann das Bild. Spart zusaetzlich das
+      // Drittel, das die Textform aufschlaegt.
+      const roh = Buffer.from(bild.data, "base64");
+      const kopf = Buffer.alloc(4);
+      kopf.writeUInt32BE(roh.length, 0);
+      zaehler++;
+      bytes += roh.length;
+      res.write(kopf);
+      res.write(roh);
+    });
+
+    // Scharf statt sparsam.
+    //
+    // Hier stand zuerst eine Notbremse: kleiner uebertragen (1100 Punkte
+    // breit) und schwach komprimiert (55), weil das Ruckeln sonst zu stark
+    // war. Die eigentliche Ursache lag aber woanders -- die Bilder kamen
+    // als Text an und mussten bei jedem einzelnen zurueckgerechnet werden.
+    // Seit sie als echte Bilddaten kommen, ist die Menge kein Problem mehr,
+    // und die Notbremse kostete nur noch Schaerfe (10.10.2026 von Emre
+    // bemerkt: "die Aufloesung ist einfach nicht HD").
+    //
+    // Doppelte Punktdichte: Die Seite wird genauso gelegt wie vorher, aber
+    // mit doppelt so vielen Bildpunkten gezeichnet. Auf einem feinen
+    // Bildschirm ist das der Unterschied zwischen scharf und weich -- ohne
+    // dass sich am Aussehen der Seite etwas aendert.
+    await cdp
+      .send("Emulation.setDeviceMetricsOverride", {
+        width: this.profilBreite ?? 1440,
+        height: this.profilHoehe ?? 900,
+        deviceScaleFactor: 2,
+        mobile: false,
+      })
+      .catch((e) => console.log(`[profil] doppelte Punktdichte nicht moeglich: ${e?.message}`));
+
+    await cdp
+      .send("Page.startScreencast", { format: "jpeg", quality: 72, everyNthFrame: 1 })
+      .catch(() => {});
+    console.log(`[profil] session ${this.id}: Bildstrom laeuft.`);
+    return true;
+  }
+
+  async profilStromStoppen() {
+    if (this.profilTakt) { clearInterval(this.profilTakt); this.profilTakt = null; }
+    if (this.profilCdp) {
+      await this.profilCdp.send("Page.stopScreencast").catch(() => {});
+      await this.profilCdp.detach().catch(() => {});
+      this.profilCdp = null;
+    }
+    if (this.profilRes && !this.profilRes.writableEnded) this.profilRes.end();
+    this.profilRes = null;
+  }
+
+  async profilSchliessen(lauf) {
+    // Nur zumachen, was der Aufrufer auch gemeint hat. Ohne diese Pruefung
+    // schloss ein verspaetetes "zu" vom ersten Aufbau die Seite des
+    // zweiten (siehe profilOeffnen).
+    if (lauf && this.profilKennung && String(lauf) !== String(this.profilKennung)) {
+      console.log(`[profil] session ${this.id}: Schliessen fuer ${lauf} verworfen, offen ist ${this.profilKennung}.`);
+      return { ok: true, uebersprungen: true };
+    }
+    await this.profilStromStoppen();
+    const seite = this.profilSeite;
+    this.profilSeite = null;
+    this.profilKennung = null;
+    // Alle Profil-Tabs weg, nicht nur der zuletzt gemerkte.
+    await this.profilTabsAufraeumen(null);
+    // ... und wieder laufen lassen -- aber nur, wenn es vorher auch lief.
+    // Hatte der Mitarbeiter das Reel selbst angehalten, bleibt es angehalten.
+    if (seite && this.buehneSteht && this.reelDurchProfilAngehalten) {
+      if (this.reelLiefVorProfil !== false) {
+        await this.page.evaluate(() => window.__buehne.fortsetzen()).catch(() => null);
+        console.log(`[profil] Reel laeuft wieder.`);
+      } else {
+        console.log(`[profil] Reel bleibt angehalten -- der Mitarbeiter hatte es selbst pausiert.`);
+      }
+      this.reelDurchProfilAngehalten = false;
+    }
+    if (seite) console.log(`[profil] session ${this.id}: geschlossen | Tabs offen: ${this.tabs()}`);
+    await this.page.bringToFront().catch(() => {});
+    return { ok: true };
   }
 
   // Alle Antworten auf einen Kommentar holen.
@@ -3303,10 +3643,10 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-strom|profil-bedienen|profil-schliessen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung, breite, hoehe, x, y } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
 
@@ -3377,6 +3717,31 @@ const server = http.createServer(async (req, res) => {
         const result = await session.kommentieren(reelId, wert);
         if (!result.posted) console.error(`[kommentar] session ${id} failed: ${result.error ?? "(no error message)"}`);
         return json(res, 200, result);
+      }
+      if (action === "profil-oeffnen") {
+        const erg = await session.profilOeffnen(wert, breite, hoehe);
+        // Auch im Fehlerfall die Kennung mitgeben: nur damit kann die App
+        // eine halb geoeffnete Seite drueben wieder schliessen lassen.
+        return erg.ok ? json(res, 200, erg) : json(res, 502, { error: erg.fehler, lauf: erg.lauf ?? null });
+      }
+      if (action === "profil-strom") {
+        res.writeHead(200, {
+          "Content-Type": "application/octet-stream",
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": "*",
+          "X-Accel-Buffering": "no",
+        });
+        const lief = await session.profilStromStarten(res);
+        if (!lief) { res.end(); return; }
+        req.on("close", () => { void session.profilStromStoppen(); });
+        return;
+      }
+      if (action === "profil-bedienen") {
+        const erg = await session.profilBedienen(art, x, y);
+        return erg.ok ? json(res, 200, erg) : json(res, 502, { error: erg.fehler });
+      }
+      if (action === "profil-schliessen") {
+        return json(res, 200, await session.profilSchliessen(wert));
       }
       if (action === "antworten") {
         const result = await session.antworten(reelId, wert);

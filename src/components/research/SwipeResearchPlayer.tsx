@@ -35,6 +35,7 @@ function SwipeSlide({
   video,
   active,
   pageActive,
+  onProfil,
   onLikeClick,
   likeStatus,
   onFollowClick,
@@ -49,6 +50,9 @@ function SwipeSlide({
   pageActive: boolean;
   onLikeClick: () => void;
   likeStatus?: LikeStatus;
+  // Oeffnet das Profil des Creators auf der zweiten Buehne. Fehlt es, ist
+  // der Name kein Knopf (aeltere Wiedergabe ohne laufende Sitzung).
+  onProfil?: (username: string) => void;
   onFollowClick: () => void;
   followStatus?: FollowStatus;
   onBlockCreator: () => void;
@@ -177,7 +181,19 @@ function SwipeSlide({
       {/* bottom-left: who/what */}
       <div className="pointer-events-auto absolute bottom-4 left-4 right-20">
         <div className="flex items-center gap-2">
-          <p className="text-[14px] text-white font-medium">@{video.username}</p>
+          {/* Der Name oeffnet das Profil -- auf einer zweiten Seite im
+              Connector, nicht in dieser Sitzung. Auf Instagram selbst
+              verliert man dabei den Feed; genau das darf hier nicht
+              passieren (10.10.2026). */}
+          <button
+            type="button"
+            onClick={() => onProfil?.(video.username)}
+            disabled={!onProfil}
+            title={onProfil ? `Open @${video.username} on the research account` : undefined}
+            className="text-[14px] text-white font-medium hover:underline underline-offset-2 disabled:cursor-default disabled:no-underline"
+          >
+            @{video.username}
+          </button>
           {canLike && (
             <button
               type="button"
@@ -438,6 +454,7 @@ export function SwipeResearchPlayer({
   onPrev,
   onLikeClick,
   likeStatus,
+  onProfil,
   onRepostClick,
   repostStatus,
   onFollowClick,
@@ -468,6 +485,7 @@ export function SwipeResearchPlayer({
   onPrev: () => void;
   onLikeClick: (video: ReelVideo) => void;
   likeStatus: Record<string, LikeStatus>;
+  onProfil?: (username: string) => void;
   onRepostClick: (video: ReelVideo) => void;
   repostStatus: Record<string, RepostStatus>;
   onFollowClick: (video: ReelVideo) => void;
@@ -751,6 +769,7 @@ export function SwipeResearchPlayer({
                 active
                 pageActive={active}
                 nurBedienelemente
+                onProfil={onProfil}
                 onLikeClick={() => onLikeClick(currentReel)}
                 likeStatus={likeStatus[currentReel.id]}
                 onFollowClick={() => onFollowClick(currentReel)}

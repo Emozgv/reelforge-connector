@@ -506,19 +506,23 @@ export function CommentsPanel({
         </div>
       </div>
 
-      {/* Feste Hoehe, nicht "waechst zwischen 160px und 62vh".
-          Die Obergrenze MUSS bleiben: ganz ohne sie zieht eine lange Liste
-          die Spalte in die Hoehe, und Save to Collection rutscht aus dem
-          Bild (am 09.10.2026 ausprobiert und sofort zurueckgenommen).
-          Mitwachsen war aber genauso schlecht: waehrend "Loading comments…"
-          schrumpfte die Spalte auf ihre Mindesthoehe, die ganze Seite wurde
-          kuerzer, und alles sprang -- danach wieder zurueck (10.10.2026 von
-          Emre im Betrieb bemerkt). Dasselbe passierte beim Wechsel zwischen
-          einem Reel mit drei und einem mit dreissig Kommentaren.
-          Feste Hoehe heisst: die Flaeche steht still, egal was darin
-          passiert. */}
+      {/* Die Liste fuellt den Platz, den die Spalte uebrig laesst. Die
+          Spaltenhoehe gibt ResearchAccountsPage vor: sie MISST den Player
+          und setzt sie den beiden anderen Spalten. Entscheidend ist, dass
+          die Hoehe von AUSSEN kommt und nie vom Inhalt.
+          Vier Anlaeufe bis hierher:
+          - ohne Grenze zog eine lange Liste die Spalte in die Hoehe und
+            Save to Collection rutschte aus dem Bild (09.10.2026);
+          - zwischen 160px und 62vh mitwachsend schrumpfte sie waehrend
+            "Loading comments…" zusammen und riss die ganze Seite mit
+            (10.10.2026);
+          - fest auf 62vh stand sie still, war aber hoeher als der Player,
+            sodass die drei Panels unten nicht mehr auf einer Linie endeten;
+          - ganz ohne Grenze zog sie waehrend einer Sitzung die ganze Reihe
+            in die Laenge (beides 10.10.2026 von Emre bemerkt).
+          Jetzt steht sie still UND endet auf derselben Linie. */}
       <div
-        className="h-[62vh] shrink-0 overflow-y-auto px-4 py-3"
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-3"
         ref={listeRef}
         onScroll={async (e) => {
           // Am unteren Ende die naechsten Kommentare holen -- so wie

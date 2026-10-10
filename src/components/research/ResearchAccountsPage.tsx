@@ -34,6 +34,7 @@ import { ReelDetailModal } from "../hub/ReelDetailModal";
 import { SwipeResearchPlayer, type LikeStatus, type RepostStatus, type FollowStatus } from "./SwipeResearchPlayer";
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
 import { CommentsPanel } from "./CommentsPanel";
+import { ProfilBuehne } from "./ProfilBuehne";
 import { panelStil } from "../../lib/panelLook";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 
@@ -509,6 +510,37 @@ export function ResearchAccountsPage({
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [likeStatus, setLikeStatus] = useState<Record<string, LikeStatus>>({});
   const [repostStatus, setRepostStatus] = useState<Record<string, RepostStatus>>({});
+  // Wessen Profil gerade auf der zweiten Buehne offen ist, falls ueberhaupt.
+  const [profilName, setProfilName] = useState<string | null>(null);
+  // Die drei Panels sollen unten auf einer Linie enden.
+  //
+  // Die linke Spalte und der Player duerfen so hoch sein, wie ihr Inhalt es
+  // verlangt -- sie bestimmen gemeinsam die Linie. NUR die Kommentarspalte
+  // bekommt diese Hoehe vorgegeben, denn sie ist die einzige, deren Inhalt
+  // beliebig lang werden kann; ohne Vorgabe zog sie waehrend einer Sitzung
+  // die ganze Reihe in die Laenge.
+  //
+  // Mit CSS allein ging das mehrfach schief, deshalb wird hier gemessen
+  // statt geraten. Beim Versuch davor hatte ich auch der linken Spalte eine
+  // Hoehe aufgezwungen -- die passte nicht zu ihrem Inhalt, und die Hoehen
+  // standen von Anfang an schief (10.10.2026 von Emre sofort bemerkt).
+  const linksRef = useRef<HTMLDivElement>(null);
+  const mitteRef = useRef<HTMLDivElement>(null);
+  const [reihenHoehe, setReihenHoehe] = useState<number | null>(null);
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const messen = () => {
+      const l = linksRef.current?.getBoundingClientRect().height ?? 0;
+      const m = mitteRef.current?.getBoundingClientRect().height ?? 0;
+      const h = Math.round(Math.max(l, m));
+      if (h > 0) setReihenHoehe((vorher) => (vorher === h ? vorher : h));
+    };
+    const beobachter = new ResizeObserver(messen);
+    if (linksRef.current) beobachter.observe(linksRef.current);
+    if (mitteRef.current) beobachter.observe(mitteRef.current);
+    messen();
+    return () => beobachter.disconnect();
+  }, [mode]);
   const [followStatus, setFollowStatus] = useState<Record<string, FollowStatus>>({});
   const [blockStatus, setBlockStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
   // Hat der Mitarbeiter "Refresh Feed" gedrueckt? Nur dann dreht sich dessen
@@ -1048,13 +1080,27 @@ export function ResearchAccountsPage({
             <p className="text-[12px] text-neutral-600 mt-1.5">Connect one above to start researching from its trained feed.</p>
           </div>
         ) : mode === "swipe" ? (
-          <div className="mt-5 flex gap-7 items-start">
+          <div className="relative mt-5 flex gap-7 items-stretch">
+            {/* Die zweite Buehne legt sich ueber genau diese drei Panels --
+                Seitenleiste und Kopfzeile bleiben stehen (so von Emre am
+                10.10.2026 eingezeichnet). Darum sitzt sie hier als Ebene
+                ueber der Reihe und nicht ueber der ganzen Seite. */}
+            {profilName && (
+              <ProfilBuehne
+                username={profilName}
+                onSchliessen={() => setProfilName(null)}
+                oeffnen={liveSession.profilOeffnen}
+                strom={liveSession.profilStrom}
+                bedienen={liveSession.profilBedienen}
+                schliessen={liveSession.profilSchliessen}
+              />
+            )}
             {/* LEFT: Session Context + Quick Actions */}
             {/* Die Reihe wird nicht mehr zentriert: so steht diese Spalte
                 buendig unter der Ueberschrift, und der Player bleibt gleich
                 daneben. Der uebrige Platz geht komplett an die Luecke vor
                 der Kommentarspalte (ml-auto dort). */}
-            <div className="w-[290px] shrink-0 flex flex-col gap-4">
+            <div ref={linksRef} className="w-[290px] shrink-0 self-stretch flex flex-col gap-4">
               <div className={PANEL + " p-5"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Session Context
@@ -1127,7 +1173,11 @@ export function ResearchAccountsPage({
                 </div>
               </div>
 
-              <div className={PANEL + " p-5"} style={PANEL_STYLE}>
+              {/* Das untere Panel der linken Spalte zieht sich bis zur
+                  gleichen Linie wie Player und Kommentare -- sonst endete
+                  die linke Spalte frueher und die drei Panels standen
+                  unten versetzt (10.10.2026 von Emre bemerkt). */}
+              <div className={PANEL + " p-5 flex-1"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Quick Actions
                 </p>
@@ -1165,7 +1215,7 @@ export function ResearchAccountsPage({
             {/* ml-2: der Player einen Hauch nach rechts. Die Kommentarspalte
                 gibt dieselben 8 px ab (ml-14 -> ml-12), damit die Reihe
                 gleich breit bleibt und sich sonst nichts verschiebt. */}
-            <div className="w-[382px] shrink-0 self-stretch flex ml-[18px]">
+            <div ref={mitteRef} className="w-[382px] shrink-0 self-stretch flex ml-[18px]">
               <div className={PANEL + " p-4 flex-1 flex flex-col items-center"} style={PANEL_STYLE}>
                 <div className="w-full max-w-[345px] flex items-center justify-between mb-3">
                   <span className="flex items-center gap-1.5 text-[12px] text-neutral-400">
@@ -1208,6 +1258,7 @@ export function ResearchAccountsPage({
                 onPrev={() => void liveSession.prev()}
                 onLikeClick={handleLikeClick}
                 likeStatus={likeStatus}
+                onProfil={(name) => setProfilName(name)}
                 onRepostClick={handleRepostClick}
                 repostStatus={repostStatus}
                 onFollowClick={handleFollowClick}
@@ -1236,7 +1287,7 @@ export function ResearchAccountsPage({
                 muss die Kommentarspalte lassen, sonst klebt sie daran.
                 Gerechnet: 24 px Luft, 60 px Panel, 24 px Luft -- abzueglich
                 der 28 px, die die Reihe ohnehin zwischen den Spalten haelt. */}
-            <div className="w-[390px] shrink-0 self-stretch flex min-h-0 ml-auto">
+            <div className="w-[390px] shrink-0 flex min-h-0 ml-auto" style={reihenHoehe ? { height: reihenHoehe } : undefined}>
               <div className={PANEL + " flex-1 flex flex-col min-h-0"} style={PANEL_STYLE}>
                 <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
                   Intelligence
