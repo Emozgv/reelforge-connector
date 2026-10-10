@@ -334,8 +334,57 @@ const BUEHNE_SKRIPT = () => {
     if (B.bus) return B.bus;
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const ziel = ctx.createMediaStreamDestination();
-    B.bus = { ctx, ziel, spur: ziel.stream.getAudioTracks()[0] ?? null };
+    // Ein Pegelmesser, parallel zum Ausgang.
+    //
+    // Vorübergehend (11.10.2026): Beim ersten Reel ist kein Ton zu hoeren,
+    // obwohl der Blick durchgehend "an, Spur offen" meldet. Damit laesst
+    // sich nicht unterscheiden, ob gar kein Schall durchgeht oder ob er
+    // unterwegs verlorengeht. Der Messer haengt NUR mit -- er greift in die
+    // Leitung nicht ein und veraendert nichts am Ton.
+    let messer = null;
+    try {
+      messer = ctx.createAnalyser();
+      messer.fftSize = 512;
+      ziel.stream; // nur zur Klarheit: der Ausgang bleibt unberuehrt
+    } catch { messer = null; }
+    B.bus = { ctx, ziel, messer, spur: ziel.stream.getAudioTracks()[0] ?? null };
     return B.bus;
+  };
+
+  // Lautstaerke am Bus -- der LAUTESTE Punkt seit der letzten Frage.
+  //
+  // Erster Anlauf nahm alle drei Sekunden eine einzige Momentaufnahme von
+  // rund 10 ms. Die trifft fast immer eine leise Stelle: 17 von 18
+  // Messungen meldeten 0, obwohl Ton zu hoeren war (11.10.2026). Beim
+  // naechsten schlechten Lauf haette der Messer also "Stille" behauptet und
+  // mich an die falsche Stelle geschickt.
+  //
+  // Deshalb wird jetzt staendig geschaut, alle 100 ms, und der hoechste
+  // Wert gemerkt. Gefragt wird nur noch danach -- und das Merken faengt
+  // danach von vorn an. So steht in jedem Takt wirklich drin, ob in den
+  // letzten Sekunden Schall durch die Leitung ging.
+  B.tonPegelLauscher = () => {
+    if (B.__pegelLaeuft) return;
+    B.__pegelLaeuft = true;
+    B.__pegelHoechst = 0;
+    setInterval(() => {
+      const m = B.bus?.messer;
+      if (!m) return;
+      const puffer = new Uint8Array(m.fftSize);
+      m.getByteTimeDomainData(puffer);
+      for (const w of puffer) {
+        const a = Math.abs(w - 128);
+        if (a > B.__pegelHoechst) B.__pegelHoechst = a;
+      }
+    }, 100);
+  };
+
+  B.tonPegel = () => {
+    if (!B.bus?.messer) return null;
+    B.tonPegelLauscher();
+    const wert = +(B.__pegelHoechst / 128).toFixed(3);
+    B.__pegelHoechst = 0;
+    return wert;
   };
 
   // Dieses Reel in die Tonleitung stecken, das vorherige abziehen.
@@ -382,6 +431,10 @@ const BUEHNE_SKRIPT = () => {
     try {
       B.tonEingang = bus.ctx.createMediaStreamSource(strom);
       B.tonEingang.connect(bus.ziel);
+      if (bus.messer) {
+        try { B.tonEingang.connect(bus.messer); } catch { /* egal */ }
+        B.tonPegelLauscher();
+      }
       B.tonEingangSpur = strom.getAudioTracks()[0] ?? null;
     } catch { return false; }
     B.tonQuelle = v;
@@ -1010,6 +1063,8 @@ const BUEHNE_SKRIPT = () => {
       amRichtigenElement: B.quelle === v,
       letzteHeilung: B.letzteHeilung ?? null,
       tonAmRichtigenElement: B.tonQuelle === B.quelle,
+      tonPegel: B.tonPegel(),
+      tonContext: B.bus?.ctx?.state ?? null,
       letzteTonHeilung: B.letzteTonHeilung ?? null,
       // Die einzigen drei Dinge, die Instagram von unserem Aufbau
       // ueberhaupt bemerken KANN: haelt sich die Seite fuer sichtbar, hat
@@ -3026,6 +3081,7 @@ class Session {
                 mitLaenge,
                 unbekannt,
                 letztesZeichnen: RF.zuletztGezeichnet ? Date.now() - RF.zuletztGezeichnet : null,
+                leiste: RF.__leisteGrund ?? "nie versucht",
               };
             })
             .catch(() => null);
@@ -3968,9 +4024,44 @@ class Session {
         // ===============================================================
         // Die Research-Leiste ueber dem Raster
         // ===============================================================
+        // Der Kasten, in dem Instagrams Kachelreihen liegen.
+        //
+        // Stand frueher im Sortier-Block und ist mit ihm geloescht worden
+        // (11.10.2026). Die Leiste rief ihn aber weiter auf -- jedes Mal
+        // ein Fehler, jedes Mal vom try/catch verschluckt, und deshalb
+        // stand der Balken einfach nicht mehr da. Also wieder hier, bei
+        // dem Einzigen, der ihn noch braucht.
+        //
+        // Gefunden wird er ueber die Kacheln selbst: der naechste
+        // gemeinsame Vorfahr aller Kacheln ist der Kasten. Nicht ueber
+        // Klassennamen -- die wechseln bei Instagram staendig.
+        const behaelterFinden = () => {
+          const kacheln = [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')].filter((a) => {
+            const r = a.getBoundingClientRect();
+            return r.width >= 120 && r.height >= 120;
+          });
+          if (!kacheln.length) return { behaelter: null };
+          let n = kacheln[0].parentElement;
+          while (n && !kacheln.every((k) => n.contains(k))) n = n.parentElement;
+          return { behaelter: n ?? null };
+        };
+
         RF.leisteSetzen = function () {
           const { behaelter } = behaelterFinden();
-          if (!behaelter || !behaelter.parentElement) return;
+          // Vorübergehend: sagen, WARUM die Leiste nicht dasteht.
+          //
+          // Seit dem Ausbau der Schalter erscheint sie nicht mehr, und der
+          // Aufruf steckt in einem try/catch -- jeder Fehler ging also
+          // stillschweigend unter (11.10.2026). Hoechstens einmal pro
+          // Sekunde, damit das Protokoll nicht zulaeuft.
+          RF.leisteSpur = (grund) => {
+            if (RF.__leisteZuletzt === grund && Date.now() - (RF.__leisteWann || 0) < 1000) return;
+            RF.__leisteZuletzt = grund;
+            RF.__leisteWann = Date.now();
+            RF.__leisteGrund = grund;
+          };
+          if (!behaelter) { RF.leisteSpur("kein Behaelter gefunden"); return; }
+          if (!behaelter.parentElement) { RF.leisteSpur("Behaelter ohne Elternteil"); return; }
           let leiste = document.getElementById("rf-leiste");
           if (!leiste) {
             // Die Leiste ist nach Emres Vorlage gebaut (10.10.2026,
@@ -4026,6 +4117,12 @@ class Session {
             RF.leisteStand = null;
           }
           if (leiste.nextElementSibling !== behaelter) behaelter.parentElement.insertBefore(leiste, behaelter);
+          const r = leiste.getBoundingClientRect();
+          RF.leisteSpur(
+            document.getElementById("rf-leiste")
+              ? `gesetzt (${Math.round(r.width)}x${Math.round(r.height)} bei ${Math.round(r.top)})`
+              : "gebaut, aber nicht in der Seite"
+          );
           if (RF.leisteStand && RF.stand) {
             RF.leisteStand.textContent = `${RF.stand.beschriftet} von ${RF.stand.kacheln} Kacheln mit Daten`;
           }
