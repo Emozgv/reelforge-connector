@@ -22,6 +22,7 @@
 // tab (crash, force-quit, forgot) never leaves a real logged-in browser
 // context running forever.
 import http from "node:http";
+import { execFile } from "node:child_process";
 import { appendFileSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -204,7 +205,58 @@ function reelNotieren(sitzung, reel) {
   }
 }
 
-const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required"];
+// Unser Erkennungszeichen auf dem unsichtbaren Chrome.
+//
+// Chrome ignoriert unbekannte Schalter, aber er steht danach in der
+// Prozesszeile. Damit laesst sich zweifelsfrei sagen, welcher Chrome von
+// uns stammt -- und nur solche werden spaeter weggeraeumt. Ohne den
+// Stempel muesste man nach Mustern raten ("unsichtbar und alt"), und raten
+// heisst hier: man koennte den eigenen Browser des Nutzers erwischen.
+const CONNECTOR_STEMPEL = "--reelforge-connector";
+
+const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required", CONNECTOR_STEMPEL];
+
+// Liegengebliebene Browser von frueher wegraeumen.
+//
+// Eine Sitzung macht ihren Browser beim Beenden selbst zu, und wird der
+// Connector normal beendet, schliesst er vorher alle Sitzungen. Nur wenn
+// er HART abgeschossen wird, kommt niemand mehr dazu -- dann lebt der
+// Browser weiter. Am 10.10.2026 lagen so sieben Stueck herum, ein bis zwei
+// Tage alt, zusammen rund 2 GB Arbeitsspeicher.
+//
+// Gekehrt wird ausschliesslich BEIM START. In dem Moment gibt es noch
+// keine Sitzung, also ist alles mit unserem Stempel zwingend eine Leiche
+// von frueher. Im laufenden Betrieb wird nie gekehrt: dort koennte ein
+// Browser zu einer offenen Sitzung gehoeren, und eine laufende Sitzung
+// abzuwuergen ist das Schlimmste, was hier passieren darf.
+function leichenWegraeumen() {
+  execFile("/bin/ps", ["-Ao", "pid=,command="], (fehler, ausgabe) => {
+    if (fehler) {
+      console.log(`[aufraeumen] Prozessliste nicht lesbar (${fehler.message}) -- uebersprungen.`);
+      return;
+    }
+    const leichen = [];
+    for (const zeile of ausgabe.split("\n")) {
+      // Nur unser Stempel zaehlt, und nur der Hauptprozess: Chromes
+      // Unterprozesse tragen "--type=..." und gehen mit dem Hauptprozess
+      // von selbst mit.
+      if (!zeile.includes(CONNECTOR_STEMPEL) || zeile.includes("--type=")) continue;
+      const pid = Number(zeile.trim().split(/\s+/)[0]);
+      if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) leichen.push(pid);
+    }
+    if (leichen.length === 0) return;
+    let zu = 0;
+    for (const pid of leichen) {
+      try {
+        process.kill(pid, "SIGTERM");
+        zu++;
+      } catch {
+        /* schon weg, auch gut */
+      }
+    }
+    console.log(`[aufraeumen] ${zu} liegengebliebene(n) Browser von frueher geschlossen.`);
+  });
+}
 
 // Haelt ReelForge das Reel an, solange ein Profil offen ist?
 //
@@ -4257,6 +4309,7 @@ function bindSessionServer(deadline) {
 }
 
 bindSessionServer(Date.now() + 8000);
+leichenWegraeumen();
 
 // Wird der Connector beendet, waehrend noch eine Sitzung laeuft, blieben
 // bisher offene Browser zurueck. Beim Beenden werden sie jetzt geschlossen.
