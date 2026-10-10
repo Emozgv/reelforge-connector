@@ -108,6 +108,10 @@ export interface ReelVideo {
   likes?: number;
   comments?: number;
   shares?: number;
+  // Instagram nennt sie media_repost_count. In der Oberflaeche stehen sie
+  // neben Likes und Kommentaren -- es sind ausdruecklich Reposts, keine
+  // Shares (Emre, 09.10.2026).
+  reposts?: number;
   tags: string[];
   saved: boolean;
   used: boolean;
@@ -131,6 +135,10 @@ export interface ReelVideo {
   creatorFit?: number;
   trending?: boolean;
   postedDaysAgo?: number;
+  // Veroeffentlichungszeitpunkt in Sekunden seit 1970, so wie die Plattform
+  // ihn liefert. postedDaysAgo ist daraus gerundet -- fuer Datum und Uhrzeit
+  // braucht es den genauen Wert.
+  takenAt?: number;
   language?: Language;
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Loader2, Heart, ChevronDown } from "lucide-react";
+import { MessageCircle, Loader2, Heart } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import type { LiveComment } from "../../state/useLiveResearchSession";
 
@@ -15,11 +15,6 @@ import type { LiveComment } from "../../state/useLiveResearchSession";
 // Closing the panel (isOpen false) tears down any pending timer and fetches
 // nothing until it's reopened -- there is no comment-fetch activity at all
 // while it's closed.
-// 09.10.2026 von 5000 auf 4000 gesenkt -- Emre wollte die Kommentare eine
-// Sekunde frueher sehen. Der Zweck der Wartezeit bleibt erhalten: wer
-// zuegig durchblaettert (gemessen 1,2-1,4 s je Reel), loest weiterhin
-// keinen einzigen Abruf aus.
-const DWELL_MS = 4000;
 
 // Disabled ("View all N comments" was a dead promise -- no pagination/API
 // support for loading more than the initial batch exists) -- flip back to
@@ -38,11 +33,20 @@ export function CommentsPanel({
 }: {
   video: ReelVideo | null;
   isOpen: boolean;
-  fetchComments: (reelId: string, sourceUrl: string) => Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string }>;
+  fetchComments: (reelId: string, sourceUrl: string, abMarke?: string | null) => Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string; naechste?: string | null }>;
 }) {
   const [displayReelId, setDisplayReelId] = useState<string | null>(null);
   const [dwelling, setDwelling] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Fortsetzungsmarke je Reel: ab hier liefert Instagram die naechsten
+  // Kommentare. Fehlt sie, gibt es keine weiteren.
+  const markenRef = useRef<Map<string, string | null>>(new Map());
+  const [laedtMehr, setLaedtMehr] = useState(false);
+  const listeRef = useRef<HTMLDivElement>(null);
+  // Die nachgeladenen Kommentare liegen in einem ref, nicht im Zustand.
+  // Dieser Zaehler loest das Neuzeichnen aus -- setDisplayReelId mit
+  // demselben Wert tut es nicht, React steigt dann aus.
+  const [, neuZeichnen] = useState(0);
   // Welcher Reiter gewaehlt ist. "notizen" ist bewusst kein Platzhalter nur
   // in der Anzeige: solange er gewaehlt ist, wird NICHTS geholt. Nur so
   // laesst sich pruefen, ob das Laden der Kommentare -- und damit das
@@ -74,6 +78,7 @@ export function CommentsPanel({
       setDwelling(false);
       setDisplayReelId(targetVideo.id);
       const result = await fetchComments(targetVideo.id, targetVideo.sourceUrl);
+      markenRef.current.set(targetVideo.id, result.naechste ?? null);
       // A newer open/close/reel-change already superseded this request --
       // never let a late response overwrite what's currently shown.
       if (myRequestId !== requestIdRef.current) return;
@@ -136,17 +141,55 @@ export function CommentsPanel({
     // leaves displayReelId/loading alone here -- whatever was on screen for
     // the previous reel just stays there until this dwell actually
     // completes, rather than flashing to empty the instant the VA moves on.
-    setDwelling(true);
-    dwellTimerRef.current = window.setTimeout(() => {
-      dwellTimerRef.current = null;
-      void runFetch(video);
-    }, DWELL_MS);
-
-    return () => clearDwellTimer();
+    // Sofort holen, ohne Wartezeit. Die Verweildauer gab es nur, weil fuer
+    // jedes Reel eine zweite Instagram-Seite geoeffnet wurde -- beim
+    // Durchblaettern waeren das Dutzende gewesen. Seit dem 09.10.2026
+    // kommen die Kommentare ueber Instagrams eigene Adresse, genau wie die
+    // Aufrufzahl, und das kostet nur noch eine schlanke Anfrage.
+    //
+    // Ein Wechsel waehrend eines laufenden Abrufs macht dessen Ergebnis
+    // ungueltig (requestIdRef), es kann also nichts Falsches stehenbleiben.
+    void runFetch(video);
+    return;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kommentareAktiv, video?.id]);
 
   if (!isOpen) return null;
+
+  // Instagram liefert sehr kleine Portionen -- teils sechs Kommentare.
+  // Die fuellen die Spalte nicht, also gibt es nichts zu scrollen, und das
+  // Nachladen beim Scrollen loest nie aus (09.10.2026 von Emre gemeldet).
+  // Deshalb nach jedem Zeichnen pruefen: passt alles hinein, obwohl es mehr
+  // gibt? Dann von selbst die naechste Portion holen, bis die Spalte voll
+  // ist oder Instagram nichts mehr hat.
+  useEffect(() => {
+    const el = listeRef.current;
+    if (!el || !video || !displayReelId || laedtMehr) return;
+    const marke = markenRef.current.get(displayReelId);
+    if (!marke) return;
+    if (el.scrollHeight > el.clientHeight + 40) return;
+    let weg = false;
+    void (async () => {
+      setLaedtMehr(true);
+      const a = await fetchComments(video.id, video.sourceUrl, marke).catch(() => null);
+      if (weg) return;
+      setLaedtMehr(false);
+      if (!a || video.id !== displayReelId) return;
+      markenRef.current.set(displayReelId, a.naechste ?? null);
+      const bisher = resultsRef.current.get(displayReelId);
+      const alte = bisher?.status === "loaded" ? bisher.comments : [];
+      const bekannt = new Set(alte.map((k) => k.id));
+      const neue = (a.comments ?? []).filter((k) => !bekannt.has(k.id));
+      if (neue.length) {
+        resultsRef.current.set(displayReelId, { status: "loaded", comments: [...alte, ...neue] });
+        neuZeichnen((n) => n + 1);
+      } else {
+        // Nichts Neues gekommen -- sonst liefe das endlos weiter.
+        markenRef.current.set(displayReelId, null);
+      }
+    })();
+    return () => { weg = true; };
+  });
 
   const result = displayReelId ? resultsRef.current.get(displayReelId) : undefined;
 
@@ -205,30 +248,44 @@ export function CommentsPanel({
       <>
       <div className="px-4 pt-3 flex items-center justify-between">
         <span className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">Top Comments</span>
-        {/* Sorting isn't implemented (comments render in whatever order the
-            provider returns) — shown to match the reference, disabled
-            rather than pretending to sort. */}
-        <button
-          type="button"
-          disabled
-          title="Sorting isn't available yet"
-          className="flex items-center gap-1 text-[11px] text-neutral-600 cursor-not-allowed"
-        >
-          Most Relevant
-          <ChevronDown size={11} />
-        </button>
+        {/* "Most Relevant" stand hier als Attrappe -- sortiert hat es nie,
+            die Kommentare kommen in Instagrams eigener Reihenfolge. Am
+            09.10.2026 entfernt: ein totes Bedienelement ist schlechter als
+            keines. */}
       </div>
 
-      {/* Fixed, compact height (not flex-1 filling the video's full height
-          the way it used to) — this now shares one card with Save to
-          Collection below it, so the list stays short enough that both
-          fit without scrolling the whole page, matching the reference. */}
-      {/* max-h caps this list's own natural size -- without it, a long
-          comment list has no upper bound, and since this sits inside a
-          self-stretch flex column matched against the player panel's
-          height, an unbounded list drags the WHOLE row (including the
-          player) taller instead of just scrolling internally. */}
-      <div className="flex-1 min-h-[160px] max-h-[50vh] overflow-y-auto px-4 py-3">
+      {/* Die Obergrenze MUSS bleiben: ganz ohne sie zieht eine lange Liste
+          die Spalte in die Hoehe, und Save to Collection rutscht aus dem
+          Bild (am 09.10.2026 ausprobiert und sofort zurueckgenommen).
+          Von 50vh auf 62vh angehoben -- damit fuellt die Liste die schwarze
+          Flaeche, die darunter stehenblieb, ohne die Reihe zu sprengen. */}
+      <div
+        className="flex-1 min-h-[160px] max-h-[62vh] overflow-y-auto px-4 py-3"
+        ref={listeRef}
+        onScroll={async (e) => {
+          // Am unteren Ende die naechsten Kommentare holen -- so wie
+          // Instagram selbst nachlaedt (09.10.2026). Ohne Marke gibt es
+          // nichts mehr zu holen.
+          const el = e.currentTarget;
+          if (!displayReelId || laedtMehr || !video) return;
+          const marke = markenRef.current.get(displayReelId);
+          if (!marke) return;
+          if (el.scrollTop + el.clientHeight < el.scrollHeight - 120) return;
+          setLaedtMehr(true);
+          const a = await fetchComments(video.id, video.sourceUrl, marke).catch(() => null);
+          setLaedtMehr(false);
+          if (!a || video.id !== displayReelId) return;
+          markenRef.current.set(displayReelId, a.naechste ?? null);
+          const bisher = resultsRef.current.get(displayReelId);
+          const alte = bisher?.status === "loaded" ? bisher.comments : [];
+          const bekannt = new Set(alte.map((k) => k.id));
+          const neue = (a.comments ?? []).filter((k) => !bekannt.has(k.id));
+          if (neue.length) {
+            resultsRef.current.set(displayReelId, { status: "loaded", comments: [...alte, ...neue] });
+            neuZeichnen((n) => n + 1);
+          }
+        }}
+      >
         {!video ? (
           <div className="h-full flex items-center justify-center text-center">
             <p className="text-[11.5px] text-neutral-600">No reel is being viewed right now.</p>

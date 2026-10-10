@@ -874,6 +874,17 @@ const BUEHNE_SKRIPT = () => {
       quelleBereit: v ? v.readyState : null,
       quelleGroesse: v ? `${v.videoWidth}x${v.videoHeight}` : null,
       spurZustand: spur ? `${spur.readyState}/${spur.muted ? "stumm" : "offen"}` : null,
+      // Die TONspur des Senders. Bisher meldete der Blick nur die Bildspur
+      // -- beim "kein Ton nach dem Neuaufbau" war damit genau die Stelle
+      // blind, auf die es ankommt (09.10.2026).
+      tonSpur: (() => {
+        const t = B.pc?.getSenders().find((x) => x.track?.kind === "audio")?.track;
+        return t ? `${t.readyState}/${t.enabled ? "an" : "aus"}/${t.muted ? "stumm" : "offen"}` : "KEINE";
+      })(),
+      tonAusgang: (() => {
+        const t = B.bus?.spur;
+        return t ? `${t.readyState}/${t.enabled ? "an" : "aus"}/${t.muted ? "stumm" : "offen"}` : "kein Bus";
+      })(),
       verbindung: B.pc?.connectionState ?? "-",
       gesendet, bilder,
       videosImDom: document.querySelectorAll("video").length,
@@ -1070,6 +1081,11 @@ function parseInstagramMedia(node) {
     const thumbnailUrl = Array.isArray(thumbCandidates) && thumbCandidates.length ? thumbCandidates[0].url : null;
     if (!videoUrl && !thumbnailUrl) return null;
 
+    // MESSUNG (09.10.2026): Wir sehen fuer die Aufrufzahl nur in play_count
+    // und view_count nach, und dort steht oft nichts. Emres Erweiterung
+    // zeigt aber eine Zahl an -- holt sie also irgendwoher. Also einmal pro
+    // Sitzung auflisten, welche Felder Instagram ueberhaupt mitschickt.
+    // Nur die NAMEN, keine Werte.
     const takenAt = typeof node.taken_at === "number" ? node.taken_at : null;
     const postedDaysAgo = takenAt ? Math.max(0, Math.floor((Date.now() / 1000 - takenAt) / 86400)) : null;
 
@@ -1089,7 +1105,18 @@ function parseInstagramMedia(node) {
       likes: typeof node.like_count === "number" ? node.like_count : null,
       comments: typeof node.comment_count === "number" ? node.comment_count : null,
       durationSec: typeof node.video_duration === "number" ? Math.round(node.video_duration) : 0,
+      // Instagram nennt sie media_repost_count -- in der Oberflaeche sind
+      // das die Reposts neben Likes und Kommentaren. Gefunden am
+      // 09.10.2026, als Emre fragte, woher seine Erweiterung die Zahl holt.
+      reposts: typeof node.media_repost_count === "number" ? node.media_repost_count : null,
+      // Instagrams interne Nummer. Nur damit laesst sich die Aufrufzahl
+      // nachfragen -- im Feed liefert Instagram sie nicht mit (gemessen am
+      // 09.10.2026: 190 Antworten, 5 Reels, kein einziges Aufruf-Feld).
+      pk: node.pk != null ? String(node.pk) : null,
       postedDaysAgo,
+      // Der genaue Zeitpunkt, nicht nur "vor X Tagen". Fuers Panel im
+      // Session-Kontext, das Datum UND Uhrzeit zeigt (09.10.2026).
+      takenAt,
     };
   } catch {
     return null;
@@ -1623,6 +1650,11 @@ async function archiveLiveReel(session, reel) {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       console.error(`[archive] session ${session.id} reel ${reel.id} failed (${res.status}): ${body.error ?? "(no error message)"}`);
+    } else {
+      // Erfolg wurde bisher gar nicht protokolliert -- dadurch liess sich
+      // "hat geschrieben" nicht von "ist stillschweigend nichts passiert"
+      // unterscheiden (09.10.2026).
+      console.log(`[archive] ${reel.id} geschrieben.`);
     }
   } catch (err) {
     // A real network failure, not a rejected token -- archive is
@@ -2021,7 +2053,92 @@ class Session {
     // oder falsch freigegeben. Der Code des ersten Reels dagegen stimmt
     // immer.
     this.erstesReel = this.erstesReel ?? sicht.code;
-    return { reel: bekannt, code: sicht.code, wege: sicht.wege, amAnfang: sicht.code === this.erstesReel };
+    // Aufrufe nachfragen. Instagram liefert sie im Feed nicht mit; die
+    // einzige Stelle ist seine eigene Adresse /api/v1/media/<nr>/info/.
+    // Genau das tut auch die Erweiterung, die Emre im Browser benutzt
+    // (09.10.2026 in deren Code nachgelesen, inklusive der funf Feldnamen).
+    //
+    // Pro Reel genau EINE Anfrage: Das Ergebnis wird gemerkt, die Abfrage
+    // des Kunden laeuft alle zwei Sekunden und darf das nicht jedes Mal
+    // ausloesen. Scheitert sie, wird nichts erfunden -- dann bleibt die
+    // Zahl leer.
+    this.__aufrufe = this.__aufrufe ?? new Map();
+    const nr = bekannt?.pk ?? null;
+    if (nr && !this.__aufrufe.has(nr)) {
+      this.__aufrufe.set(nr, null); // Platz belegen, damit es nur einmal laeuft
+      const geholt = await this.page
+        .evaluate(async (id) => {
+          try {
+            const r = await fetch(`/api/v1/media/${id}/info/`, {
+              headers: { "X-IG-App-ID": "936619743392459" },
+              credentials: "include",
+            });
+            if (!r.ok) return { fehler: `HTTP ${r.status}` };
+            const j = await r.json();
+            const m = j?.items?.[0] ?? {};
+            for (const k of ["play_count", "ig_play_count", "view_count", "video_view_count", "content_views_count"]) {
+              if (typeof m[k] === "number") return { wert: m[k], feld: k };
+            }
+            return { fehler: "kein Aufruf-Feld in der Antwort" };
+          } catch (e) { return { fehler: String(e?.message ?? e) }; }
+        }, nr)
+        .catch((e) => ({ fehler: String(e?.message ?? e) }));
+      if (typeof geholt?.wert === "number") {
+        this.__aufrufe.set(nr, geholt.wert);
+        console.log(`[aufrufe] ${sicht.code}: ${geholt.wert} (${geholt.feld})`);
+      } else {
+        console.log(`[aufrufe] ${sicht.code}: nicht bekommen -- ${geholt?.fehler ?? "?"}`);
+      }
+    }
+    const aufrufe = nr ? this.__aufrufe.get(nr) : null;
+
+    // Die Laenge steht nicht in Instagrams Antwort (gemessen am 09.10.2026:
+    // video_duration fehlt in jedem Reel). Das laufende Video kennt sie aber
+    // selbst -- also dort ablesen statt in der Antwort zu suchen.
+    const laenge = await this.page
+      .evaluate(() => {
+        const v = window.__buehne?.videoImBild?.();
+        return v && isFinite(v.duration) && v.duration > 0 ? Math.round(v.duration) : null;
+      })
+      .catch(() => null);
+    // Ins Archiv schreiben, was der Mitarbeiter wirklich gesehen hat.
+    //
+    // In V1 geschah das in next() -- und das ruft in V2 niemand mehr auf.
+    // Dadurch sammelte das Archiv seit der Umstellung nur noch, was beim
+    // Verbinden oder beim Resync eingelesen wurde, nicht die Reels der
+    // laufenden Sitzung (09.10.2026 von Emre gemeldet).
+    //
+    // Einmal pro Reel und Sitzung: diese Abfrage laeuft alle zwei Sekunden,
+    // ohne Gedaechtnis wuerde dasselbe Reel staendig erneut geschrieben.
+    // Wie ueberall beim Archiv ohne Warten und ohne Folgen fuer die Bild-
+    // uebertragung -- es ist Verlauf, nichts, woran der Feed haengt.
+    this.__archiviert = this.__archiviert ?? new Set();
+    if (bekannt && !this.__archiviert.has(bekannt.id)) {
+      this.__archiviert.add(bekannt.id);
+      // Einmal pro Sitzung: wie lange haelt die Bildadresse? Instagram
+      // unterschreibt sie mit einem Ablaufzeitpunkt (Emres Frage vom
+      // 09.10.2026). Nur Lesen, nur einmal.
+      if (!this.__ablaufGemeldet && bekannt.thumbnailUrl) {
+        this.__ablaufGemeldet = true;
+        try {
+          const u = new URL(bekannt.thumbnailUrl);
+          const hex = u.searchParams.get("oe");
+          const exp = u.searchParams.get("_nc_exp");
+          const bis = hex ? parseInt(hex, 16) * 1000 : exp ? Number(exp) : null;
+          console.log(
+            bis
+              ? `[thumbnail] gueltig bis ${new Date(bis).toISOString()} -- noch ${Math.round((bis - Date.now()) / 86400000)} Tage`
+              : `[thumbnail] kein Ablauf in der Adresse gefunden (${[...u.searchParams.keys()].join(", ")})`,
+          );
+        } catch (e) { console.log(`[thumbnail] Adresse nicht lesbar: ${e?.message ?? e}`); }
+      }
+      void archiveLiveReel(this, bekannt);
+    }
+
+    const angereichert = bekannt
+      ? { ...bekannt, ...(laenge ? { durationSec: laenge } : {}), ...(typeof aufrufe === "number" ? { viewsRaw: aufrufe } : {}) }
+      : bekannt;
+    return { reel: angereichert, code: sicht.code, wege: sicht.wege, amAnfang: sicht.code === this.erstesReel };
   }
 
   async buehneZustand() {
@@ -2473,8 +2590,68 @@ class Session {
   // already-known current reel rather than this.current(), so a slow
   // fetch that resolves after the VA has already moved on can't silently
   // attach comments to the wrong reel — the client checks the id itself.
-  async comments(reelId, sourceUrl) {
+  async comments(reelId, sourceUrl, abMarke) {
     if (!sourceUrl) return { available: false, comments: [] };
+
+    // SCHNELLER WEG (09.10.2026, Emres Idee): Kommentare ueber Instagrams
+    // eigene Adresse holen, genauso wie die Aufrufzahl -- statt eine zweite
+    // Seite zu oeffnen und deren Text abzulesen.
+    //
+    // Das Oeffnen kostet mehrere Sekunden und ist der letzte Punkt, an dem
+    // wir uns anders verhalten als ein Mensch. Die Anfrage laeuft dagegen
+    // aus der Buehne selbst, mit deren Anmeldung, und bringt die Kommentare
+    // als saubere Daten statt als abgelesenen Bildschirmtext.
+    //
+    // Klappt sie nicht, bleibt der alte Weg darunter unveraendert stehen.
+    const bekannt =
+      this.history.find((r) => r.id === reelId) ??
+      this.pending.find((r) => r.id === reelId) ??
+      this.katalog.get(reelId) ??
+      null;
+    if (bekannt?.pk && this.buehneSteht) {
+      const schnell = await this.page
+        .evaluate(async ({ nr, abMarke }) => {
+          try {
+            // Instagram gibt zu jeder Antwort eine Marke mit, ab der die
+            // naechsten Kommentare beginnen. Damit laesst sich beim Scrollen
+            // nachladen, genau wie Instagram es selbst tut (09.10.2026).
+            const adresse = abMarke
+              ? `/api/v1/media/${nr}/comments/?min_id=${encodeURIComponent(abMarke)}`
+              : `/api/v1/media/${nr}/comments/`;
+            const r = await fetch(adresse, {
+              headers: { "X-IG-App-ID": "936619743392459" },
+              credentials: "include",
+            });
+            if (!r.ok) return { fehler: `HTTP ${r.status}` };
+            const j = await r.json();
+            const roh = Array.isArray(j?.comments) ? j.comments : [];
+            return {
+              naechste: typeof j?.next_min_id === "string" ? j.next_min_id : null,
+              // Keine eigene Obergrenze: Instagram bestimmt selbst, wie
+              // viele es pro Antwort schickt. Hier stand frueher
+              // slice(0, 30) -- das warf weg, was schon da war, und holte
+              // es beim Scrollen ein zweites Mal (09.10.2026).
+              kommentare: roh.map((c) => ({
+                id: String(c.pk ?? c.id ?? ""),
+                username: c.user?.username ?? null,
+                text: typeof c.text === "string" ? c.text : "",
+                likeCount: typeof c.comment_like_count === "number" ? c.comment_like_count : null,
+                postedAt: typeof c.created_at === "number" ? c.created_at : null,
+              })).filter((c) => c.text && c.username),
+            };
+          } catch (e) { return { fehler: String(e?.message ?? e) }; }
+        }, { nr: bekannt.pk, abMarke })
+        .catch((e) => ({ fehler: String(e?.message ?? e) }));
+      // Wichtig: "keine Kommentare" ist kein Fehlschlag. Ein Reel ohne
+      // Kommentare liefert eine leere Liste -- faellt man darauf zurueck,
+      // oeffnet ReelForge eine zweite Seite fuer nichts. Nur ein echter
+      // Fehler fuehrt zum alten Weg (Emres Einwand, 09.10.2026).
+      if (Array.isArray(schnell?.kommentare)) {
+        console.log(`[kommentare] ${reelId}: ${schnell.kommentare.length} ueber die Adresse geholt${schnell.naechste ? ", weitere vorhanden" : ""}.`);
+        return { available: true, comments: schnell.kommentare, reelId, naechste: schnell.naechste ?? null };
+      }
+      console.log(`[kommentare] ${reelId}: schneller Weg fehlgeschlagen (${schnell?.fehler ?? "?"}) -- zweite Seite wird geoeffnet.`);
+    }
 
     // Real network sniffing (four live attempts) never found a
     // "/comment"-named endpoint, and every GraphQL response seen turned out
@@ -2781,7 +2958,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
       const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert } = await readBody(req);
@@ -2847,10 +3024,137 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, result);
       }
       if (action === "comments") {
-        const result = await session.comments(reelId, sourceUrl);
+        const result = await session.comments(reelId, sourceUrl, wert ?? null);
         if (!result.available) console.error(`[comments] session ${id} unavailable for reel ${reelId ?? "(unknown)"}: ${result.error ?? "no comments response captured"}`);
         return json(res, 200, result);
       }
+      // --- Teilen (09.10.2026) ----------------------------------------
+      // Instagrams eigenes Teilen-Fenster, nachgebaut in ReelForge. Der
+      // Mitarbeiter sieht Instagrams Seite nicht, sondern nur den Bildstrom
+      // des Reels -- das Fenster muss also hier gezeichnet werden.
+      //
+      // Das Fenster bleibt drueben OFFEN, solange der Mitarbeiter darin
+      // arbeitet. Anders ginge keine echte Suche: Oeffnen, Tippen, Lesen
+      // und Schliessen dauert zusammen mehrere Sekunden -- viel zu lang,
+      // um beim Tippen mitzukommen.
+      //
+      // Vier Schritte, bewusst getrennt, damit Lesen nie versehentlich
+      // etwas verschickt: oeffnen, suchen, senden, schliessen.
+      if (action.startsWith("teilen-")) {
+        const schritt = action.slice("teilen-".length);
+        const erg = await session.page
+          .evaluate(async ({ schritt, ziel, text }) => {
+            const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+            const klick = (el) => (el?.closest("button, [role='button'], div[role='button']") ?? el?.parentElement)?.click();
+            const dlg = () => document.querySelector("div[role='dialog']");
+            // Instagram baut Startliste und Suchtreffer unterschiedlich auf:
+            // oben anklickbare Eintraege mit Bild, nach der Suche Zeilen mit
+            // einem Auswahlfeld ("Radio selection").
+            const zeileVon = (el) => {
+              let n = el;
+              for (let i = 0; i < 6 && n; i++) {
+                n = n.parentElement;
+                if (n && n.querySelector("img") && (n.innerText || "").trim()) return n;
+              }
+              return el.parentElement;
+            };
+            const zeilen = (d) => {
+              const r = [...d.querySelectorAll("input[aria-label='Radio selection']")].map(zeileVon).filter(Boolean);
+              return r.length ? r : [...d.querySelectorAll("div[role='button']")].filter((x) => x.querySelector("img"));
+            };
+            const lies = (el) => {
+              const t = (el.innerText || "").trim().split("\n").map((x) => x.trim()).filter(Boolean);
+              return { name: t[0] ?? "", kennung: t[1] ?? "", bild: el.querySelector("img")?.src ?? null };
+            };
+            const schliesse = () => {
+              const d = dlg(); if (!d) return;
+              const zu = [...d.querySelectorAll("svg[aria-label]")].find((x) => /close|schlie/i.test(x.getAttribute("aria-label") ?? ""));
+              klick(zu);
+            };
+            const tippe = (feld, wert) => {
+              const proto = feld.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+              Object.getOwnPropertyDescriptor(proto, "value").set.call(feld, wert);
+              feld.dispatchEvent(new Event("input", { bubbles: true }));
+            };
+
+            if (schritt === "schliessen") { schliesse(); return { ok: true }; }
+
+            // Noch zu? Dann aufmachen.
+            if (!dlg()) {
+              const teilenKnopf = [...document.querySelectorAll("svg[aria-label]")]
+                .find((x) => /^share$|teilen/i.test(x.getAttribute("aria-label") ?? ""));
+              if (!teilenKnopf) return { ok: false, fehler: "Instagram zeigt gerade keinen Teilen-Knopf." };
+              klick(teilenKnopf);
+              await warte(1600);
+            }
+            let d = dlg();
+            if (!d) return { ok: false, fehler: "Das Teilen-Fenster ging nicht auf." };
+
+            if (schritt === "oeffnen") {
+              // Instagram rendert nur die ersten paar Kontakte und laedt den
+              // Rest beim Scrollen nach.
+              const roller = [...d.querySelectorAll("div")]
+                .filter((x) => x.scrollHeight > x.clientHeight + 20)
+                .sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+              const gesammelt = new Map();
+              const einsammeln = () => {
+                for (const z of zeilen(d)) { const k = lies(z); if (k.name) gesammelt.set(`${k.name}|${k.kennung}`, k); }
+              };
+              einsammeln();
+              if (roller) {
+                for (let i = 0; i < 8 && gesammelt.size < 40; i++) {
+                  roller.scrollTop = roller.scrollHeight;
+                  await warte(650);
+                  d = dlg(); if (!d) break;
+                  einsammeln();
+                }
+              }
+              return { ok: true, kontakte: [...gesammelt.values()].slice(0, 40) };
+            }
+
+            const suchfeld = d.querySelector("input");
+            if (!suchfeld) return { ok: false, fehler: "Kein Suchfeld im Teilen-Fenster." };
+
+            if (schritt === "suchen") {
+              tippe(suchfeld, ziel);
+              await warte(1800);
+              d = dlg(); if (!d) return { ok: false, fehler: "Fenster ist zugegangen." };
+              return { ok: true, kontakte: zeilen(d).map(lies).filter((x) => x.name).slice(0, 25) };
+            }
+
+            if (schritt === "senden") {
+              // Immer frisch suchen, damit wirklich der Gemeinte getroffen
+              // wird und nicht, was zufaellig noch in der Liste stand.
+              tippe(suchfeld, ziel);
+              await warte(2000);
+              d = dlg();
+              const treffer = zeilen(d);
+              const passend = treffer.find((x) => (x.innerText || "").toLowerCase().includes(String(ziel).toLowerCase()));
+              if (!passend) { return { ok: false, fehler: `Instagram findet "${ziel}" nicht.` }; }
+              const wer = lies(passend);
+              passend.click();
+              await warte(900);
+              d = dlg();
+              if (text) {
+                const feld = [...d.querySelectorAll("input,textarea")].find((i) => /write a message|nachricht/i.test(i.placeholder ?? ""));
+                if (feld) { tippe(feld, text); await warte(400); d = dlg(); }
+              }
+              const sendKnopf = [...d.querySelectorAll("button, [role='button'], div[role='button']")]
+                .find((b) => /^(send|senden)$/i.test((b.innerText || "").trim()));
+              if (!sendKnopf) { return { ok: false, fehler: "Kein Senden-Knopf gefunden." }; }
+              sendKnopf.click();
+              await warte(2200);
+              schliesse();
+              return { ok: true, gesendet: true, an: wer };
+            }
+
+            return { ok: false, fehler: "unbekannter Schritt" };
+          }, { schritt, ziel: reelId ?? "", text: wert ?? "" })
+          .catch((e) => ({ ok: false, fehler: String(e?.message ?? e) }));
+        console.log(`[teilen] ${schritt}: ${JSON.stringify(erg).slice(0, 220)}`);
+        return json(res, erg.ok ? 200 : 502, erg);
+      }
+
       if (action === "heartbeat") {
         return json(res, 200, { ok: true });
       }

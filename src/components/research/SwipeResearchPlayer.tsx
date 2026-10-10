@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle, Send, Volume2, VolumeX } from "lucide-react";
+import { Send as SendIcon, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle, Send, Volume2, VolumeX } from "lucide-react";
+import { panelStil } from "../../lib/panelLook";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
 import { PlatformIcon } from "../hub/PlatformIcon";
@@ -7,7 +8,8 @@ import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { formatDuration } from "../../lib/researchFeedMapping";
 import { formatCompactNumber } from "../../lib/formatCount";
 import { DownloadConnectorLink } from "./DownloadConnectorButton";
-import { LiveBuehne, buehneEingabe } from "./LiveBuehne";
+import { LiveBuehne, buehneEingabe, teilenOeffnen, teilenSuchen, teilenSenden, teilenSchliessen } from "./LiveBuehne";
+import { ShareSheet } from "./ShareSheet";
 import { RESEARCH_MODUS } from "../../lib/researchModus";
 
 // "offen" gibt es, seit der Like direkt in Instagrams Tab gesetzt wird: das
@@ -212,13 +214,10 @@ function SwipeSlide({
             {video.caption}
           </button>
         )}
-        <div className="mt-2 flex items-center gap-3 text-[11.5px] text-white/70 tabular-nums">
-          {/* Live reels: no real platform view count means no view count
-              shown — never a misleading 0 (see useLiveResearchSession's
-              liveReelToVideo, which leaves views as "" for exactly this). */}
-          {video.views && <span>{video.views} views</span>}
-          {video.likes !== undefined && <span>{video.likes.toLocaleString()} likes</span>}
-        </div>
+        {/* Views und Likes standen hier frueher doppelt -- seit dem
+            09.10.2026 stehen sie im Session-Kontext unter "Current Reel",
+            zusammen mit Kommentaren, Reposts, Laenge und Zeitpunkt. Im Bild
+            waren sie nur Rauschen ueber dem Reel. */}
       </div>
 
       {/* right stat rail — matches the Research Accounts Figma reference
@@ -485,6 +484,16 @@ export function SwipeResearchPlayer({
   // nichts. Der Connector sagt es uns, am Reel-Code festgemacht -- nicht
   // mitgezaehlt, damit ein verworfener Wisch die Sperre nicht verschiebt.
   const [amAnfang, setAmAnfang] = useState(true);
+  const [teilenOffen, setTeilenOffen] = useState(false);
+  // Hat der Mitarbeiter den Start selbst ausgeloest? Dann darf das Fenster
+  // "Research session ended" mit dem Start-Knopf nicht mehr auftauchen --
+  // der Zustand springt beim Starten kurz auf "checking" und zeigte dieses
+  // Fenster fuer den Bruchteil einer Sekunde, mitten im Startvorgang
+  // (09.10.2026 von Emre gemeldet).
+  const [startetGerade, setStartetGerade] = useState(false);
+  useEffect(() => {
+    if (sessionStatus !== "checking" && sessionStatus !== "connecting") setStartetGerade(false);
+  }, [sessionStatus]);
   const touchStartY = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // One deliberate navigation action must move exactly one reel — a fast
@@ -675,6 +684,12 @@ export function SwipeResearchPlayer({
 
   return (
     <div className="flex flex-col items-center">
+      {/* Der Rahmen schneidet alles ab, was ueber seinen Rand hinausgeht
+          (overflow-hidden) -- die Pfeile muessen deshalb AUSSERHALB von ihm
+          liegen. Dieser Behaelter haelt beides zusammen und gibt den
+          Pfeilen den Bezugspunkt. Emre am 09.10.2026: die Pfeile sollen
+          zwischen Video und Kommentare, so wie bei Instagram. */}
+      <div className="relative">
       <div
         ref={containerRef}
         onWheel={handleWheel}
@@ -807,7 +822,7 @@ export function SwipeResearchPlayer({
                   Try again
                 </button>
               </>
-            ) : sessionStatus === "idle" || sessionStatus === "checking" ? (
+            ) : (sessionStatus === "idle" || sessionStatus === "checking") && !startetGerade ? (
               <>
                 {sessionStatus === "checking" ? (
                   <Loader2 size={16} className="text-neutral-500 animate-spin mb-1" />
@@ -824,7 +839,7 @@ export function SwipeResearchPlayer({
                 <button
                   type="button"
                   disabled={sessionStatus === "checking"}
-                  onClick={onRefreshSession}
+                  onClick={() => { setStartetGerade(true); onRefreshSession(); }}
                   className="mt-4 h-9 px-4 rounded-full bg-[#D39448] text-[#020508] text-[12.5px] font-medium hover:brightness-110 transition-[filter] duration-150 disabled:opacity-40 disabled:cursor-default"
                 >
                   Start research
@@ -840,7 +855,7 @@ export function SwipeResearchPlayer({
                 <Loader2 size={20} className="text-[#D39448] animate-spin" />
                 <p className="mt-3 text-[12.5px] text-neutral-400">Starting research in {wakeCountdown}…</p>
               </>
-            ) : sessionStatus === "connecting" ? (
+            ) : sessionStatus === "connecting" || startetGerade ? (
               // Covers both: the health-check wait right after a click
               // (before a cold-launch countdown even starts, or when
               // Connector was already running and there's no countdown at
@@ -903,11 +918,21 @@ export function SwipeResearchPlayer({
           </div>
         )}
 
-        {(hasPrev || (liveAnsicht && sitzung)) && (
+      </div>
+
+      {/* Eigenes Panel zwischen Video und Kommentaren, im selben Stil wie
+          die uebrigen. Es steht IMMER da -- auch ohne laufende Sitzung --
+          und wird erst bedienbar, sobald eine Session laeuft (Emre,
+          09.10.2026). Dadurch springt die Aufteilung beim Starten nicht. */}
+      <div
+        className="absolute left-full top-1/2 -translate-y-1/2 ml-[26px] rounded-xl border border-[#1a130b] p-2 flex flex-col gap-2"
+        style={panelStil()}
+      >
+        {(() => { const ohneSitzung = !(liveAnsicht && sitzung) && !hasPrev; return (
           <button
             type="button"
             onClick={goPrev}
-            disabled={liveAnsicht && !!sitzung && amAnfang}
+            disabled={ohneSitzung || (liveAnsicht && !!sitzung && amAnfang)}
             title={
               liveAnsicht && sitzung && amAnfang
                 ? "This is the first reel of the session"
@@ -916,25 +941,58 @@ export function SwipeResearchPlayer({
                   : "Previous"
             }
             className={
-              "absolute top-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center transition-colors " +
+              "w-10 h-10 rounded-lg flex items-center justify-center transition-colors duration-150 disabled:text-white/15 disabled:cursor-not-allowed " +
               (liveAnsicht && sitzung && amAnfang
-                ? "text-white/25 cursor-not-allowed"
-                : "text-white/80 hover:text-white hover:bg-black/60")
+                ? "text-white/15"
+                : "text-neutral-400 hover:text-neutral-50 hover:bg-white/[0.07]")
             }
           >
-            {navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronUp size={16} />}
+            {navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronUp size={18} />}
           </button>
-        )}
-        {(currentReel || (liveAnsicht && sitzung)) && (
+        ); })()}
+        {(() => { const ohneSitzung = !(liveAnsicht && sitzung) && !currentReel; return (
           <button
             type="button"
+            disabled={ohneSitzung}
             onClick={goNext}
             title={navBusy ? "Waiting for the next reel to load…" : "Next"}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-colors disabled:opacity-40"
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-neutral-400 enabled:hover:text-neutral-50 enabled:hover:bg-white/[0.07] transition-colors duration-150 disabled:text-white/15 disabled:cursor-not-allowed"
           >
-            {loading || navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
+            {/* Nur navBusy, nicht loading: loading ist auch beim Starten der
+                Sitzung wahr, und dann drehte sich der Pfeil, obwohl gar kein
+                Wisch unterwegs war (09.10.2026 von Emre gemeldet). Am
+                Klickverhalten aendert das nichts -- goNext prueft loading
+                weiterhin. */}
+            {navBusy ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={18} />}
           </button>
-        )}
+        ); })()}
+
+        {/* Trennstrich und darunter Teilen -- wie im linken Panel, wo
+            "Current Reel" unter einer Linie steht. Nur mit laufender
+            Sitzung bedienbar: ohne sie gibt es kein Reel zu teilen. */}
+        <span className="my-0.5 h-px bg-white/[0.08]" />
+        <button
+          type="button"
+          disabled={!(liveAnsicht && sitzung) || !currentReel}
+          onClick={() => setTeilenOffen((v) => !v)}
+          title={currentReel ? "Share this reel" : "No reel is being viewed right now"}
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-neutral-400 enabled:hover:text-neutral-50 enabled:hover:bg-white/[0.07] transition-colors duration-150 disabled:text-white/15 disabled:cursor-not-allowed"
+        >
+          <SendIcon size={17} />
+        </button>
+      </div>
+
+      {liveAnsicht && sitzung && (
+        <ShareSheet
+          offen={teilenOffen}
+          onSchliessen={() => setTeilenOffen(false)}
+          reelUrl={currentReel?.sourceUrl ?? null}
+          kontakteLaden={() => teilenOeffnen(sitzung.sessionId, sitzung.sessionSecret)}
+          suchen={(begriff) => teilenSuchen(sitzung.sessionId, sitzung.sessionSecret, begriff)}
+          senden={(ziel, text) => teilenSenden(sitzung.sessionId, sitzung.sessionSecret, ziel, text)}
+          aufraeumen={() => teilenSchliessen(sitzung.sessionId, sitzung.sessionSecret)}
+        />
+      )}
       </div>
 
       <p className="mt-3 text-[11px] text-neutral-600">Scroll, swipe, or use ↑ / ↓ to move between reels.</p>

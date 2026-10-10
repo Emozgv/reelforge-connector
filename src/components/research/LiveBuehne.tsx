@@ -87,6 +87,27 @@ export function LiveBuehne({
   const [neustart, setNeustart] = useState(0);
   // Als State, nicht als ref: wird in der Anzeige gelesen.
   const [gibtNochAuf, setGibtNochAuf] = useState(false);
+  // Der gewuenschte Tonzustand in einem ref: ontrack wird einmal gesetzt und
+  // kennt spaetere Aenderungen sonst nicht.
+  const stummRef = useRef(stumm);
+  useEffect(() => { stummRef.current = stumm || !!laedt; }, [stumm, laedt]);
+
+  // MESSUNG (09.10.2026): Nach dem Zurueckkommen aus dem Archiv bleibt der
+  // Ton weg, und der Tonschalter hilft nicht. Der Connector sendet
+  // nachweislich Ton -- also liegt es am Empfang. Diese Zeile schreibt in
+  // die Browser-Konsole, was hier wirklich ankommt. Nur Lesen.
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      const el = videoRef.current;
+      const strom = el?.srcObject as MediaStream | null;
+      const ton = strom?.getAudioTracks?.() ?? [];
+      console.log(
+        `[ton] stumm=${el?.muted} pausiert=${el?.paused} lautstaerke=${el?.volume} ` +
+          `spuren=${ton.length} zustand=${ton.map((x) => `${x.readyState}/${x.enabled ? "an" : "aus"}/${x.muted ? "stumm" : "offen"}`).join(",") || "-"}`,
+      );
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, []);
   // Die Rueckmeldung liegt in einem ref, nicht in der Abhaengigkeitsliste:
   // sie ist bei jedem Rendern eine neue Funktion, und der Abfragetakt haette
   // sich sonst staendig selbst neu aufgesetzt.
@@ -222,7 +243,9 @@ export function LiveBuehne({
   // dieser Effekt den Ton zurueck, wenn jemand waehrend der Ladeflaeche den
   // Tonschalter umlegt.
   useEffect(() => {
-    if (videoRef.current) videoRef.current.muted = stumm || !!laedt;
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = stumm || !!laedt;
   }, [stumm, laedt]);
 
   // Dauerhaft nachfragen, welches Reel Instagram gerade zeigt -- statt einmal
@@ -238,6 +261,7 @@ export function LiveBuehne({
     let gestoppt = false;
     let letzterCode: string | null = null;
     let letzteGueteWarGut = false;
+    let letzterAbdruck = "";
     const frag = async () => {
       if (gestoppt) return;
       try {
@@ -253,9 +277,23 @@ export function LiveBuehne({
         // eine bessere Antwort da ist. Beim ersten Reel ist Instagrams
         // Antwort oft noch gar nicht mitgelesen (verzeichnis=0) -- wer hier
         // nur einmal meldet, laesst @unknown fuer immer stehen.
-        if (code !== letzterCode || (gut && !letzteGueteWarGut)) {
+        // Auch melden, wenn sich an den Zahlen selbst etwas getan hat.
+        // Vorher wurde nur bei Codewechsel oder beim ersten bekannten Namen
+        // gemeldet -- die Aufrufzahl wird aber nachgefragt und trifft erst
+        // ein, wenn beides laengst steht. Sie kam dann nie in der
+        // Oberflaeche an, bis der Mitarbeiter das Reel verliess und
+        // zurueckkam (09.10.2026 von Emre gemeldet).
+        const fingerabdruck = JSON.stringify([
+          (reel as { viewsRaw?: number | null })?.viewsRaw ?? null,
+          (reel as { likes?: number | null })?.likes ?? null,
+          (reel as { comments?: number | null })?.comments ?? null,
+          (reel as { reposts?: number | null })?.reposts ?? null,
+          (reel as { durationSec?: number | null })?.durationSec ?? null,
+        ]);
+        if (code !== letzterCode || (gut && !letzteGueteWarGut) || fingerabdruck !== letzterAbdruck) {
           letzterCode = code;
           letzteGueteWarGut = gut;
+          letzterAbdruck = fingerabdruck;
           meldeRef.current?.(reel);
         }
       } catch { /* der naechste Versuch kommt gleich */ }
@@ -326,6 +364,24 @@ export function LiveBuehne({
 
 // Ein Wisch des Mitarbeiters geht in Instagrams eigenen Tab. Genau das ist
 // der Punkt von V2: Instagram sieht einen echten Wisch, keinen Pufferwechsel.
+type TeilenAntwort = { ok: boolean; kontakte?: { name: string; kennung: string; bild: string | null }[]; fehler?: string };
+
+// Instagrams Teilen-Fenster, in vier Schritten. Es bleibt drueben offen,
+// solange der Mitarbeiter darin arbeitet -- anders ginge keine echte Suche,
+// weil Oeffnen und Schliessen jedes Mal Sekunden kosten.
+export async function teilenOeffnen(sessionId: string, sessionSecret: string) {
+  return (await ruf(`/sessions/${sessionId}/teilen-oeffnen`, { sessionSecret }, 25000)) as TeilenAntwort;
+}
+export async function teilenSuchen(sessionId: string, sessionSecret: string, begriff: string) {
+  return (await ruf(`/sessions/${sessionId}/teilen-suchen`, { sessionSecret, reelId: begriff }, 20000)) as TeilenAntwort;
+}
+export async function teilenSenden(sessionId: string, sessionSecret: string, ziel: string, text: string) {
+  return (await ruf(`/sessions/${sessionId}/teilen-senden`, { sessionSecret, reelId: ziel, wert: text }, 30000)) as { ok: boolean; fehler?: string };
+}
+export function teilenSchliessen(sessionId: string, sessionSecret: string) {
+  void ruf(`/sessions/${sessionId}/teilen-schliessen`, { sessionSecret }, 10000).catch(() => {});
+}
+
 export async function buehneEingabe(
   sessionId: string,
   sessionSecret: string,

@@ -73,8 +73,10 @@ interface RawLiveReel {
   viewsRaw: number | null;
   likes: number | null;
   comments: number | null;
+  reposts?: number | null;
   durationSec: number;
   postedDaysAgo: number | null;
+  takenAt?: number | null;
 }
 
 function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
@@ -94,12 +96,14 @@ function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
     viewsRaw: raw.viewsRaw ?? 0,
     likes: raw.likes ?? undefined,
     comments: raw.comments ?? undefined,
+    reposts: raw.reposts ?? undefined,
     tags: [],
     saved: false,
     used: false,
     duration: formatDuration(raw.durationSec ?? 0),
     durationSec: raw.durationSec ?? 0,
     postedDaysAgo: raw.postedDaysAgo ?? undefined,
+    takenAt: raw.takenAt ?? undefined,
   };
 }
 
@@ -1029,15 +1033,18 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   const fetchComments = useCallback(
     async (
       reelId: string,
-      sourceUrl: string
-    ): Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string }> => {
+      sourceUrl: string,
+      // Fortsetzungsmarke fuers Nachladen beim Scrollen -- null heisst "von
+      // vorn".
+      abMarke?: string | null
+    ): Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string; naechste?: string | null }> => {
       const session = sessionRef.current;
       if (!session) return { available: false, comments: [], reelId, error: "No active research session." };
       try {
         const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionSecret: session.sessionSecret, reelId, sourceUrl }),
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, reelId, sourceUrl, wert: abMarke ?? null }),
         });
         const body = await res.json();
         return {
@@ -1045,6 +1052,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
           comments: Array.isArray(body.comments) ? body.comments : [],
           reelId,
           error: body.error,
+          naechste: typeof body.naechste === "string" ? body.naechste : null,
         };
       } catch (err) {
         return {

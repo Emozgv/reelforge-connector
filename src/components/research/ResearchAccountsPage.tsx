@@ -17,6 +17,7 @@ import {
   Bookmark,
   Diamond,
 } from "lucide-react";
+import { formatViews, formatDuration } from "../../lib/researchFeedMapping";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
 import type { Creator, Platform, ReelVideo, ResearchAccount } from "../../types";
@@ -44,12 +45,79 @@ import { StarfieldBackground } from "../shared/StarfieldBackground";
 const PANEL = "rounded-xl border border-[#1a130b]";
 const PANEL_STYLE = panelStil();
 
-function SessionRow({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) {
+// Die Kennzahlen zum laufenden Reel, so wie Instagram sie liefert.
+// Fehlt ein Wert, steht ein Strich -- nie eine ausgedachte Null.
+//
+// Die Engagement-Rate rechnet (Likes + Kommentare) / Aufrufe. Das ist die
+// uebliche Definition; welche Formel Emres Erweiterung benutzt, ist
+// unbekannt, deshalb kann die Zahl dort leicht abweichen. Ohne Aufrufzahl
+// -- Instagram laesst sie oft weg -- bleibt sie leer.
+function reelKennzahlen(v: ReelVideo | null | undefined) {
+  const strich = "—";
+  if (!v) return { engagement: strich, likes: strich, comments: strich, reposts: strich, views: strich, laenge: strich, datum: strich, zeit: strich, exaktLikes: undefined, exaktComments: undefined, exaktReposts: undefined, exaktViews: undefined };
+  // formatViews haengt immer eine Nachkommastelle an ("10.0K"). Die ist bei
+  // einer glatten Zahl nur Rauschen -- Emre am 09.10.2026: "10.0k gibts
+  // nicht, lieber 10k". Dieselbe Darstellung steckt auch in anderen
+  // Ansichten; dort bewusst nicht angefasst.
+  const glatt = (t: string) => t.replace(/\.0(?=[KM]$)/, "");
+  const zahl = (n?: number) => (typeof n === "number" ? glatt(formatViews(n)) : strich);
+  const views = v.viewsRaw > 0 ? glatt(formatViews(v.viewsRaw)) : strich;
+  const rate =
+    v.viewsRaw > 0 && (typeof v.likes === "number" || typeof v.comments === "number")
+      ? `${((((v.likes ?? 0) + (v.comments ?? 0)) / v.viewsRaw) * 100).toFixed(1)}%`
+      : strich;
+  const d = typeof v.takenAt === "number" ? new Date(v.takenAt * 1000) : null;
+  const exakt = (n?: number) => (typeof n === "number" ? n.toLocaleString() : undefined);
+  return {
+    exaktLikes: exakt(v.likes),
+    exaktComments: exakt(v.comments),
+    exaktReposts: exakt(v.reposts),
+    exaktViews: v.viewsRaw > 0 ? v.viewsRaw.toLocaleString() : undefined,
+    engagement: rate,
+    likes: zahl(v.likes),
+    comments: zahl(v.comments),
+    reposts: zahl(v.reposts),
+    views,
+    laenge: v.durationSec > 0 ? formatDuration(v.durationSec) : strich,
+    datum: d ? d.toLocaleDateString() : strich,
+    zeit: d ? d.toLocaleTimeString() : strich,
+  };
+}
+
+// Dauer im selben Format wie die Uhrzeit darueber: hh:mm:ss, immer
+// zweistellig. So stehen "Started" und "Duration" gleich aus und lassen
+// sich auf einen Blick vergleichen (Emre, 09.10.2026).
+function dauerText(ms: number) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const zwei = (n: number) => String(n).padStart(2, "0");
+  return `${zwei(Math.floor(s / 3600))}:${zwei(Math.floor((s % 3600) / 60))}:${zwei(s % 60)}`;
+}
+
+function SessionRow({ label, value, muted, genau }: { label: string; value: React.ReactNode; muted?: boolean; genau?: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <span className="text-[11px] text-neutral-500">{label}</span>
-      <span className={["text-[12px] font-medium text-right", muted ? "text-neutral-600" : "text-neutral-50"].join(" ")}>
-        {value}
+      {/* genau: die ungerundete Zahl beim Darueberfahren -- "250.8K" sagt
+          nicht, ob 250.798 oder 250.850 gemeint ist.
+          Bewusst NICHT der eingebaute Hinweis des Browsers: der kommt erst
+          nach einer Sekunde, sieht aus wie vom Betriebssystem und setzt
+          sich irgendwohin. Diese Blase erscheint sofort und sitzt neben der
+          Zahl. cursor-default und select-none, damit der Mauszeiger ein
+          Zeiger bleibt und nicht zum Textbalken wird. */}
+      <span className="relative group flex items-center justify-end">
+        <span
+          className={[
+            "text-[12px] font-medium text-right cursor-default select-none",
+            muted ? "text-neutral-600" : "text-neutral-50",
+          ].join(" ")}
+        >
+          {value}
+        </span>
+        {genau && (
+          <span className="pointer-events-none absolute right-full mr-2 hidden group-hover:block whitespace-nowrap rounded-md bg-[#17171a] border border-white/[0.09] px-2 py-1 text-[11px] font-medium text-neutral-100 shadow-lg z-20">
+            {genau}
+          </span>
+        )}
       </span>
     </div>
   );
@@ -139,24 +207,17 @@ function ResearchInfoPopover() {
 
       {open && (
         <div className="absolute left-0 top-7 z-20 w-[300px] rounded-xl bg-[#141416] border border-white/[0.09] shadow-2xl p-4 animate-fade-in">
-          <p className="text-[11px] tracking-[0.08em] uppercase text-neutral-500 font-medium mb-1">What works</p>
-          <p className="text-[12.5px] text-neutral-400 leading-relaxed mb-3">
-            Likes, follows, blocks, and other supported interactions are applied to the connected Research Account
-            and can help shape the feed.
-          </p>
-          <p className="text-[11px] tracking-[0.08em] uppercase text-neutral-500 font-medium mb-1">
-            Current limitation
-          </p>
-          <p className="text-[12.5px] text-neutral-400 leading-relaxed mb-3">
-            Watch-time signals are not fully supported inside ReelForge yet.
-          </p>
-          <p className="text-[11px] tracking-[0.08em] uppercase text-[#D39448] font-medium mb-1">
-            Recommendation <span className="normal-case tracking-normal text-neutral-600">(optional)</span>
-          </p>
+          {/* "Current limitation" und "Recommendation" am 09.10.2026
+              entfernt. Die Einschraenkung ("Watch-time signals are not
+              fully supported") stimmt nicht mehr: Emre hat an seinem
+              Research Account nachgewiesen, dass Schauen und Liken den
+              Feed drehen -- er hat ihn mit Hochzeitsvideos vollbekommen.
+              Und das Vortrainieren auf Instagram braucht es damit auch
+              nicht mehr als Empfehlung. */}
+          <p className="text-[11px] tracking-[0.08em] uppercase text-[#D39448] font-medium mb-1">What works</p>
           <p className="text-[12.5px] text-neutral-400 leading-relaxed">
-            For the best starting experience, pre-train the Research Account directly on Instagram before connecting
-            it to ReelForge. This gives a stronger initial feed while ReelForge continues training through supported
-            interactions.
+            Everything happens on the real account: what gets watched, liked, followed, or blocked is applied
+            directly on Instagram and shapes the feed over time.
           </p>
         </div>
       )}
@@ -448,6 +509,15 @@ export function ResearchAccountsPage({
   const [likeStatus, setLikeStatus] = useState<Record<string, LikeStatus>>({});
   const [followStatus, setFollowStatus] = useState<Record<string, FollowStatus>>({});
   const [blockStatus, setBlockStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
+  // Hat der Mitarbeiter "Refresh Feed" gedrueckt? Nur dann dreht sich dessen
+  // Kreis. Vorher haengte das Drehen am Sitzungszustand -- und der ist beim
+  // Starten derselbe, also drehte es sich auch dann mit (09.10.2026).
+  const [frischtAuf, setFrischtAuf] = useState(false);
+  // Beginn und Dauer der laufenden Sitzung. Beides stand bisher auf einem
+  // Strich, weil es den Wert nirgends gab -- die Oberflaeche kann ihn aber
+  // selbst fuehren: ab dem Moment, in dem die Sitzung steht.
+  const [beginn, setBeginn] = useState<number | null>(null);
+  const [, tickt] = useState(0);
   const liveSession = useLiveResearchSession(workspaceId);
 
   useEffect(() => {
@@ -507,6 +577,45 @@ export function ResearchAccountsPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCreator?.id, platform]);
 
+  // Instagrams Bildadressen laufen nach rund vier Tagen ab -- danach bleibt
+  // die Kachel im Archiv leer (am 09.10.2026 gemessen). Deshalb holt eine
+  // Funktion bei Supabase das Bild und legt eine bleibende Kopie an; die
+  // Adresse im Eintrag wird dabei ersetzt.
+  //
+  // Abgeschickt und NICHT abgewartet: Das Archiv soll dadurch nie langsamer
+  // werden. Beim naechsten Oeffnen ist die bleibende Adresse da.
+  // Hoechstens zwoelf auf einmal, damit ein grosses Archiv nicht hundert
+  // Aufrufe gleichzeitig ausloest -- der Rest kommt beim naechsten Mal.
+  const bereitsGesichert = useRef<Set<string>>(new Set());
+
+  // Sichern schon BEIM SEHEN, nicht erst beim Oeffnen des Archivs. Sonst
+  // reicht es, vier Tage lang nicht hineinzuschauen -- dann ist Instagrams
+  // Adresse abgelaufen und es gibt nichts mehr zu holen. Genau der Fall,
+  // den das Ganze verhindern soll.
+  //
+  // Mit Verzoegerung, weil der Connector den Eintrag erst anlegen muss --
+  // vorher faende die Funktion nichts.
+  useEffect(() => {
+    const reel = liveSession.currentReel;
+    if (!reel || bereitsGesichert.current.has(reel.id)) return;
+    bereitsGesichert.current.add(reel.id);
+    const t = window.setTimeout(() => {
+      void supabase.functions.invoke("cache-research-thumbnail", { body: { item_id: reel.id } }).catch(() => {});
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [liveSession.currentReel?.id]);
+
+  function sichereThumbnails(rows: ResearchFeedItemRow[]) {
+    const offen = rows
+      .filter((r) => r.thumbnail_url && !r.thumbnail_url.includes("/client-os-research-thumbnails/"))
+      .filter((r) => !bereitsGesichert.current.has(r.id))
+      .slice(0, 12);
+    for (const r of offen) {
+      bereitsGesichert.current.add(r.id);
+      void supabase.functions.invoke("cache-research-thumbnail", { body: { item_id: r.id } }).catch(() => {});
+    }
+  }
+
   async function loadFeed(accountId: string) {
     setLoadingFeed(true);
     setFeedError(false);
@@ -523,7 +632,9 @@ export function ResearchAccountsPage({
       setFeedError(true);
       setRawItems([]);
     } else {
-      setRawItems(data as ResearchFeedItemRow[]);
+      const rows = data as ResearchFeedItemRow[];
+      setRawItems(rows);
+      sichereThumbnails(rows);
     }
     setLoadingFeed(false);
   }
@@ -638,6 +749,25 @@ export function ResearchAccountsPage({
   // stops surfacing this creator afterward, not a local ReelForge-only
   // blacklist. Only ever reports "done" once Connector has confirmed the
   // real block genuinely took effect (see session-server.mjs's Session.block).
+  // Zuruecksetzen, sobald die Sitzung wieder steht. Bewusst hier unten,
+  // weil liveSession erst weiter oben im Rumpf entsteht.
+  useEffect(() => {
+    if (liveSession.status === "active") setFrischtAuf(false);
+  }, [liveSession.status]);
+
+  useEffect(() => {
+    if (liveSession.status === "active") setBeginn((b) => b ?? Date.now());
+    else setBeginn(null);
+  }, [liveSession.status]);
+
+  // Einmal pro Sekunde neu zeichnen, damit die Dauer mitlaeuft. Nur solange
+  // eine Sitzung steht -- sonst taeten wir das rund um die Uhr.
+  useEffect(() => {
+    if (beginn === null) return;
+    const t = window.setInterval(() => tickt((n) => n + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [beginn]);
+
   async function handleBlockCreator(video: ReelVideo) {
     if (blockStatus[video.id] === "pending" || blockStatus[video.id] === "done") return;
     setBlockStatus((prev) => ({ ...prev, [video.id]: "pending" }));
@@ -873,8 +1003,12 @@ export function ResearchAccountsPage({
             <p className="text-[12px] text-neutral-600 mt-1.5">Connect one above to start researching from its trained feed.</p>
           </div>
         ) : mode === "swipe" ? (
-          <div className="mt-5 flex justify-center gap-7 items-start">
+          <div className="mt-5 flex gap-7 items-start">
             {/* LEFT: Session Context + Quick Actions */}
+            {/* Die Reihe wird nicht mehr zentriert: so steht diese Spalte
+                buendig unter der Ueberschrift, und der Player bleibt gleich
+                daneben. Der uebrige Platz geht komplett an die Luecke vor
+                der Kommentarspalte (ml-auto dort). */}
             <div className="w-[290px] shrink-0 flex flex-col gap-4">
               <div className={PANEL + " p-5"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
@@ -907,9 +1041,38 @@ export function ResearchAccountsPage({
                       counter exists anywhere in the live session state today
                       — shown per the reference for layout, left as an honest
                       "—" rather than invented values. */}
-                  <SessionRow label="Started" value="—" muted />
-                  <SessionRow label="Duration" value="—" muted />
-                  <SessionRow label="Items Scanned" value="—" muted />
+                  <SessionRow
+                    label="Started"
+                    value={beginn ? new Date(beginn).toLocaleTimeString() : "—"}
+                    muted={!beginn}
+                  />
+                  <SessionRow
+                    label="Duration"
+                    value={beginn ? dauerText(Date.now() - beginn) : "—"}
+                    muted={!beginn}
+                  />
+                </div>
+
+                {/* Zweiter Abschnitt: die Kennzahlen zum Reel, das gerade
+                    laeuft. Ersetzt "Items Scanned". Jeder Wert kommt
+                    unveraendert aus Instagrams eigener Antwort -- fehlt
+                    einer dort, steht hier ein Strich, nie eine erfundene
+                    Null. Shares liefert Instagram nicht, deshalb gar nicht
+                    erst aufgefuehrt. */}
+                <div className="mt-4 pt-4 border-t border-white/[0.07]">
+                  <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
+                    Current Reel
+                  </p>
+                  <div className="flex flex-col gap-2.5">
+                    <SessionRow label="Engagement" value={reelKennzahlen(currentSwipeVideo).engagement} muted={!currentSwipeVideo} />
+                    <SessionRow label="Likes" value={reelKennzahlen(currentSwipeVideo).likes} genau={reelKennzahlen(currentSwipeVideo).exaktLikes} muted={!currentSwipeVideo} />
+                    <SessionRow label="Comments" value={reelKennzahlen(currentSwipeVideo).comments} genau={reelKennzahlen(currentSwipeVideo).exaktComments} muted={!currentSwipeVideo} />
+                    <SessionRow label="Reposts" value={reelKennzahlen(currentSwipeVideo).reposts} genau={reelKennzahlen(currentSwipeVideo).exaktReposts} muted={!currentSwipeVideo} />
+                    <SessionRow label="Views" value={reelKennzahlen(currentSwipeVideo).views} genau={reelKennzahlen(currentSwipeVideo).exaktViews} muted={!currentSwipeVideo} />
+                    <SessionRow label="Length" value={reelKennzahlen(currentSwipeVideo).laenge} muted={!currentSwipeVideo} />
+                    <SessionRow label="Posted" value={reelKennzahlen(currentSwipeVideo).datum} muted={!currentSwipeVideo} />
+                    <SessionRow label="Time" value={reelKennzahlen(currentSwipeVideo).zeit} muted={!currentSwipeVideo} />
+                  </div>
                 </div>
               </div>
 
@@ -921,9 +1084,12 @@ export function ResearchAccountsPage({
                   <QuickActionButton
                     icon={RefreshCw}
                     label="Refresh Feed"
-                    spinning={liveSession.status === "connecting" || liveSession.status === "checking"}
+                    spinning={frischtAuf && liveSession.status !== "active"}
                     disabled={liveSession.status !== "active"}
-                    onClick={() => void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform)}
+                    onClick={() => {
+                      setFrischtAuf(true);
+                      void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform);
+                    }}
                   />
                   <QuickActionButton
                     icon={Square}
@@ -945,7 +1111,10 @@ export function ResearchAccountsPage({
                 instead of floating as a bare card — the video itself was
                 pulled in slightly so it reads as content inside a panel,
                 not the panel itself. */}
-            <div className="w-[382px] shrink-0 self-stretch flex">
+            {/* ml-2: der Player einen Hauch nach rechts. Die Kommentarspalte
+                gibt dieselben 8 px ab (ml-14 -> ml-12), damit die Reihe
+                gleich breit bleibt und sich sonst nichts verschiebt. */}
+            <div className="w-[382px] shrink-0 self-stretch flex ml-[18px]">
               <div className={PANEL + " p-4 flex-1 flex flex-col items-center"} style={PANEL_STYLE}>
                 <div className="w-full max-w-[345px] flex items-center justify-between mb-3">
                   <span className="flex items-center gap-1.5 text-[12px] text-neutral-400">
@@ -1009,7 +1178,12 @@ export function ResearchAccountsPage({
             {/* RIGHT: Intelligence (Comments/Notes) + Save to Collection —
                 one continuous card, matching the reference, instead of two
                 separate stacked panels the VA had to scroll past. */}
-            <div className="w-[390px] shrink-0 self-stretch flex min-h-0">
+            {/* Das Pfeil-Panel steht absolut neben dem Video und nimmt
+                deshalb selbst keinen Platz in der Reihe ein. Diesen Abstand
+                muss die Kommentarspalte lassen, sonst klebt sie daran.
+                Gerechnet: 24 px Luft, 60 px Panel, 24 px Luft -- abzueglich
+                der 28 px, die die Reihe ohnehin zwischen den Spalten haelt. */}
+            <div className="w-[390px] shrink-0 self-stretch flex min-h-0 ml-auto">
               <div className={PANEL + " flex-1 flex flex-col min-h-0"} style={PANEL_STYLE}>
                 <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
                   Intelligence
