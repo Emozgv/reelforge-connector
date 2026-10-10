@@ -112,6 +112,9 @@ export interface ReelVideo {
   // neben Likes und Kommentaren -- es sind ausdruecklich Reposts, keine
   // Shares (Emre, 09.10.2026).
   reposts?: number;
+  // Das Konto blendet seine Like-Zahl aus. Dann zeigt auch ReelForge keine
+  // -- und rechnet sie nicht in die Engagement-Rate ein.
+  likesVerborgen?: boolean;
   tags: string[];
   saved: boolean;
   used: boolean;

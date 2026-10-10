@@ -403,3 +403,51 @@ html[data-tab-hidden="true"] .hero-photo-layer {
   0%, 100% { transform: scale(1.05) translate(0, 0); }
   50% { transform: scale(1.08) translate(-1%, -0.6%); }
 }
+
+/* Der gefuellte Teil unter dem Punkt kommt aus --fuellung, das die
+   Komponente je nach Lautstaerke setzt. */
+/* Lautstaerkeregler in der Ton-Kapsel der Buehne. Instagram hat dieselbe
+   Kapsel stehend, mit dem Symbol unten -- bei uns liegt sie, Symbol links.
+   Spur und Knopf sind bewusst kraeftig, so wie dort. */
+.ton-regler {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 84px;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+.ton-regler::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #fff var(--fuellung, 100%),
+    rgba(255, 255, 255, 0.45) var(--fuellung, 100%)
+  );
+}
+.ton-regler::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4.5px;
+  border-radius: 999px;
+  background: #fff;
+}
+.ton-regler::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #fff var(--fuellung, 100%),
+    rgba(255, 255, 255, 0.45) var(--fuellung, 100%)
+  );
+}
+.ton-regler::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+}

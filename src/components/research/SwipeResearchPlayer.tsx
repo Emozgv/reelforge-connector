@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Send as SendIcon, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle, Send, Volume2, VolumeX } from "lucide-react";
+import { Send as SendIcon, ChevronUp, ChevronDown, ExternalLink, Loader2, Heart, Play as PlayIcon, MoreHorizontal, Link as LinkIcon, Check, Ban, AlertTriangle, Square, MessageCircle, Send, Repeat2, Volume2, VolumeX } from "lucide-react";
 import { panelStil } from "../../lib/panelLook";
 import type { ReelVideo, ResearchAccount } from "../../types";
 import type { LiveSessionStatus } from "../../state/useLiveResearchSession";
@@ -16,6 +16,8 @@ import { RESEARCH_MODUS } from "../../lib/researchModus";
 // Herz ist dort ein Schalter, und ein zweiter Druck nimmt ihn zurueck. Ohne
 // diesen Zustand saehe ein bewusstes Entliken wie ein Fehlschlag aus.
 export type LikeStatus = "pending" | "liked" | "failed" | "offen";
+// Wie beim Herz: "offen" heisst zurueckgenommen, nicht fehlgeschlagen.
+export type RepostStatus = "pending" | "reposted" | "failed" | "offen";
 export type FollowStatus = "pending" | "following" | "failed";
 export type BlockStatus = "pending" | "done" | "failed";
 
@@ -229,7 +231,11 @@ function SwipeSlide({
           Add-to-Collection moved to the dedicated Save-to-Collection panel
           (ResearchAccountsPage) to match the reference, which doesn't show
           them on the video itself. */}
-      <div className="pointer-events-auto absolute bottom-6 right-3 flex flex-col items-center gap-4">
+      {/* In der Live-Ansicht steht diese Spalte nicht mehr ueber dem Reel,
+          sondern rechts in der Leiste unter dem Senden-Pfeil -- damit das
+          Bild frei bleibt (10.10.2026 von Emre gewuenscht). Ausserhalb der
+          Live-Ansicht (die aeltere Wiedergabe) bleibt sie, wo sie war. */}
+      <div className={["pointer-events-auto absolute bottom-6 right-3 flex-col items-center gap-4", nurBedienelemente ? "hidden" : "flex"].join(" ")}>
         {canLike && (
           <button
             type="button"
@@ -432,6 +438,8 @@ export function SwipeResearchPlayer({
   onPrev,
   onLikeClick,
   likeStatus,
+  onRepostClick,
+  repostStatus,
   onFollowClick,
   followStatus,
   onBlockCreator,
@@ -460,6 +468,8 @@ export function SwipeResearchPlayer({
   onPrev: () => void;
   onLikeClick: (video: ReelVideo) => void;
   likeStatus: Record<string, LikeStatus>;
+  onRepostClick: (video: ReelVideo) => void;
+  repostStatus: Record<string, RepostStatus>;
   onFollowClick: (video: ReelVideo) => void;
   followStatus: Record<string, FollowStatus>;
   onBlockCreator: (video: ReelVideo) => void;
@@ -527,6 +537,19 @@ export function SwipeResearchPlayer({
   useEffect(() => {
     setStumm(true);
   }, [sitzung?.sessionId]);
+  // Lautstaerke, wie bei Instagram hinter dem Ton-Symbol versteckt. Sie
+  // ueberlebt das Stummschalten absichtlich: wer wieder laut stellt, hoert
+  // es so laut wie vorher. Nur das Stummsein selbst wird je Sitzung
+  // zurueckgesetzt.
+  const [lautstaerke, setLautstaerke] = useState(1);
+  // Stand des Herzens fuer das gerade sichtbare Reel -- dieselbe Quelle,
+  // die das Herz frueher im Bild benutzt hat.
+  const herzStand = currentReel ? likeStatus[currentReel.id] : undefined;
+  const repostStand = currentReel ? repostStatus[currentReel.id] : undefined;
+  // Laeuft gerade ein Reel? Daran haengt, ob die Leiste rechts hell oder
+  // gedaempft ist -- dieselbe Bedingung, die auch die Knoepfe sperrt.
+  const reelDa = !!(liveAnsicht && sitzung && currentReel);
+  const [reglerOffen, setReglerOffen] = useState(false);
   // Haelt Instagrams Reel gerade an? Kommt vom Connector zurueck, nicht
   // geraten -- er liest nach dem Tipp nach, was Instagram daraus gemacht hat.
   const [pausiert, setPausiert] = useState(false);
@@ -720,7 +743,7 @@ export function SwipeResearchPlayer({
           // V2: was hier laeuft, ist Instagram selbst. Die Bedienelemente
           // bleiben unsere -- nur das Bild darunter ist echt.
           <>
-            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} onAntippen={antippen} pausiert={pausiert} laedt={ladeAnzeige} onAktuellesReel={(r) => onLiveReel?.(r)} onAmAnfang={setAmAnfang} />
+            <LiveBuehne sessionId={sitzung.sessionId} sessionSecret={sitzung.sessionSecret} stumm={stumm} lautstaerke={lautstaerke} onAntippen={antippen} pausiert={pausiert} laedt={ladeAnzeige} onAktuellesReel={(r) => onLiveReel?.(r)} onAmAnfang={setAmAnfang} />
             {currentReel && (
               <SwipeSlide
                 key={currentReel.id}
@@ -737,13 +760,52 @@ export function SwipeResearchPlayer({
                 canLike={currentReel.platform === "instagram" || currentReel.platform === "tiktok"}
               />
             )}
-            <button
-              onClick={() => setStumm((v) => !v)}
-              title={stumm ? "Ton an" : "Ton aus"}
-              className="absolute left-3 top-3 z-20 h-8 w-8 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center text-white/90"
+            {/* Ton-Symbol mit Lautstaerkeregler: EINE Pille, die beim
+                Schweben nach rechts aufgeht. Der Regler lag vorher
+                freischwebend darunter -- und weil frei schwebende Teile
+                nicht zur Flaeche ihres Knopfes zaehlen, galt der Weg
+                dorthin als "Maus weg" und er klappte sofort wieder zu
+                (10.10.2026 von Emre gemeldet). Jetzt sitzt er mit im selben
+                Koerper, also kann man hinuebergehen. */}
+            <div
+              className="absolute left-3 top-3 z-20 flex items-center h-8 rounded-full bg-black/55 backdrop-blur-sm overflow-hidden transition-[width] duration-200 ease-out"
+              style={{ width: reglerOffen ? 132 : 32 }}
+              onMouseEnter={() => setReglerOffen(true)}
+              onMouseLeave={() => setReglerOffen(false)}
             >
-              {stumm ? <VolumeX size={15} /> : <Volume2 size={15} />}
-            </button>
+              <button
+                onClick={() => setStumm((v) => !v)}
+                title={stumm ? "Ton an" : "Ton aus"}
+                className="h-8 w-8 shrink-0 flex items-center justify-center text-white/90"
+              >
+                {stumm ? <VolumeX size={15} /> : <Volume2 size={15} />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                // Stummgeschaltet steht der Regler leer -- wie bei
+                // Instagram. Zieht man ihn auf, geht der Ton an.
+                value={stumm ? 0 : lautstaerke}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setLautstaerke(v);
+                  setStumm(v === 0);
+                }}
+                aria-label="Volume"
+                // Solange die Pille zu ist, darf der Regler nicht erreichbar
+                // sein -- sonst koennte man mit der Tastatur in etwas
+                // springen, das niemand sieht.
+                tabIndex={reglerOffen ? 0 : -1}
+                className="ton-regler mr-3 shrink-0"
+                style={{
+                  ["--fuellung" as string]: `${Math.round((stumm ? 0 : lautstaerke) * 100)}%`,
+                  opacity: reglerOffen ? 1 : 0,
+                  transition: "opacity 150ms ease-out",
+                }}
+              />
+            </div>
           </>
         ) : currentReel ? (
           <SwipeSlide
@@ -990,6 +1052,105 @@ export function SwipeResearchPlayer({
           className="w-10 h-10 rounded-lg flex items-center justify-center text-neutral-400 enabled:hover:text-neutral-50 enabled:hover:bg-white/[0.07] transition-colors duration-150 disabled:text-white/15 disabled:cursor-not-allowed"
         >
           <SendIcon size={17} />
+        </button>
+
+        {/* Herz und Kommentarzahl sassen frueher im Bild ueber dem Reel.
+            Das Herz ist eine echte Handlung auf dem verbundenen
+            Instagram-Konto -- dasselbe wie vorher, nur an anderer Stelle.
+            Die Kommentarzahl ist reine Angabe: es gibt dahinter keine
+            Handlung, die Kommentare stehen rechts im Panel. */}
+        <span className="my-0.5 h-px bg-white/[0.08]" />
+        <button
+          type="button"
+          onClick={() => currentReel && onLikeClick(currentReel)}
+          disabled={!(liveAnsicht && sitzung) || !currentReel || herzStand === "pending"}
+          title={
+            herzStand === "liked"
+              ? "Liked — press again to undo"
+              : herzStand === "pending"
+                ? "Liking on Instagram…"
+                : herzStand === "failed"
+                  ? "Couldn't confirm the like — try again"
+                  : "Like on the real Instagram account"
+          }
+          className="w-10 rounded-lg flex flex-col items-center justify-center gap-0.5 py-1.5 text-neutral-400 enabled:hover:text-neutral-50 enabled:hover:bg-white/[0.07] transition-colors duration-150 disabled:text-white/15 disabled:cursor-not-allowed"
+        >
+          {herzStand === "pending" ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Heart
+              size={17}
+              fill={herzStand === "liked" ? "currentColor" : "none"}
+              className={herzStand === "liked" ? "text-rose-400" : herzStand === "failed" ? "text-rose-400/70" : ""}
+            />
+          )}
+          {/* Blendet das Konto seine Like-Zahl aus, bleibt die Zeile LEER,
+              wird aber nicht entfernt -- sonst ruecken die Symbole darunter
+              nach oben, sobald man auf so ein Reel kommt (10.10.2026 von
+              Emre gemeldet). */}
+          <span className="text-[9.5px] tabular-nums leading-none">
+            {herzStand === "failed"
+              ? "Retry"
+              : currentReel?.likesVerborgen
+                ? "\u00a0"
+                : currentReel?.likes !== undefined
+                  ? formatCompactNumber(currentReel.likes)
+                  : "—"}
+          </span>
+        </button>
+        {/* Die Kommentarzahl ist als Einzige kein Knopf -- deshalb blieb sie
+            hell, waehrend alles andere daneben abgedunkelt war, solange kein
+            Reel laeuft (10.10.2026 von Emre gemeldet). Sie folgt jetzt
+            derselben Regel: gedaempft ohne Reel, normal sobald eines da
+            ist. */}
+        <div
+          title="Comments on this reel"
+          className={[
+            "w-10 rounded-lg flex flex-col items-center justify-center gap-0.5 py-1.5",
+            reelDa ? "text-neutral-400" : "text-white/15",
+          ].join(" ")}
+        >
+          <MessageCircle size={17} />
+          <span className="text-[9.5px] tabular-nums leading-none">
+            {currentReel?.comments !== undefined ? formatCompactNumber(currentReel.comments) : "—"}
+          </span>
+        </div>
+        {/* Repost: echte Handlung auf dem verbundenen Konto, wie Like.
+            Instagram behandelt ihn als Schalter -- nochmal druecken nimmt
+            ihn zurueck. Gemeldet wird erst, wenn Instagrams eigener Knopf
+            nachweislich umgesprungen ist. */}
+        <button
+          type="button"
+          onClick={() => currentReel && onRepostClick(currentReel)}
+          disabled={!(liveAnsicht && sitzung) || !currentReel || repostStand === "pending"}
+          title={
+            repostStand === "reposted"
+              ? "Reposted — press again to undo"
+              : repostStand === "pending"
+                ? "Reposting on Instagram…"
+                : repostStand === "failed"
+                  ? "Couldn't confirm the repost — try again"
+                  : repostStand === "offen"
+                    ? "Repost undone"
+                    : "Repost on the real Instagram account"
+          }
+          className="w-10 rounded-lg flex flex-col items-center justify-center gap-0.5 py-1.5 text-neutral-400 enabled:hover:text-neutral-50 enabled:hover:bg-white/[0.07] transition-colors duration-150 disabled:text-white/15 disabled:cursor-not-allowed"
+        >
+          {repostStand === "pending" ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Repeat2
+              size={17}
+              className={repostStand === "reposted" ? "text-[#D39448]" : repostStand === "failed" ? "text-rose-400/70" : ""}
+            />
+          )}
+          <span className="text-[9.5px] tabular-nums leading-none">
+            {repostStand === "failed"
+              ? "Retry"
+              : currentReel?.reposts !== undefined
+                ? formatCompactNumber(currentReel.reposts)
+                : "—"}
+          </span>
         </button>
       </div>
 

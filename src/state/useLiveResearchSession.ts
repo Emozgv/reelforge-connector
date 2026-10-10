@@ -71,6 +71,13 @@ export interface LiveComment {
   avatar?: string | null;
   // Blaues Haekchen neben dem Namen, so wie Instagram es zeigt.
   verifiziert?: boolean;
+  // GIF-Kommentare haben keinen Text, sondern ein Bild. Instagram legt es
+  // unter giphy_media_info ab; hier steht die fertige Bildadresse.
+  gif?: string | null;
+  // Antworten auf diesen Kommentar. Eine Handvoll kommt schon beim Lesen
+  // mit; antwortenAnzahl sagt, wie viele es insgesamt sind.
+  antworten?: LiveComment[];
+  antwortenAnzahl?: number;
 }
 
 interface RawLiveReel {
@@ -82,6 +89,7 @@ interface RawLiveReel {
   username: string | null;
   viewsRaw: number | null;
   likes: number | null;
+  likesVerborgen?: boolean;
   comments: number | null;
   reposts?: number | null;
   durationSec: number;
@@ -104,7 +112,11 @@ function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
     // ReelVideo's shared shape, but it's never rendered for a live reel.
     views: raw.viewsRaw != null ? formatViews(raw.viewsRaw) : "",
     viewsRaw: raw.viewsRaw ?? 0,
-    likes: raw.likes ?? undefined,
+    // Blendet das Konto seine Like-Zahl aus, wird gar keine gezeigt --
+    // genau wie bei Instagram. Die mitgelieferte Zahl ist dann nicht die
+    // echte und darf auch nicht in die Engagement-Rate einfliessen.
+    likes: raw.likesVerborgen ? undefined : (raw.likes ?? undefined),
+    likesVerborgen: raw.likesVerborgen === true,
     comments: raw.comments ?? undefined,
     reposts: raw.reposts ?? undefined,
     tags: [],
@@ -999,6 +1011,66 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     }
   }, []);
 
+  // Ein echter Repost auf dem verbundenen Konto, gleiche Regel wie like():
+  // gemeldet wird nur, was Instagrams eigener Knopf bestaetigt hat. Wie das
+  // Herz ist er ein Schalter -- ein zweiter Druck nimmt ihn zurueck.
+  const repost = useCallback(async (): Promise<{ reposted: boolean; error?: string }> => {
+    const session = sessionRef.current;
+    if (!session) return { reposted: false, error: "No active research session." };
+    try {
+      const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/repost`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionSecret: session.sessionSecret }),
+      });
+      const body = await res.json();
+      return { reposted: !!body.reposted, error: body.error };
+    } catch (err) {
+      return { reposted: false, error: err instanceof Error ? err.message : "Couldn't repost this reel." };
+    }
+  }, []);
+
+  // Einen echten Kommentar vom verbundenen Konto schreiben. Wie bei
+  // Like/Repost gilt: gemeldet wird nur, was Instagram angenommen hat.
+  const kommentieren = useCallback(
+    async (reelId: string, text: string): Promise<{ posted: boolean; comment?: LiveComment; error?: string }> => {
+      const session = sessionRef.current;
+      if (!session) return { posted: false, error: "No active research session." };
+      try {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/kommentar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, reelId, wert: text }),
+        });
+        const body = await res.json();
+        return { posted: !!body.posted, comment: body.comment ?? undefined, error: body.error };
+      } catch (err) {
+        return { posted: false, error: err instanceof Error ? err.message : "Couldn't post this comment." };
+      }
+    },
+    []
+  );
+
+  // Alle Antworten auf einen Kommentar nachladen ("View all N replies").
+  const antwortenLaden = useCallback(
+    async (reelId: string, kommentarId: string): Promise<{ available: boolean; comments: LiveComment[] }> => {
+      const session = sessionRef.current;
+      if (!session) return { available: false, comments: [] };
+      try {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/antworten`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, reelId, wert: kommentarId }),
+        });
+        const body = await res.json();
+        return { available: !!body.available, comments: Array.isArray(body.comments) ? body.comments : [] };
+      } catch {
+        return { available: false, comments: [] };
+      }
+    },
+    []
+  );
+
   // A real platform action on the real connected account (see
   // session-server.mjs's Session.follow) — same shape as like().
   const follow = useCallback(async (): Promise<{ following: boolean; error?: string }> => {
@@ -1164,6 +1236,9 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     next,
     prev,
     like,
+    repost,
+    kommentieren,
+    antwortenLaden,
     follow,
     block,
     fetchComments,

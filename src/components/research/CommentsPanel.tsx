@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Loader2, Heart, ChevronDown, Check } from "lucide-react";
+import { MessageCircle, Loader2, Heart, ChevronDown, Check, AlertTriangle, Smile } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import type { LiveComment, KommentarSortierung } from "../../state/useLiveResearchSession";
 
@@ -17,6 +17,23 @@ function StandardBild({ className }: { className?: string }) {
     </svg>
   );
 }
+
+// Emoji-Auswahl hinter dem Smiley im Eingabefeld.
+//
+// Das System-Fenster von macOS oder Windows laesst sich aus einer Webseite
+// heraus NICHT oeffnen -- dafuer gibt es keinen Weg. Instagram macht es
+// genauso wenig: deren Smiley oeffnet Instagrams eigene Auswahl. Das hier
+// ist unsere, und sie sieht auf jedem Rechner gleich aus.
+// Wer lieber das System-Fenster will, kommt weiterhin ueber
+// Ctrl+Cmd+Leertaste (Mac) bzw. Windows+Punkt dran -- das Feld nimmt beides.
+const EMOJIS = [
+  "❤️", "🔥", "😂", "😍", "😮", "😢", "👏", "🙌", "💯", "✨",
+  "😅", "😊", "😎", "🥰", "😭", "🤣", "😁", "🙂", "😇", "🤩",
+  "🤔", "😴", "🥺", "😤", "😱", "🤯", "😬", "🙃", "😉", "😌",
+  "👍", "👎", "🙏", "💪", "🤝", "👀", "🧠", "🫶", "🤌", "✌️",
+  "💔", "💖", "💥", "⚡", "⭐", "🌟", "🎯", "🏆", "🚀", "💎",
+  "🎉", "🎬", "📈", "💰", "⏰", "📌", "✅", "❌", "⚠️", "❓",
+];
 
 // Instagrams blaues Verifiziert-Abzeichen: gezackte Scheibe, weisser Haken.
 function Haekchen({ className }: { className?: string }) {
@@ -86,18 +103,68 @@ type ReelResult =
 // Zeigt das Profilbild, und sobald es nicht laedt, Instagrams Platzhalter.
 // Bewusst mit eigenem Zustand statt nur CSS: ein unsichtbar geschaltetes
 // kaputtes Bild liesse ein Loch, der Platzhalter fuellt es.
-function KommentarBild({ src }: { src: string | null }) {
+function KommentarBild({ src, klein = false }: { src: string | null; klein?: boolean }) {
   const [kaputt, setKaputt] = useState(false);
-  if (!src || kaputt) return <StandardBild className="w-7 h-7 rounded-full shrink-0" />;
+  const groesse = klein ? "w-6 h-6" : "w-7 h-7";
+  if (!src || kaputt) return <StandardBild className={`${groesse} rounded-full shrink-0`} />;
   return (
     <img
       src={src}
       alt=""
       loading="lazy"
       referrerPolicy="no-referrer"
-      className="w-7 h-7 rounded-full object-cover shrink-0 bg-white/[0.06]"
+      className={`${groesse} rounded-full object-cover shrink-0 bg-white/[0.06]`}
       onError={() => setKaputt(true)}
     />
+  );
+}
+
+// Eine Kommentarzeile -- dieselbe Form fuer Kommentare und fuer Antworten
+// darauf. "klein" ist die Antwort-Fassung: kleineres Bild, etwas kleinerer
+// Text, so wie Instagram seine Antworten einrueckt.
+function Kommentar({ c, klein = false }: { c: LiveComment; klein?: boolean }) {
+  return (
+    <div className={["flex items-start gap-2.5 leading-snug", klein ? "text-[12px]" : "text-[12.5px]"].join(" ")}>
+      {/* Profilbild wie bei Instagram. Fehlt es -- weil jemand keines hat,
+          weil Instagrams befristete Bildadresse nicht mehr laedt, oder weil
+          der alte Ableseweg gar keine Bilder kennt -- steht Instagrams
+          eigener Platzhalter dort. Der Platz ist immer gleich gross, die
+          Zeile rutscht also in keinem Fall. */}
+      <KommentarBild key={c.avatar ?? "ohne"} src={c.avatar ?? null} klein={klein} />
+      <div className="min-w-0 flex-1">
+        {/* Erste Zeile wie bei Instagram: Name, Haekchen, Alter. Der Text
+            steht darunter -- so bleibt das Alter lesbar und rutscht nicht
+            mitten in den Kommentar. */}
+        <div className="flex items-center gap-[3px] min-w-0">
+          <span className="text-neutral-50 font-medium truncate">{c.username ?? "unknown"}</span>
+          {c.verifiziert && <Haekchen className="w-[13px] h-[13px] shrink-0" />}
+          {vorZeit(c.postedAt) && (
+            <span className="text-[11.5px] text-neutral-400 shrink-0 ml-[2px]">{vorZeit(c.postedAt)}</span>
+          )}
+        </div>
+        {/* GIF-Kommentare tragen keinen Text, sondern ein Bild. Bis zum
+            10.10.2026 sind sie bei uns gar nicht aufgetaucht -- wir haben
+            alles ohne Text weggeworfen. */}
+        {c.gif && (
+          <img
+            src={c.gif}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className={["mt-1 max-w-full rounded-lg border border-white/[0.07]", klein ? "w-[150px]" : "w-[190px]"].join(" ")}
+          />
+        )}
+        {/* Instagram setzt den Kommentartext genauso hell wie den Namen und
+            nur die Zusatzzeile darunter grau. */}
+        {c.text && <span className="block text-neutral-100">{c.text}</span>}
+        {typeof c.likeCount === "number" && (
+          <div className="text-[11px] text-neutral-400 mt-0.5">{c.likeCount.toLocaleString()} likes</div>
+        )}
+      </div>
+      {/* Read-only, like the rest of this panel — there's no comment-level
+          like action on the real account. */}
+      <Heart size={klein ? 15 : 18} className="shrink-0 text-neutral-400" />
+    </div>
   );
 }
 
@@ -105,10 +172,22 @@ export function CommentsPanel({
   video,
   isOpen,
   fetchComments,
+  kommentieren,
+  kannKommentieren,
+  eigenesKonto,
+  antwortenLaden,
 }: {
   video: ReelVideo | null;
   isOpen: boolean;
   fetchComments: (reelId: string, sourceUrl: string, abMarke?: string | null, sortierung?: KommentarSortierung | null) => Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string; naechste?: string | null }>;
+  // Einen eigenen Kommentar schreiben -- echte Handlung auf dem verbundenen
+  // Konto, deshalb nur mit laufender Sitzung.
+  kommentieren: (reelId: string, text: string) => Promise<{ posted: boolean; comment?: LiveComment; error?: string }>;
+  kannKommentieren: boolean;
+  // Der Name des Research-Kontos -- nur, um den eigenen Kommentar richtig
+  // zu beschriften, wenn Instagram ihn nicht mitschickt.
+  eigenesKonto?: string | null;
+  antwortenLaden: (reelId: string, kommentarId: string) => Promise<{ available: boolean; comments: LiveComment[] }>;
 }) {
   const [displayReelId, setDisplayReelId] = useState<string | null>(null);
   const [dwelling, setDwelling] = useState(false);
@@ -132,6 +211,14 @@ export function CommentsPanel({
   // Instagrams Kommentar-Sortierung. "For you" ist Instagrams Normalfall.
   const [sortierung, setSortierung] = useState<KommentarSortierung>("fuer-dich");
   const [sortOffen, setSortOffen] = useState(false);
+  const [entwurf, setEntwurf] = useState("");
+  const [schickt, setSchickt] = useState(false);
+  const [schreibFehler, setSchreibFehler] = useState<string | null>(null);
+  const [emojisOffen, setEmojisOffen] = useState(false);
+  // Welche Antwort-Straenge offen sind, und was davon schon nachgeladen ist.
+  const [antwortenOffen, setAntwortenOffen] = useState<Record<string, boolean>>({});
+  const [antwortenCache, setAntwortenCache] = useState<Record<string, LiveComment[]>>({});
+  const [laedtAntworten, setLaedtAntworten] = useState<string | null>(null);
   // Zwischenspeicher und Fortsetzungsmarke haengen an Reel UND Sortierung:
   // eine andere Reihenfolge ist eine andere Liste, sonst zeigte der Wechsel
   // weiter die alte an.
@@ -275,6 +362,56 @@ export function CommentsPanel({
 
   const result = displayReelId ? resultsRef.current.get(schluessel(displayReelId)) : undefined;
 
+  async function antwortenUmschalten(c: LiveComment) {
+    const offen = !!antwortenOffen[c.id];
+    setAntwortenOffen((v) => ({ ...v, [c.id]: !offen }));
+    if (offen || antwortenCache[c.id] || !video) return;
+    // Nur holen, wenn Instagram mehr hat, als es schon mitgeschickt hat.
+    const vorschau = c.antworten ?? [];
+    if ((c.antwortenAnzahl ?? 0) <= vorschau.length) return;
+    setLaedtAntworten(c.id);
+    const a = await antwortenLaden(video.id, c.id).catch(() => null);
+    setLaedtAntworten(null);
+    if (a?.available && a.comments.length) {
+      setAntwortenCache((v) => ({ ...v, [c.id]: a.comments }));
+    }
+  }
+
+  async function abschicken() {
+    const text = entwurf.trim();
+    if (!text || !video || schickt) return;
+    setSchickt(true);
+    setSchreibFehler(null);
+    const a = await kommentieren(video.id, text);
+    setSchickt(false);
+    if (!a.posted) {
+      setSchreibFehler(a.error ?? "Instagram didn't accept the comment.");
+      return;
+    }
+    setEntwurf("");
+    // Den eigenen Kommentar oben einsetzen, statt die ganze Liste neu zu
+    // holen -- Instagram braucht einen Moment, bis er dort auftaucht.
+    //
+    // Schickt Instagram den fertigen Kommentar nicht zurueck, wird er aus
+    // dem gebaut, was wir sicher wissen: der getippte Text und das eigene
+    // Konto. Das ist ehrlich -- der Kommentar IST raus, das hat Instagram
+    // bestaetigt; nur seine Daten kamen nicht mit (10.10.2026 gemessen).
+    const k = schluessel(video.id);
+    const bisher = resultsRef.current.get(k);
+    const alte = bisher?.status === "loaded" ? bisher.comments : [];
+    const neuer: LiveComment = a.comment ?? {
+      id: `eigener-${Date.now()}`,
+      username: eigenesKonto ?? null,
+      text,
+      postedAt: Math.floor(Date.now() / 1000),
+      likeCount: 0,
+      avatar: null,
+      verifiziert: false,
+    };
+    resultsRef.current.set(k, { status: "loaded", comments: [neuer, ...alte] });
+    neuZeichnen((n) => n + 1);
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Comments/Notes tabs — one bordered segmented box (matching the
@@ -369,13 +506,19 @@ export function CommentsPanel({
         </div>
       </div>
 
-      {/* Die Obergrenze MUSS bleiben: ganz ohne sie zieht eine lange Liste
+      {/* Feste Hoehe, nicht "waechst zwischen 160px und 62vh".
+          Die Obergrenze MUSS bleiben: ganz ohne sie zieht eine lange Liste
           die Spalte in die Hoehe, und Save to Collection rutscht aus dem
           Bild (am 09.10.2026 ausprobiert und sofort zurueckgenommen).
-          Von 50vh auf 62vh angehoben -- damit fuellt die Liste die schwarze
-          Flaeche, die darunter stehenblieb, ohne die Reihe zu sprengen. */}
+          Mitwachsen war aber genauso schlecht: waehrend "Loading comments…"
+          schrumpfte die Spalte auf ihre Mindesthoehe, die ganze Seite wurde
+          kuerzer, und alles sprang -- danach wieder zurueck (10.10.2026 von
+          Emre im Betrieb bemerkt). Dasselbe passierte beim Wechsel zwischen
+          einem Reel mit drei und einem mit dreissig Kommentaren.
+          Feste Hoehe heisst: die Flaeche steht still, egal was darin
+          passiert. */}
       <div
-        className="flex-1 min-h-[160px] max-h-[62vh] overflow-y-auto px-4 py-3"
+        className="h-[62vh] shrink-0 overflow-y-auto px-4 py-3"
         ref={listeRef}
         onScroll={async (e) => {
           // Am unteren Ende die naechsten Kommentare holen -- so wie
@@ -425,38 +568,115 @@ export function CommentsPanel({
           </div>
         ) : (
           <ul className="space-y-3">
-            {result.comments.map((c) => (
-              <li key={c.id} className="flex items-start gap-2.5 text-[12.5px] leading-snug">
-                {/* Profilbild wie bei Instagram. Fehlt es -- weil jemand
-                    keines hat, weil Instagrams befristete Bildadresse nicht
-                    mehr laedt, oder weil der alte Ableseweg gar keine Bilder
-                    kennt -- steht Instagrams eigener Platzhalter dort. Der
-                    Platz ist immer gleich gross, die Zeile rutscht also in
-                    keinem Fall. */}
-                <KommentarBild key={c.avatar ?? "ohne"} src={c.avatar ?? null} />
-                <div className="min-w-0 flex-1">
-                  {/* Erste Zeile wie bei Instagram: Name, Haekchen, Alter.
-                      Der Text steht darunter -- so bleibt das Alter lesbar
-                      und rutscht nicht mitten in den Kommentar. */}
-                  <div className="flex items-center gap-[3px] min-w-0">
-                    <span className="text-neutral-50 font-medium truncate">{c.username ?? "unknown"}</span>
-                    {c.verifiziert && <Haekchen className="w-[13px] h-[13px] shrink-0" />}
-                    {vorZeit(c.postedAt) && (
-                      <span className="text-[11.5px] text-neutral-500 shrink-0 ml-[2px]">{vorZeit(c.postedAt)}</span>
-                    )}
-                  </div>
-                  <span className="block text-neutral-400">{c.text}</span>
-                  {typeof c.likeCount === "number" && (
-                    <div className="text-[11px] text-neutral-600 mt-0.5">{c.likeCount.toLocaleString()} likes</div>
+            {result.comments.map((c) => {
+              const offen = !!antwortenOffen[c.id];
+              const geladen = antwortenCache[c.id];
+              const sichtbar = geladen ?? c.antworten ?? [];
+              const anzahl = c.antwortenAnzahl ?? sichtbar.length;
+              return (
+                <li key={c.id}>
+                  <Kommentar c={c} />
+                  {/* Antworten wie bei Instagram: zusammengeklappt mit
+                      einem Strich davor, aufklappbar. Eine Handvoll liegt
+                      schon in derselben Antwort bei; "alle" holt den Rest
+                      nach. Klappt das Nachholen nicht, bleibt wenigstens
+                      die Vorschau stehen -- verloren geht nichts. */}
+                  {anzahl > 0 && (
+                    <div className="mt-2 ml-[38px]">
+                      <button
+                        type="button"
+                        onClick={() => void antwortenUmschalten(c)}
+                        className="flex items-center gap-2 text-[11.5px] text-neutral-400 hover:text-neutral-200 transition-colors"
+                      >
+                        <span className="w-5 h-px bg-white/20" />
+                        {laedtAntworten === c.id
+                          ? "Loading replies…"
+                          : offen
+                            ? "Hide replies"
+                            : `View ${anzahl === 1 ? "1 reply" : `all ${anzahl} replies`}`}
+                      </button>
+                      {offen && (
+                        <ul className="mt-3 space-y-3">
+                          {sichtbar.map((a) => (
+                            <li key={a.id}>
+                              <Kommentar c={a} klein />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   )}
-                </div>
-                {/* Read-only, like the rest of this panel — there's no
-                    comment-level like action on the real account. */}
-                <Heart size={18} className="shrink-0 text-neutral-400" />
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
+      </div>
+
+      {/* Eigenen Kommentar schreiben -- dieselbe Stelle wie bei Instagram:
+          ganz unten unter der Liste. Es ist eine echte Handlung auf dem
+          verbundenen Konto, deshalb nur mit laufender Sitzung und erst
+          dann bestaetigt, wenn Instagram den Kommentar angenommen hat.
+          Erscheint er, wird er oben in die Liste gesetzt, ohne alles neu
+          zu holen. */}
+      <div className="px-4 pb-3 pt-2 border-t border-white/[0.08]">
+        {schreibFehler && (
+          <p className="mb-1.5 flex items-start gap-1.5 text-[11px] text-amber-300/90 leading-snug">
+            <AlertTriangle size={12} className="shrink-0 mt-0.5" /> {schreibFehler}
+          </p>
+        )}
+        <div className="relative flex items-center gap-2">
+          {emojisOffen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setEmojisOffen(false)} />
+              <div className="absolute z-40 bottom-[42px] right-0 w-[252px] max-h-[176px] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#0d0d0f] shadow-[0_18px_50px_-10px_rgba(0,0,0,0.9)] p-2 grid grid-cols-10 gap-0.5">
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => { setEntwurf((v) => v + e); setSchreibFehler(null); }}
+                    className="h-[22px] w-[22px] rounded flex items-center justify-center text-[14px] leading-none hover:bg-white/[0.08] transition-colors"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {/* Der Smiley sitzt IM Feld, rechts -- wie bei Instagram. */}
+          <div className="relative flex-1 min-w-0">
+            <input
+              value={entwurf}
+              onChange={(e) => { setEntwurf(e.target.value); setSchreibFehler(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void abschicken(); } }}
+              disabled={!kannKommentieren || !video || schickt}
+              placeholder={kannKommentieren ? "Add a comment…" : "Start a research session to comment"}
+              className="w-full h-9 pl-3 pr-9 rounded-full bg-white/[0.04] border border-white/[0.08] text-[12.5px] text-neutral-100 placeholder:text-neutral-600 outline-none focus:border-white/20 disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={() => setEmojisOffen((v) => !v)}
+              disabled={!kannKommentieren || !video || schickt}
+              title="Emoji"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full flex items-center justify-center text-neutral-500 hover:text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Smile size={15} />
+            </button>
+          </div>
+          {/* Erst sichtbar, wenn wirklich etwas dasteht -- wie bei
+              Instagram, wo "Posten" vorher nicht da ist. */}
+          {entwurf.trim() && (
+            <button
+              type="button"
+              onClick={() => void abschicken()}
+              disabled={schickt}
+              className="shrink-0 h-9 px-3 rounded-full text-[12.5px] font-medium text-[#D39448] hover:brightness-110 transition-[filter] disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {schickt ? <Loader2 size={13} className="animate-spin" /> : null}
+              {schickt ? "Posting…" : "Post"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Hidden rather than removed -- no pagination/API support for loading

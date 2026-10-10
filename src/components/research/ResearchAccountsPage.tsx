@@ -31,7 +31,7 @@ import { VideoGrid } from "../hub/VideoGrid";
 import { SavePanel } from "../hub/SavePanel";
 import { SavedCollectionsPopover } from "../hub/SavedCollectionsPopover";
 import { ReelDetailModal } from "../hub/ReelDetailModal";
-import { SwipeResearchPlayer, type LikeStatus, type FollowStatus } from "./SwipeResearchPlayer";
+import { SwipeResearchPlayer, type LikeStatus, type RepostStatus, type FollowStatus } from "./SwipeResearchPlayer";
 import { DownloadConnectorButton } from "./DownloadConnectorButton";
 import { CommentsPanel } from "./CommentsPanel";
 import { panelStil } from "../../lib/panelLook";
@@ -62,8 +62,10 @@ function reelKennzahlen(v: ReelVideo | null | undefined) {
   const glatt = (t: string) => t.replace(/\.0(?=[KM]$)/, "");
   const zahl = (n?: number) => (typeof n === "number" ? glatt(formatViews(n)) : strich);
   const views = v.viewsRaw > 0 ? glatt(formatViews(v.viewsRaw)) : strich;
+  // Ohne sichtbare Likes gibt es keine vergleichbare Rate -- dann Strich,
+  // statt still durch (nur Kommentare / Aufrufe) zu ersetzen.
   const rate =
-    v.viewsRaw > 0 && (typeof v.likes === "number" || typeof v.comments === "number")
+    !v.likesVerborgen && v.viewsRaw > 0 && (typeof v.likes === "number" || typeof v.comments === "number")
       ? `${((((v.likes ?? 0) + (v.comments ?? 0)) / v.viewsRaw) * 100).toFixed(1)}%`
       : strich;
   const d = typeof v.takenAt === "number" ? new Date(v.takenAt * 1000) : null;
@@ -506,6 +508,7 @@ export function ResearchAccountsPage({
   const [connectFlow, setConnectFlow] = useState<{ mode: "new" | "reconnect"; start: ConnectStart | null; label?: string } | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [likeStatus, setLikeStatus] = useState<Record<string, LikeStatus>>({});
+  const [repostStatus, setRepostStatus] = useState<Record<string, RepostStatus>>({});
   const [followStatus, setFollowStatus] = useState<Record<string, FollowStatus>>({});
   const [blockStatus, setBlockStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
   // Hat der Mitarbeiter "Refresh Feed" gedrueckt? Nur dann dreht sich dessen
@@ -733,6 +736,20 @@ export function ResearchAccountsPage({
     }));
   }
 
+  // Ein echter Repost auf dem verbundenen Konto -- wie bei Instagram ein
+  // Schalter: nochmal druecken nimmt ihn zurueck. Erfolg wird erst
+  // gemeldet, wenn Instagrams eigener Knopf umgesprungen ist.
+  async function handleRepostClick(video: ReelVideo) {
+    if (repostStatus[video.id] === "pending") return;
+    setRepostStatus((prev) => ({ ...prev, [video.id]: "pending" }));
+    const { reposted, error } = await liveSession.repost();
+    setRepostStatus((prev) => ({
+      ...prev,
+      // Kein Fehler, aber auch nicht repostet, heisst: zurueckgenommen.
+      [video.id]: reposted ? "reposted" : error ? "failed" : "offen",
+    }));
+  }
+
   // A real platform action on the real connected account (see
   // session-server.mjs's Session.follow) — same shape as handleLikeClick.
   async function handleFollowClick(video: ReelVideo) {
@@ -804,7 +821,13 @@ export function ResearchAccountsPage({
   }
 
   return (
-    <div className="relative h-full overflow-y-auto" style={{ background: "#020203" }}>
+    // Der Platz fuer die Scrollleiste wird IMMER freigehalten, auch wenn
+    // gerade keine da ist. Ohne das wurde die Seite beim Starten einer
+    // Sitzung laenger, die Leiste kam dazu, und weil der Inhalt mittig
+    // sitzt (mx-auto weiter unten), rutschte alles um ein paar Pixel zur
+    // Seite -- beim Beenden wieder zurueck. (Am 10.10.2026 von Emre
+    // bemerkt.) Die Spaltenbreiten selbst sind fest, die waren es nicht.
+    <div className="relative h-full overflow-y-auto" style={{ background: "#020203", scrollbarGutter: "stable" }}>
       {/* Scoped, stronger than the shared .dashboard-starfield-boost (which
           stays untouched for the frozen Dashboard) — this page gets its
           own bump on top of it, same pattern as Creativity Hub. */}
@@ -1085,6 +1108,12 @@ export function ResearchAccountsPage({
                   <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                     Current Reel
                   </p>
+                  {/* Blendet das Konto seine Like-Zahl aus, stehen bei Likes
+                      UND Engagement Striche -- die Zeilen selbst bleiben.
+                      Sie wegzulassen liess die Panels springen, weil die
+                      Spalte kuerzer wurde (10.10.2026 von Emre sofort
+                      zurueckgewiesen). Engagement muss mit: die Rate ohne
+                      Likes waere eine andere Zahl unter demselben Namen. */}
                   <div className="flex flex-col gap-2.5">
                     <SessionRow label="Engagement" value={reelKennzahlen(currentSwipeVideo).engagement} muted={!currentSwipeVideo} />
                     <SessionRow label="Likes" value={reelKennzahlen(currentSwipeVideo).likes} genau={reelKennzahlen(currentSwipeVideo).exaktLikes} muted={!currentSwipeVideo} />
@@ -1179,6 +1208,8 @@ export function ResearchAccountsPage({
                 onPrev={() => void liveSession.prev()}
                 onLikeClick={handleLikeClick}
                 likeStatus={likeStatus}
+                onRepostClick={handleRepostClick}
+                repostStatus={repostStatus}
                 onFollowClick={handleFollowClick}
                 followStatus={followStatus}
                 onBlockCreator={handleBlockCreator}
@@ -1215,7 +1246,15 @@ export function ResearchAccountsPage({
                     comment list grows/shrinks with it instead of leaving
                     Save to Collection floating at a fixed offset. */}
                 <div className="flex-1 flex flex-col min-h-0">
-                  <CommentsPanel video={currentSwipeVideo} isOpen fetchComments={liveSession.fetchComments} />
+                  <CommentsPanel
+                    video={currentSwipeVideo}
+                    isOpen
+                    fetchComments={liveSession.fetchComments}
+                    kommentieren={liveSession.kommentieren}
+                    kannKommentieren={liveSession.status === "active"}
+                    eigenesKonto={currentAccount.username || currentAccount.label}
+                    antwortenLaden={liveSession.antwortenLaden}
+                  />
                 </div>
 
                 <div className="p-4 border-t border-white/[0.08]">

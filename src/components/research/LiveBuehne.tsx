@@ -50,6 +50,7 @@ export function LiveBuehne({
   sessionId,
   sessionSecret,
   stumm,
+  lautstaerke,
   onZustand,
   onAntippen,
   pausiert,
@@ -62,6 +63,9 @@ export function LiveBuehne({
   // Der Mitarbeiter soll selbst entscheiden koennen, ob er Ton hoert --
   // Instagram zaehlt die Verweildauer so oder so, der Ton haengt nicht daran.
   stumm: boolean;
+  // Wie laut, von 0 bis 1. Rein oertlich: das Bild kommt als Uebertragung
+  // an, und wie laut sie hier abgespielt wird, geht den Connector nichts an.
+  lautstaerke: number;
   onZustand?: (z: BuehnenZustand, meldung?: string) => void;
   // Antippen haelt Instagrams Reel an und spielt es wieder weiter -- wie ein
   // Fingertipp auf dem Handy. Der Tipp geht in Instagrams eigenen Tab,
@@ -247,6 +251,14 @@ export function LiveBuehne({
     if (!el) return;
     el.muted = stumm || !!laedt;
   }, [stumm, laedt]);
+
+  // Lautstaerke getrennt davon: sie bleibt erhalten, waehrend stumm
+  // geschaltet ist -- wer wieder laut stellt, hoert es so laut wie vorher.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.volume = Math.min(1, Math.max(0, lautstaerke));
+  }, [lautstaerke]);
 
   // Dauerhaft nachfragen, welches Reel Instagram gerade zeigt -- statt einmal
   // nach dem Aufbau zu fragen und zu hoffen.

@@ -1035,6 +1035,54 @@ const BUEHNE_SKRIPT = () => {
     return { ok: false, fehler: "Das Herz hat nicht reagiert.", warGeliked };
   };
 
+  // Repost: Instagrams eigener Knopf in der Leiste des sichtbaren Reels.
+  // Dieselbe Regel wie beim Herz -- erst melden, wenn nachweislich
+  // umgesprungen ist, nie weil ein Klick abgeschickt wurde.
+  //
+  // UNBEWIESEN (10.10.2026): wie Instagram den Knopf genau benennt, ist
+  // nicht gemessen. Findet sich keiner der Namen, schreibt die Antwort
+  // auf, wie die Knoepfe im Bild wirklich heissen -- dann steht es nach
+  // EINEM Durchlauf im Protokoll und muss nicht geraten werden.
+  B.REPOST_AUS = ["Repost", "Erneut posten"];
+  B.REPOST_AN = ["Reposted", "Remove repost", "Undo repost", "Repost entfernen", "Erneut gepostet"];
+
+  B.repostDruecken = async () => {
+    const alle = [...B.REPOST_AUS, ...B.REPOST_AN];
+    const istAn = (name) => B.REPOST_AN.some((n) => n.toLowerCase() === name.toLowerCase());
+
+    const vorher = B.knopfImBild(alle);
+    if (!vorher) {
+      const gesehen = [...document.querySelectorAll("svg[aria-label]")]
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.top >= 0 && r.bottom <= innerHeight + 4;
+        })
+        .map((el) => el.getAttribute("aria-label"));
+      return { ok: false, fehler: "Kein Repost-Knopf im Bild gefunden.", gesehen: [...new Set(gesehen)] };
+    }
+
+    const warRepostet = istAn(vorher.name);
+    const knopf = vorher.el.closest("[role=button], button") ?? vorher.el.parentElement;
+    // Die Zahl unter dem Knopf als zweiter Zeuge: springt der Name nicht um,
+    // verraet die Zahl trotzdem, ob Instagram es angenommen hat.
+    const zahlVorher = knopf?.parentElement?.textContent?.trim() ?? null;
+    knopf?.click?.();
+
+    const ende = Date.now() + 3500;
+    while (Date.now() < ende) {
+      await new Promise((r) => setTimeout(r, 120));
+      const jetzt = B.knopfImBild(alle);
+      if (jetzt && istAn(jetzt.name) !== warRepostet) {
+        return { ok: true, repostet: istAn(jetzt.name), weg: "Name" };
+      }
+      const zahlJetzt = knopf?.parentElement?.textContent?.trim() ?? null;
+      if (zahlVorher !== null && zahlJetzt !== null && zahlJetzt !== zahlVorher) {
+        return { ok: true, repostet: !warRepostet, weg: "Zahl" };
+      }
+    }
+    return { ok: false, fehler: "Der Repost-Knopf hat nicht reagiert.", warRepostet };
+  };
+
   B.folgen = async () => {
     const kandidaten = [...document.querySelectorAll("button, [role=button]")].filter((b) => {
       const t = (b.textContent ?? "").trim().toLowerCase();
@@ -1102,6 +1150,11 @@ function parseInstagramMedia(node) {
       // count for a Reel at all. null here means exactly that: no real
       // count was available, never faked as 0.
       viewsRaw: typeof node.play_count === "number" ? node.play_count : (typeof node.view_count === "number" ? node.view_count : null),
+      // Manche Konten blenden ihre Like-Zahl aus. Instagram zeigt dann gar
+      // nichts an -- wir zeigten eine Zahl, die nichts bedeutet (ein Reel
+      // mit 668.000 Aufrufen stand auf "3 Likes"), und rechneten daraus
+      // auch noch eine Engagement-Rate. Am 10.10.2026 von Emre gemeldet.
+      likesVerborgen: node.like_and_view_counts_disabled === true,
       likes: typeof node.like_count === "number" ? node.like_count : null,
       comments: typeof node.comment_count === "number" ? node.comment_count : null,
       durationSec: typeof node.video_duration === "number" ? Math.round(node.video_duration) : 0,
@@ -1293,7 +1346,7 @@ function parseCommentLines(lines) {
     }
     const text = textParts.join(" ").trim();
     // avatar: der abgelesene Bildschirmtext traegt kein Bild (10.10.2026).
-    if (text) comments.push({ id: `${username}-${i}`, username, text, postedAt: null, likeCount, avatar: null, verifiziert: false });
+    if (text) comments.push({ id: `${username}-${i}`, username, text, postedAt: null, likeCount, avatar: null, verifiziert: false, gif: null });
     i = j > i ? j : i + 1;
   }
   return comments;
@@ -2528,6 +2581,157 @@ class Session {
     return result;
   }
 
+  // Repost auf dem verbundenen Konto -- dieselbe Regel wie Like/Follow/Block:
+  // Erfolg wird nur gemeldet, wenn Instagrams eigener Knopf nachweislich
+  // umgesprungen ist. Bewusst OHNE den Umweg ueber eine zweite Seite: der
+  // Repost gehoert zu dem Reel, das der Mitarbeiter gerade sieht, und ohne
+  // Buehne gibt es kein sichtbares Reel.
+  async repost() {
+    if (!this.buehneSteht) return { reposted: false, error: "No reel is currently in view." };
+    const erg = await this.page
+      .evaluate(() => window.__buehne.repostDruecken())
+      .catch((e) => ({ ok: false, fehler: e.message }));
+    const was = await this.buehneAktuell().catch(() => ({ code: null }));
+    if (erg.ok) {
+      console.log(`[repost] session ${this.id}: reel=${was.code ?? "?"} -> ${erg.repostet ? "repostet" : "zurueckgenommen"} (erkannt an: ${erg.weg}).`);
+      return { reposted: !!erg.repostet, reelCode: was.code ?? null };
+    }
+    console.log(`[repost] session ${this.id}: reel=${was.code ?? "?"} FEHLER ${erg.fehler}${erg.gesehen ? ` | Knoepfe im Bild: ${erg.gesehen.join(" | ")}` : ""}`);
+    return { reposted: false, error: erg.fehler ?? "Couldn't confirm the repost." };
+  }
+
+  // Alle Antworten auf einen Kommentar holen.
+  //
+  // Eine Handvoll liefert Instagram schon beim Lesen der Kommentare mit;
+  // das hier ist fuer "alle ansehen". UNBEWIESEN (10.10.2026): die Adresse
+  // dafuer ist nicht gemessen. Scheitert sie, bleibt die Vorschau stehen,
+  // die ohnehin schon da ist -- es geht also nichts verloren, und im
+  // Protokoll steht, was Instagram geantwortet hat.
+  async antworten(reelId, kommentarId) {
+    if (!this.buehneSteht) return { available: false, comments: [] };
+    const bekannt =
+      this.history.find((r) => r.id === reelId) ??
+      this.pending.find((r) => r.id === reelId) ??
+      this.katalog.get(reelId) ??
+      null;
+    if (!bekannt?.pk || !kommentarId) return { available: false, comments: [] };
+
+    const erg = await this.page
+      .evaluate(async ({ nr, kid }) => {
+        try {
+          const r = await fetch(`/api/v1/media/${nr}/comments/${kid}/child_comments/`, {
+            headers: { "X-IG-App-ID": "936619743392459" },
+            credentials: "include",
+          });
+          if (!r.ok) return { fehler: `HTTP ${r.status}` };
+          const j = await r.json();
+          const roh = Array.isArray(j?.child_comments) ? j.child_comments : [];
+          return {
+            ok: true,
+            kommentare: roh
+              .map((c) => ({
+                id: String(c.pk ?? c.id ?? ""),
+                username: c.user?.username ?? null,
+                text: typeof c.text === "string" ? c.text : "",
+                likeCount: typeof c.comment_like_count === "number" ? c.comment_like_count : null,
+                postedAt: typeof c.created_at === "number" ? c.created_at : null,
+                avatar: typeof c.user?.profile_pic_url === "string" ? c.user.profile_pic_url : null,
+                verifiziert: c.user?.is_verified === true,
+                gif: null,
+              }))
+              .filter((c) => c.text && c.username),
+          };
+        } catch (e) { return { fehler: String(e?.message ?? e) }; }
+      }, { nr: bekannt.pk, kid: String(kommentarId) })
+      .catch((e) => ({ fehler: String(e?.message ?? e) }));
+
+    if (erg?.ok) {
+      console.log(`[antworten] ${reelId}/${kommentarId}: ${erg.kommentare.length} geholt.`);
+      return { available: true, comments: erg.kommentare };
+    }
+    console.log(`[antworten] ${reelId}/${kommentarId}: FEHLER ${erg?.fehler ?? "?"}`);
+    return { available: false, comments: [], error: erg?.fehler ?? "Couldn't load the replies." };
+  }
+
+  // Einen echten Kommentar vom verbundenen Konto schreiben.
+  //
+  // Ueber dieselbe Adresse, ueber die wir die Kommentare auch LESEN -- aus
+  // der Buehne heraus, mit deren Anmeldung. Der Weg ueber Instagrams
+  // sichtbares Eingabefeld waere der andere, haette aber einen Haken: das
+  // Kommentarfenster muesste drueben aufgehen, und der Mitarbeiter saehe es
+  // mitten in seinem Bild.
+  //
+  // UNBEWIESEN (10.10.2026): Adresse und Kopfzeilen zum Schreiben sind
+  // nicht gemessen, nur die zum Lesen. Deshalb schreibt die Antwort im
+  // Fehlerfall auf, was Instagram zurueckgegeben hat -- dann steht es nach
+  // EINEM Versuch im Protokoll.
+  async kommentieren(reelId, text) {
+    const sauber = String(text ?? "").trim();
+    if (!sauber) return { posted: false, error: "There's nothing to post." };
+    if (!this.buehneSteht) return { posted: false, error: "No reel is currently in view." };
+
+    const bekannt =
+      this.history.find((r) => r.id === reelId) ??
+      this.pending.find((r) => r.id === reelId) ??
+      this.katalog.get(reelId) ??
+      null;
+    if (!bekannt?.pk) return { posted: false, error: "Couldn't tell which reel this comment belongs to." };
+
+    const erg = await this.page
+      .evaluate(async ({ nr, text }) => {
+        try {
+          const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? "";
+          if (!csrf) return { fehler: "Kein csrftoken in der Sitzung gefunden." };
+          const r = await fetch(`/api/v1/web/comments/${nr}/add/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-CSRFToken": csrf,
+              "X-IG-App-ID": "936619743392459",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "include",
+            body: new URLSearchParams({ comment_text: text }).toString(),
+          });
+          const roh = await r.text();
+          let j = null;
+          try { j = JSON.parse(roh); } catch { /* Instagram antwortete nicht mit Daten */ }
+          if (!r.ok || j?.status === "fail") {
+            return { fehler: `HTTP ${r.status}${j?.message ? ` -- ${j.message}` : ""}`, antwort: roh.slice(0, 300) };
+          }
+          const c = j?.comment ?? null;
+          return {
+            ok: true,
+            // MESSUNG (10.10.2026): Der Kommentar ging nachweislich raus,
+            // aber in der Antwort stand er nicht dort, wo ich ihn erwartet
+            // habe -- deshalb erschien er nicht oben in der Liste. Hier die
+            // tatsaechlichen Felder mitschreiben, dann muss es nicht
+            // geraten werden.
+            felder: j && typeof j === "object" ? Object.keys(j) : [],
+            kommentar: c
+              ? {
+                  id: String(c.pk ?? c.id ?? Date.now()),
+                  username: c.user?.username ?? null,
+                  text: typeof c.text === "string" ? c.text : text,
+                  likeCount: 0,
+                  postedAt: typeof c.created_time === "number" ? c.created_time : Math.floor(Date.now() / 1000),
+                  avatar: typeof c.user?.profile_pic_url === "string" ? c.user.profile_pic_url : null,
+                  verifiziert: c.user?.is_verified === true,
+                }
+              : null,
+          };
+        } catch (e) { return { fehler: String(e?.message ?? e) }; }
+      }, { nr: bekannt.pk, text: sauber })
+      .catch((e) => ({ fehler: String(e?.message ?? e) }));
+
+    if (erg?.ok) {
+      console.log(`[kommentar] session ${this.id}: ${reelId} -- geschrieben.${erg.kommentar ? "" : ` Antwort trug keinen fertigen Kommentar; Felder: ${(erg.felder ?? []).join(", ") || "(keine)"}`}`);
+      return { posted: true, comment: erg.kommentar };
+    }
+    console.log(`[kommentar] session ${this.id}: ${reelId} FEHLER ${erg?.fehler ?? "?"}${erg?.antwort ? ` | Antwort: ${erg.antwort}` : ""}`);
+    return { posted: false, error: erg?.fehler ?? "Instagram didn't accept the comment." };
+  }
+
   async follow() {
     if (this.buehneSteht) {
       const erg = await this.page.evaluate(() => window.__buehne.folgen()).catch((e) => ({ ok: false, fehler: e.message }));
@@ -2652,6 +2856,13 @@ class Session {
             // naechsten Kommentare beginnen. Damit laesst sich beim Scrollen
             // nachladen, genau wie Instagram es selbst tut (09.10.2026).
             const teile = [];
+            // Ohne diesen Zusatz liefert Instagram zu einem Kommentar KEINE
+            // Antworten mit -- ein Kommentar mit 29 Antworten kam bei uns
+            // ohne eine einzige an (10.10.2026 von Emre an gregoryisbored
+            // nachgewiesen). Instagrams eigene Seite schickt ihn mit.
+            // UNBEWIESEN, dass genau das die Ursache ist: direkt darunter
+            // schreibt der Aufrufer mit, welche Felder wirklich ankommen.
+            teile.push("can_support_threading=true");
             if (abMarke) teile.push(`min_id=${encodeURIComponent(abMarke)}`);
             // Instagrams eigene Sortierung. "For you" ist der Normalfall und
             // braucht keinen Zusatz -- genau das holen wir schon immer.
@@ -2670,6 +2881,48 @@ class Session {
             if (!r.ok) return { fehler: `HTTP ${r.status}` };
             const j = await r.json();
             const roh = Array.isArray(j?.comments) ? j.comments : [];
+
+            // GIF-Kommentare: Instagram legt das Bild unter giphy_media_info
+            // ab und laesst text leer (10.10.2026 gemessen -- vorher sind
+            // diese Kommentare stillschweigend verschwunden). Giphy benennt
+            // seine Groessen je nach Antwort unterschiedlich, deshalb der
+            // Reihe nach durchprobieren.
+            const gifAus = (g) => {
+              if (!g || typeof g !== "object") return null;
+              const b = g.images ?? g.image ?? null;
+              const kandidaten = [
+                b?.fixed_height?.webp, b?.fixed_height?.url,
+                b?.fixed_height_downsampled?.webp, b?.fixed_height_downsampled?.url,
+                b?.downsized?.url, b?.fixed_width?.webp, b?.fixed_width?.url,
+                b?.original?.webp, b?.original?.url,
+                g.url, g.gif_url,
+              ];
+              for (const k of kandidaten) if (typeof k === "string" && k.startsWith("http")) return k;
+              return null;
+            };
+            // Ein Kommentar in unsere Form bringen -- fuer Kommentare UND
+            // fuer Antworten darauf, die genauso aufgebaut sind.
+            const machKommentar = (c) => ({
+              id: String(c.pk ?? c.id ?? ""),
+              username: c.user?.username ?? null,
+              text: typeof c.text === "string" ? c.text : "",
+              likeCount: typeof c.comment_like_count === "number" ? c.comment_like_count : null,
+              postedAt: typeof c.created_at === "number" ? c.created_at : null,
+              // Das Profilbild liegt der Antwort bei und wurde hier
+              // frueher einfach weggeworfen (10.10.2026, Emres Frage).
+              // Die Adresse ist befristet wie alle Instagram-Bilder --
+              // fuer die laufende Sitzung reicht das, denn die Kommentare
+              // werden ohnehin nur jetzt angezeigt und nicht archiviert.
+              avatar: typeof c.user?.profile_pic_url === "string" ? c.user.profile_pic_url : null,
+              // Das blaue Haekchen. Liegt derselben Antwort bei und macht
+              // ueberhaupt erst nachpruefbar, wen Instagram bei
+              // "Meta Verified" zurueckgibt (10.10.2026, Emres Einwand:
+              // ohne Haeckchen laesst sich nicht beweisen, dass der
+              // Filter wirklich greift).
+              verifiziert: c.user?.is_verified === true,
+              gif: gifAus(c.giphy_media_info),
+            });
+
             return {
               naechste: typeof j?.next_min_id === "string" ? j.next_min_id : null,
               // Keine eigene Obergrenze: Instagram bestimmt selbst, wie
@@ -2677,24 +2930,37 @@ class Session {
               // slice(0, 30) -- das warf weg, was schon da war, und holte
               // es beim Scrollen ein zweites Mal (09.10.2026).
               kommentare: roh.map((c) => ({
-                id: String(c.pk ?? c.id ?? ""),
-                username: c.user?.username ?? null,
-                text: typeof c.text === "string" ? c.text : "",
-                likeCount: typeof c.comment_like_count === "number" ? c.comment_like_count : null,
-                postedAt: typeof c.created_at === "number" ? c.created_at : null,
-                // Das Profilbild liegt der Antwort bei und wurde hier
-                // frueher einfach weggeworfen (10.10.2026, Emres Frage).
-                // Die Adresse ist befristet wie alle Instagram-Bilder --
-                // fuer die laufende Sitzung reicht das, denn die Kommentare
-                // werden ohnehin nur jetzt angezeigt und nicht archiviert.
-                avatar: typeof c.user?.profile_pic_url === "string" ? c.user.profile_pic_url : null,
-                // Das blaue Haekchen. Liegt derselben Antwort bei und macht
-                // ueberhaupt erst nachpruefbar, wen Instagram bei
-                // "Meta Verified" zurueckgibt (10.10.2026, Emres Einwand:
-                // ohne Haeckchen laesst sich nicht beweisen, dass der
-                // Filter wirklich greift).
-                verifiziert: c.user?.is_verified === true,
-              })).filter((c) => c.text && c.username),
+                ...machKommentar(c),
+                // Antworten auf diesen Kommentar. Eine Handvoll schickt
+                // Instagram in derselben Antwort mit (preview_child_comments)
+                // -- die kosten nichts. Wie viele es insgesamt sind, steht
+                // in child_comment_count; fehlt das Feld, nehmen wir die
+                // Vorschau als Anzahl, statt eine zu erfinden.
+                antworten: Array.isArray(c.preview_child_comments)
+                  ? c.preview_child_comments.map(machKommentar).filter((a) => (a.text || a.gif) && a.username)
+                  : [],
+                antwortenAnzahl:
+                  typeof c.child_comment_count === "number"
+                    ? c.child_comment_count
+                    : (Array.isArray(c.preview_child_comments) ? c.preview_child_comments.length : 0),
+              })).filter((c) => (c.text || c.gif) && c.username),
+              // MESSUNG (10.10.2026, Emres Frage nach GIFs): Kommentare
+              // OHNE Text werfen wir hier weg. Ein GIF-Kommentar hat
+              // vermutlich genau das -- kein Text, dafuer ein Bild in einem
+              // Feld, dessen Namen wir nicht kennen. Hier die Feldnamen
+              // solcher Kommentare mitschreiben, dann steht nach EINEM
+              // Durchlauf im Protokoll, wo das GIF steckt.
+              // Bleibt als Messung drin, aber enger: nur noch Kommentare,
+              // die weder Text NOCH ein erkanntes GIF haben. Dann steht im
+              // Protokoll, was uns sonst noch entgeht.
+              // MESSUNG (10.10.2026): Welche Felder tragen die Kommentare
+              // wirklich? Nur so laesst sich sehen, ob die Antworten jetzt
+              // mitkommen -- und unter welchem Namen.
+              felderProbe: roh.slice(0, 1).map((c) => Object.keys(c).filter((k) => /child|thread|repl/i.test(k)).join(",") || "(keine Antwort-Felder)"),
+              ohneInhalt: roh
+                .filter((c) => c.user?.username && !(typeof c.text === "string" && c.text) && !gifAus(c.giphy_media_info))
+                .slice(0, 2)
+                .map((c) => (c.giphy_media_info ? `GIF unbekannt: ${JSON.stringify(c.giphy_media_info).slice(0, 300)}` : Object.keys(c).join(","))),
             };
           } catch (e) { return { fehler: String(e?.message ?? e) }; }
         }, { nr: bekannt.pk, abMarke, sortParam })
@@ -2709,6 +2975,13 @@ class Session {
         // Reihenfolge bringt -- oder ob Instagram den Zusatz ignoriert.
         const erste = schnell.kommentare.slice(0, 3).map((k) => k.id).join(",");
         const haken = schnell.kommentare.filter((k) => k.verifiziert).length;
+        const mitAntworten = schnell.kommentare.filter((k) => (k.antwortenAnzahl ?? 0) > 0).length;
+        console.log(`[kommentare] ${reelId}: ${mitAntworten} mit Antworten | Antwort-Felder am ersten Kommentar: ${(schnell.felderProbe ?? []).join(" | ")}`);
+        const mitGif = schnell.kommentare.filter((k) => k.gif).length;
+        if (mitGif) console.log(`[kommentare] ${reelId}: davon ${mitGif} mit GIF.`);
+        if (schnell.ohneInhalt?.length) {
+          console.log(`[kommentare] ${reelId}: ${schnell.ohneInhalt.length} Kommentar(e) ohne Text und ohne erkennbares GIF weggelassen -- ${schnell.ohneInhalt.join(" || ")}`);
+        }
         console.log(`[kommentare] ${reelId}: ${schnell.kommentare.length} ueber die Adresse geholt${schnell.naechste ? ", weitere vorhanden" : ""} | sortierung=${sortierung ?? "fuer-dich"} | verifiziert=${haken}/${schnell.kommentare.length} | erste=${erste}`);
         return { available: true, comments: schnell.kommentare, reelId, naechste: schnell.naechste ?? null };
       }
@@ -3030,7 +3303,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
       const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung } = await readBody(req);
@@ -3093,6 +3366,20 @@ const server = http.createServer(async (req, res) => {
         // specific error string on failure, but nothing ever logged it, so
         // every failure looked identical from the outside ("Retry").
         if (!result.blocked) console.error(`[block] session ${id} failed: ${result.error ?? "(no error message)"}`);
+        return json(res, 200, result);
+      }
+      if (action === "repost") {
+        const result = await session.repost();
+        if (!result.reposted) console.error(`[repost] session ${id} failed: ${result.error ?? "(no error message)"}`);
+        return json(res, 200, result);
+      }
+      if (action === "kommentar") {
+        const result = await session.kommentieren(reelId, wert);
+        if (!result.posted) console.error(`[kommentar] session ${id} failed: ${result.error ?? "(no error message)"}`);
+        return json(res, 200, result);
+      }
+      if (action === "antworten") {
+        const result = await session.antworten(reelId, wert);
         return json(res, 200, result);
       }
       if (action === "comments") {
