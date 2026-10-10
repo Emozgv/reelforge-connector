@@ -2983,6 +2983,7 @@ class Session {
               // Kacheln wirklich alles dasteht.
               let sichtbar = 0;
               let mitDatum = 0;
+              let mitLaenge = 0;
               let unbekannt = 0;
               for (const a of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
                 const r = a.getBoundingClientRect();
@@ -2992,13 +2993,17 @@ class Session {
                 sichtbar++;
                 const b = RF.daten.get(m[1]);
                 if (!b) unbekannt++;
-                else if (b.zeitpunkt) mitDatum++;
+                else {
+                  if (b.zeitpunkt) mitDatum++;
+                  if (b.dauer !== null && b.dauer !== undefined) mitLaenge++;
+                }
               }
               return {
                 da: true,
                 stand: RF.stand,
                 sichtbar,
                 mitDatum,
+                mitLaenge,
                 unbekannt,
                 letztesZeichnen: RF.zuletztGezeichnet ? Date.now() - RF.zuletztGezeichnet : null,
               };
@@ -3029,8 +3034,9 @@ class Session {
         // nicht -- damals MUSSTE hier alles geholt werden, und fuenf
         // Runden waren 5,2 Sekunden Wartezeit beim Oeffnen. Inzwischen
         // laedt der Hintergrund-Tab weiter, waehrend der Mitarbeiter schon
-        // schaut (10.10.2026 gemessen: von 37 auf 49 vollstaendige Kacheln
-        // in drei Sekunden). Damit ist das lange Vorladen hier
+        // schaut, und die Schilder vervollstaendigen sich dabei in rund
+        // drei Sekunden vor seinen Augen (10.10.2026 gemessen: von 37 auf
+        // 49 vollstaendige Kacheln). Damit ist das lange Vorladen hier
         // ueberfluessig geworden.
         await this.profilVorladen(seite, `${name} (Raster)`, 2);
 
@@ -3414,6 +3420,8 @@ class Session {
       let runden = 0;
       let leerlauf = 0;
       let gemeldet = false;
+      const versuche = new Map();
+      const vergeblich = new Set();
       while (laeuftNoch()) {
         const dazu = await eineRunde();
         if (dazu > 0) {
@@ -3445,22 +3453,55 @@ class Session {
         await sleep(6000);
         if (!laeuftNoch()) break;
 
+        // Gesucht wird nach HALBEN Schildern, nicht nur nach leeren.
+        //
+        // Hier lag der Fehler (10.10.2026): gefragt wurde nur "gibt es
+        // Kacheln, zu denen wir gar nichts haben?". Die Antwort war null,
+        // also schlief der Wachdienst -- waehrend bei Emre vier Kacheln
+        // mit halbem Schild standen (Zahlen ja, Datum nein). Genau die
+        // sind der Grund, warum es sich fuer ihn anfuehlte, als wuerde es
+        // aufhoeren.
+        //
+        // Codes, die zweimal erfolglos nachgefasst wurden, zaehlen nicht
+        // mehr mit -- sonst dreht sich der Wachdienst ewig um Beitraege,
+        // zu denen Instagram schlicht nichts mehr hergibt.
         const fehlen = await this.profilSeite
-          ?.evaluate(() => {
+          ?.evaluate((schonVersucht) => {
             const RF = window.__rfForschung;
-            if (!RF) return 0;
-            let offen = 0;
+            if (!RF) return { offen: 0, codes: [] };
+            const codes = [];
             for (const a of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
+              const r = a.getBoundingClientRect();
+              if (r.width < 120 || r.height < 120) continue;
               const m = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
-              if (m && !RF.daten.has(m[1])) offen++;
+              if (!m) continue;
+              const b = RF.daten.get(m[1]);
+              // Leer ODER halb: beides zaehlt als offen.
+              // Nur Datum zaehlt, NICHT die Laenge.
+              //
+              // Gemessen am 10.10.2026: von 26 sichtbaren Kacheln hatten
+              // 25 ein Datum, aber nur 3 eine Laenge. Instagram liefert
+              // video_duration im Raster gar nicht mit -- sie steht nur in
+              // der Einzelauskunft, die kommt, wenn man ein Reel anklickt.
+              // Mit der Laenge im Kriterium fasste der Wachdienst alle
+              // sechs Sekunden fuer 23 Kacheln nach, die er nie fuellen
+              // kann: verschwendete Arbeit und genau die Art Dauerschleife,
+              // die heute schon einmal den Browser ausgebremst hat.
+              if ((!b || !b.zeitpunkt) && !schonVersucht.includes(m[1])) codes.push(m[1]);
             }
-            return offen;
-          })
-          .catch(() => 0);
+            return { offen: codes.length, codes: codes.slice(0, 40) };
+          }, [...vergeblich])
+          .catch(() => ({ offen: 0, codes: [] }));
 
-        if (fehlen > 0) {
-          console.log(`[nachladen] ${name}: ${fehlen} Kachel(n) ohne Zahlen -- wird nachgefasst.`);
+        if (fehlen.offen > 0) {
+          console.log(`[nachladen] ${name}: ${fehlen.offen} Kachel(n) mit halbem Schild -- wird nachgefasst.`);
+          for (const c of fehlen.codes) versuche.set(c, (versuche.get(c) ?? 0) + 1);
+          for (const [c, n] of versuche) if (n >= 2) vergeblich.add(c);
           gemeldet = false;
+          // Von vorn durchladen: Instagram gibt nach einem neuen Anlauf
+          // manchmal mehr her als beim blossen Weiterscrollen.
+          await hilfsSeite.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+          await sleep(600);
         }
       }
     } catch (err) {
@@ -3665,7 +3706,7 @@ class Session {
           const stapel = document.createElement("div");
           stapel.style.cssText =
             `display:flex;flex-direction:column;align-items:stretch;gap:${pxS(4)};` +
-            `font:700 ${pxS(13)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
+            `font:700 ${pxS(12)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
 
           const pille = (kinder, farbig) => {
             const z = document.createElement("div");
@@ -3686,8 +3727,8 @@ class Session {
           const bildEl = (name) => {
             const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             s.setAttribute("viewBox", "0 0 16 16");
-            s.setAttribute("width", pxS(13.5));
-            s.setAttribute("height", pxS(13.5));
+            s.setAttribute("width", pxS(12.5));
+            s.setAttribute("height", pxS(12.5));
             s.setAttribute("fill", "currentColor");
             s.style.cssText = "flex:none";
             s.innerHTML = ZEICHEN[name];
