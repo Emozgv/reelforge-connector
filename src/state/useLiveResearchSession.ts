@@ -1076,14 +1076,14 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // EIGENEN Seite -- die laufende Buehne traegt Reihenfolge und Historie der
   // Sitzung und wird dafuer nie navigiert.
   const profilOeffnen = useCallback(
-    async (username: string, breite: number, hoehe: number): Promise<{ ok: boolean; bild?: string; lauf?: string; error?: string }> => {
+    async (username: string, breite: number, hoehe: number, anzeige?: number): Promise<{ ok: boolean; bild?: string; lauf?: string; error?: string }> => {
       const session = sessionRef.current;
       if (!session) return { ok: false, error: "No active research session." };
       try {
         const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-oeffnen`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionSecret: session.sessionSecret, wert: username, breite, hoehe }),
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, wert: username, breite, hoehe, anzeige }),
         });
         const body = await res.json();
         return { ok: !!body.ok, bild: body.bild, lauf: body.lauf, error: body.error };

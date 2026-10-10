@@ -277,6 +277,13 @@ function leichenWegraeumen() {
 // ist. Falls nicht, war die erste Vermutung doch richtig -- dann hier
 // wieder auf false.
 const PROFIL_HAELT_REEL_AN = true;
+
+// Die Research-Schicht auf dem Profil: Instagrams Raster bleibt Instagrams
+// Raster, bekommt aber unsere Kennzahlen auf die Kacheln gelegt.
+//
+// Geht etwas schief, steht hier false und das Profil ist wieder blankes
+// Instagram -- ohne dass irgendwo anders etwas angefasst werden muss.
+const PROFIL_FORSCHUNG = true;
 // Normales Rechnerfenster, nicht Handybreite.
 //
 // 08.10.2026: Mit 420 Pixeln Breite liefert Instagram das schmale Layout --
@@ -2785,7 +2792,7 @@ class Session {
     return roh ? `data:image/jpeg;base64,${roh.toString("base64")}` : null;
   }
 
-  async profilOeffnen(username, breite, hoehe) {
+  async profilOeffnen(username, breite, hoehe, anzeige) {
     const name = String(username ?? "").replace(/^@/, "").trim();
     if (!/^[A-Za-z0-9._]{1,40}$/.test(name)) {
       console.log(`[profil] session ${this.id}: abgelehnt, "${username}" ist kein Profilname.`);
@@ -2893,12 +2900,34 @@ class Session {
       await seite.setViewportSize({ width: w, height: h }).catch(() => {});
       this.profilBreite = w;
       this.profilHoehe = h;
+      // Um wie viel wird das Bild bei uns verkleinert? Genau um diesen
+      // Faktor werden die Schilder groesser gebaut.
+      const gezeigt = Number(anzeige) > 0 ? Number(anzeige) : w;
+      this.profilVergroesserung = Math.max(1, Math.min(w / gezeigt, 2.5));
 
       // Instagram leitet beim Oeffnen eines Profils intern weiter; die erste
       // Navigation wird dadurch abgebrochen und Playwright meldet
       // ERR_ABORTED, obwohl die Seite danach normal laedt. Deshalb: auf
       // "commit" warten statt auf das fertige Dokument, und einen
       // Fehlschlag einmal wiederholen.
+      // Mitlesen starten, BEVOR geladen wird. Faengt man erst danach an,
+      // ist Instagrams erste Antwort -- die mit den meisten Beitraegen --
+      // schon durch.
+      if (PROFIL_FORSCHUNG) await this.profilNetzBeobachten(seite, name);
+
+      // Die Schicht nach JEDEM Seitenwechsel neu setzen. Instagram wechselt
+      // beim Oeffnen eines Beitrags und beim Zurueckgehen die Seite, und
+      // dabei geht alles verloren, was in ihr stand.
+      if (PROFIL_FORSCHUNG) {
+        seite.on("framenavigated", async (rahmen) => {
+          if (rahmen !== seite.mainFrame()) return;
+          await sleep(700);
+          if (this.profilSeite !== seite || seite.isClosed()) return;
+          await this.profilSchichtEinsetzen(seite);
+          await this.profilSchichtFuettern();
+        });
+      }
+
       const hin = () => seite.goto(`https://www.instagram.com/${name}/`, { waitUntil: "commit", timeout: 30000 });
       try {
         await hin();
@@ -2916,6 +2945,12 @@ class Session {
       await this.page.bringToFront().catch(() => {});
       await sleep(1800);
       if (ueberholt() || seite.isClosed()) return { ok: false, fehler: "Cancelled.", lauf: meinLauf };
+
+      if (PROFIL_FORSCHUNG) {
+        await this.profilSchichtEinsetzen(seite);
+        await this.profilSchichtFuettern();
+        console.log(`[forschung] ${name}: Schilder ${JSON.stringify(this.profilSchichtStand ?? null)}`);
+      }
 
       const bild = await this.profilBild();
       if (!bild) {
@@ -2963,6 +2998,602 @@ class Session {
         [x, y]
       )
       .catch((e) => `nicht lesbar (${e?.message?.slice(0, 40)})`);
+  }
+
+  // ===================================================================
+  // Research-Schicht auf dem Profil
+  // ===================================================================
+  //
+  // Zwei getrennte Haelften, und die Trennung ist Absicht:
+  //
+  //   1. SAMMELN passiert AUSSERHALB der Seite. Wir lesen Instagrams eigene
+  //      Antworten mit, so wie ein Protokoll mitliest. An der Seite wird
+  //      dabei nichts veraendert, nichts ersetzt, nichts ueberschrieben.
+  //      Zwei frueere Versuche, von innen an Instagram zu drehen, haben die
+  //      Seite lahmgelegt (10.10.2026) -- daher diese Regel.
+  //
+  //   2. ZEICHNEN passiert in der Seite, aber nur additiv: wir haengen
+  //      eigene Elemente an die Kacheln und raeumen sie wieder weg. Kein
+  //      Element von Instagram wird entfernt, umgehaengt oder umgestellt.
+
+  async profilNetzBeobachten(seite, name) {
+    const cdp = await this.context.newCDPSession(seite).catch(() => null);
+    if (!cdp) {
+      console.log(`[forschung] ${name}: kein Zugang zum Netzverkehr -- keine Kennzahlen.`);
+      return;
+    }
+    this.profilNetzCdp = cdp;
+    this.profilBeitraege = new Map();
+    this.profilName = name;
+    await cdp.send("Network.enable").catch(() => {});
+
+    const zahl = (...k) => k.find((x) => typeof x === "number") ?? null;
+
+    // Instagram benennt dieselbe Zahl je nach Antwort anders. Hier wird auf
+    // EINE Form gebracht; der Rest muss davon nichts wissen.
+    const auswerten = (e) => {
+      const code = e.code ?? e.shortcode ?? null;
+      if (!code) return null;
+      return {
+        code,
+        likes: zahl(e.like_count, e.edge_liked_by?.count, e.edge_media_preview_like?.count),
+        kommentare: zahl(e.comment_count, e.edge_media_to_comment?.count),
+        aufrufe: zahl(e.play_count, e.ig_play_count, e.video_view_count),
+        reposts: zahl(e.media_repost_count),
+        zeitpunkt: zahl(e.taken_at, e.taken_at_timestamp),
+        dauer: typeof e.video_duration === "number" ? Math.round(e.video_duration) : null,
+        // Versteckte Zahlen bleiben versteckt -- nichts schaetzen.
+        verborgen: e.like_and_view_counts_disabled === true,
+      };
+    };
+
+    const sammeln = (wert, tiefe) => {
+      if (!wert || typeof wert !== "object" || tiefe > 8) return;
+      if (Array.isArray(wert)) {
+        for (const e of wert) {
+          const b = e && typeof e === "object" ? auswerten(e.node ?? e.media ?? e) : null;
+          if (b && (b.likes !== null || b.kommentare !== null || b.aufrufe !== null)) {
+            const alt = this.profilBeitraege.get(b.code);
+            // Spaeter eintreffende, vollstaendigere Angaben gewinnen -- aber
+            // ein vorhandener Wert wird nie durch null ersetzt.
+            this.profilBeitraege.set(
+              b.code,
+              alt ? { ...alt, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== null)) } : b
+            );
+          } else if (e && typeof e === "object") sammeln(e.node ?? e.media ?? e, tiefe + 1);
+        }
+        return;
+      }
+      for (const k of Object.keys(wert)) sammeln(wert[k], tiefe + 1);
+    };
+
+    let zuletzt = 0;
+    const adressen = new Map();
+
+    cdp.on("Network.responseReceived", (e) => {
+      const adresse = e?.response?.url ?? "";
+      if (!/instagram\.com\/(api\/v1|graphql)/.test(adresse)) return;
+      adressen.set(e.requestId, adresse);
+    });
+
+    // WICHTIG: den Inhalt erst holen, wenn die Antwort VOLLSTAENDIG da ist.
+    // Beim blossen Ankuendigen hat Chrome ihn meist noch nicht und meldet
+    // "kein Inhalt zu dieser Kennung" -- am 10.10.2026 kostete genau das
+    // einen ganzen Durchlauf mit null gesammelten Beitraegen.
+    cdp.on("Network.loadingFinished", async (e) => {
+      const adresse = adressen.get(e.requestId);
+      if (!adresse) return;
+      adressen.delete(e.requestId);
+      try {
+        const { body } = await cdp.send("Network.getResponseBody", { requestId: e.requestId });
+        sammeln(JSON.parse(body), 0);
+        const jetzt = this.profilBeitraege.size;
+        if (jetzt > zuletzt) {
+          zuletzt = jetzt;
+          console.log(`[forschung] ${name}: ${jetzt} Beitraege mit Zahlen bekannt.`);
+          void this.profilSchichtFuettern();
+        }
+      } catch {
+        /* Nicht lesbare Antwort -- es kommen genug andere. */
+      }
+    });
+  }
+
+  // Die Schicht in die Seite setzen. Mehrfaches Aufrufen schadet nicht:
+  // sie setzt sich nur einmal und meldet sich danach selbst als vorhanden.
+  async profilSchichtEinsetzen(seite) {
+    if (!seite || seite.isClosed()) return false;
+    return await seite
+      .evaluate((vergroesserung) => {
+        if (window.__rfForschung) {
+          window.__rfForschung.groesse = vergroesserung;
+          return true;
+        }
+
+        const RF = (window.__rfForschung = { daten: new Map(), stand: null });
+
+        const kurz = (n) => {
+          if (n === null || n === undefined) return null;
+          if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
+          if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, "")}K`;
+          return String(n);
+        };
+        const dauerText = (s) => (s == null ? null : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
+        const datumText = (t) => (t ? new Date(t * 1000).toLocaleDateString("de-DE") : null);
+
+        // Engagement = (Likes + Kommentare) / Aufrufe. Ohne Aufrufe gibt es
+        // keine vergleichbare Rate -- dann steht da NICHTS, nicht null
+        // Prozent. Nichts schaetzen.
+        const rate = (b) => {
+          if (!b.aufrufe || b.aufrufe <= 0) return null;
+          if (b.likes === null && b.kommentare === null) return null;
+          return `${((((b.likes ?? 0) + (b.kommentare ?? 0)) / b.aufrufe) * 100).toFixed(1)}%`;
+        };
+
+        const GOLD = "#EAC088";
+        const uhrzeitText = (t) => (t ? new Date(t * 1000).toLocaleTimeString("de-DE") : null);
+
+        // Das Bild der Seite wird bei uns verkleinert gezeigt. Damit die
+        // Schilder lesbar ankommen, werden sie um genau diesen Faktor
+        // groesser gebaut. RF.groesse setzt der Connector.
+        RF.groesse = vergroesserung || 1;
+        const px = (n) => `${(n * RF.groesse).toFixed(1)}px`;
+
+        // Das Schild auf der Kachel: einzelne RUNDE Pillen, untereinander
+        // gestapelt, ALLE GLEICH BREIT, unten links. Oben die
+        // Engagement-Rate farbig abgesetzt, darunter je eine Zeile mit
+        // gefuelltem Zeichen und Zahl (nach Emres Nahaufnahme vom
+        // 10.10.2026, in unseren Farben statt deren Rosa/Violett).
+        const ZEICHEN = {
+          herz: '<path d="M8 14.2S2 10.4 2 6.9A3.1 3.1 0 0 1 8 5.4a3.1 3.1 0 0 1 6 1.5c0 3.5-6 7.3-6 7.3z"/>',
+          sprechblase: '<path d="M3 2.4h10A1.6 1.6 0 0 1 14.6 4v5.6a1.6 1.6 0 0 1-1.6 1.6H6.6l-3.1 2.6v-2.6H3a1.6 1.6 0 0 1-1.6-1.6V4A1.6 1.6 0 0 1 3 2.4z"/>',
+          teilen: '<circle cx="12.4" cy="3.4" r="2"/><circle cx="3.6" cy="8" r="2"/><circle cx="12.4" cy="12.6" r="2"/><path d="M5.4 7 10.6 4.3M5.4 9l5.2 2.7" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+          auge: '<path d="M8 3.4c3.4 0 5.9 2.8 6.6 4.6-.7 1.8-3.2 4.6-6.6 4.6S2.1 9.8 1.4 8C2.1 6.2 4.6 3.4 8 3.4z"/><circle cx="8" cy="8" r="2.1" fill="#111114"/>',
+          uhr: '<path d="M8 1.6a6.4 6.4 0 1 0 0 12.8A6.4 6.4 0 0 0 8 1.6zm.7 6.1 2.4 1.4-.7 1.2-3.1-1.8V4.2h1.4z"/>',
+          kalender: '<path d="M5 1.5v1.2h6V1.5h1.5v1.2H13A1.5 1.5 0 0 1 14.5 4.2v8.3A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.2A1.5 1.5 0 0 1 3 2.7h.5V1.5zM3 6.4v6.1h10V6.4z"/>',
+        };
+
+        function schild(b) {
+          const stapel = document.createElement("div");
+          stapel.style.cssText =
+            `display:flex;flex-direction:column;align-items:stretch;gap:${px(3.5)};` +
+            `font:700 ${px(12)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
+
+          const pille = (kinder, farbig) => {
+            const z = document.createElement("div");
+            z.style.cssText =
+              `display:flex;align-items:center;gap:${px(6)};` +
+              `padding:${px(5)} ${px(10)};border-radius:${px(999)};white-space:nowrap;` +
+              "font-variant-numeric:tabular-nums;" +
+              (farbig
+                ? "background:linear-gradient(180deg,#EAC088,#D39448);color:#231704;font-weight:800;"
+                : "background:rgba(17,17,20,.82);color:#fff;border:1px solid rgba(255,255,255,.07);");
+            z.append(...kinder);
+            return z;
+          };
+
+          const bildEl = (name) => {
+            const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            s.setAttribute("viewBox", "0 0 16 16");
+            s.setAttribute("width", px(12));
+            s.setAttribute("height", px(12));
+            s.setAttribute("fill", "currentColor");
+            s.style.cssText = "flex:none";
+            s.innerHTML = ZEICHEN[name];
+            return s;
+          };
+          const textEl = (wert) => {
+            const s = document.createElement("span");
+            s.textContent = wert;
+            return s;
+          };
+
+          const r = rate(b);
+          if (r) stapel.appendChild(pille([textEl(r)], true));
+
+          const zeilen = [
+            ["herz", kurz(b.likes)],
+            ["sprechblase", kurz(b.kommentare)],
+            ["teilen", kurz(b.reposts)],
+            ["auge", kurz(b.aufrufe)],
+            ["uhr", dauerText(b.dauer)],
+            ["kalender", datumText(b.zeitpunkt)],
+            ["uhr", uhrzeitText(b.zeitpunkt)],
+          ];
+          let hatZahlen = false;
+          for (const [name, wert] of zeilen) {
+            if (!wert) continue;
+            if (name !== "uhr" && name !== "kalender") hatZahlen = true;
+            stapel.appendChild(pille([bildEl(name), textEl(wert)]));
+          }
+
+          // Instagram versteckt die Zahlen dieses Beitrags. Das sagen wir
+          // so -- statt eine Null hinzuschreiben, die es nicht gibt.
+          if (!hatZahlen && b.verborgen) {
+            const h = pille([textEl("Zahlen verborgen")]);
+            h.style.fontWeight = "600";
+            h.style.opacity = ".8";
+            stapel.insertBefore(h, stapel.firstChild);
+          }
+          return stapel;
+        }
+
+        // ---------------------------------------------------------------
+        // Zeichnen -- und die Identitaetsgarantie
+        // ---------------------------------------------------------------
+        //
+        // Jede Kachel wird bei JEDEM Durchgang neu ueber den Code in ihrem
+        // Link bestimmt. Nie ueber die Position, nie ueber etwas Gemerktes.
+        // Zusaetzlich traegt jedes Schild den Code, zu dem es gehoert: passt
+        // er nicht mehr zur Kachel, fliegt das Schild weg und wird neu
+        // gebaut. Damit kann Instagrams Wiederverwenden von Kacheln beim
+        // Scrollen kein fremdes Schild stehenlassen.
+        RF.zeichnen = function () {
+          let kacheln = 0;
+          let beschriftet = 0;
+          for (const link of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
+            const treffer = (link.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
+            const code = treffer ? treffer[1] : null;
+            // "Kachel" heisst: gross genug UND das Bild ist wirklich schon
+            // da. Ohne die zweite Bedingung lag das Schild auf der noch
+            // leeren Kachel -- die Pillen standen frei im Weissen
+            // (10.10.2026 von Emre gemeldet).
+            const gross = link.getBoundingClientRect();
+            const bildDa = (() => {
+              const i = link.querySelector("img");
+              return !!(i && i.complete && i.naturalWidth > 0);
+            })();
+            const istKachel = gross.width >= 120 && gross.height >= 120 && bildDa;
+            let vorhanden = link.querySelector(":scope > .rf-schild");
+
+            if (!istKachel || !code) {
+              if (vorhanden) vorhanden.remove();
+              continue;
+            }
+            kacheln++;
+            const b = RF.daten.get(code);
+
+            // Kein Wert -> kein Schild. Lieber nichts als etwas Falsches.
+            if (!b) {
+              if (vorhanden) vorhanden.remove();
+              continue;
+            }
+            // Gehoert das Schild noch zu diesem Beitrag?
+            if (vorhanden && vorhanden.dataset.code !== code) {
+              vorhanden.remove();
+              vorhanden = null;
+            }
+            const stand = [code, b.likes, b.kommentare, b.aufrufe, b.reposts, b.zeitpunkt, b.dauer].join("|");
+            if (vorhanden && vorhanden.dataset.stand === stand) {
+              beschriftet++;
+              continue;
+            }
+            if (!vorhanden) {
+              vorhanden = document.createElement("div");
+              vorhanden.className = "rf-schild";
+              vorhanden.style.cssText = `position:absolute;left:${px(9)};bottom:${px(9)};z-index:20;pointer-events:none`;
+              if (getComputedStyle(link).position === "static") link.style.position = "relative";
+              link.appendChild(vorhanden);
+            }
+            vorhanden.dataset.code = code;
+            vorhanden.dataset.stand = stand;
+            vorhanden.textContent = "";
+            vorhanden.appendChild(schild(b));
+            beschriftet++;
+          }
+          RF.stand = { kacheln, beschriftet, bekannt: RF.daten.size };
+          try { RF.leisteSetzen(); } catch { /* Darstellung darf nie stoeren */ }
+          try { RF.sortierungAnwenden(); } catch { /* dito */ }
+        };
+
+        // ---------------------------------------------------------------
+        // Wie ist Instagrams Raster aufgebaut?
+        // ---------------------------------------------------------------
+        //
+        // Nur zum Nachsehen. Davon haengt ab, ob sich spaeter sortieren
+        // laesst, ohne Instagrams Layout anzufassen -- und das wird
+        // gemessen, nicht vermutet.
+        RF.spalten = function () {
+          const kacheln = [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')].filter((a) => {
+            const r = a.getBoundingClientRect();
+            return r.width >= 100 && r.height >= 100;
+          });
+          if (!kacheln.length) return 0;
+          const oben = Math.round(kacheln[0].getBoundingClientRect().top);
+          return kacheln.filter((a) => Math.abs(Math.round(a.getBoundingClientRect().top) - oben) < 8).length;
+        };
+
+        // ===============================================================
+        // Sortieren -- ohne Instagrams Aufbau anzufassen
+        // ===============================================================
+        //
+        // Gemessen am 10.10.2026: Instagrams Raster ist KEIN flaches
+        // Raster, sondern ein Stapel von Reihen. Kacheln zwischen Reihen
+        // umzuhaengen waere der naheliegende Weg -- und der gefaehrlichste:
+        // React baut staendig neu auf, und umgehaengte Knoten sind genau
+        // die Stelle, an der Zahlen auf der falschen Kachel landen.
+        //
+        // Deshalb wird NICHTS umgehaengt. Die Reihen bekommen nur
+        // display:contents, der Behaelter wird fuer diese Zeit ein Raster,
+        // jede Kachel bekommt eine Ordnungszahl. Reine Darstellung.
+        //
+        // Ohne Sortierung wird gar nichts angefasst: dann ist es blankes
+        // Instagram.
+        RF.sortierung = { feld: null, richtung: "ab" };
+
+        const FELDER = [
+          { schluessel: null, name: "Aus" },
+          { schluessel: "aufrufe", name: "Aufrufe" },
+          { schluessel: "likes", name: "Likes" },
+          { schluessel: "kommentare", name: "Kommentare" },
+          { schluessel: "eng", name: "Engagement" },
+          { schluessel: "zeitpunkt", name: "Datum" },
+        ];
+
+        const wertVon = (b, feld) => {
+          if (!b) return null;
+          if (feld === "eng") {
+            if (!b.aufrufe || b.aufrufe <= 0) return null;
+            return ((b.likes ?? 0) + (b.kommentare ?? 0)) / b.aufrufe;
+          }
+          return typeof b[feld] === "number" ? b[feld] : null;
+        };
+
+        function behaelterFinden() {
+          const kacheln = [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')].filter((x) => {
+            const r = x.getBoundingClientRect();
+            return r.width >= 120 && r.height >= 120;
+          });
+          if (kacheln.length < 2) return { kacheln: [], behaelter: null };
+          let behaelter = kacheln[0].parentElement;
+          while (behaelter && !kacheln.every((k) => behaelter.contains(k))) behaelter = behaelter.parentElement;
+          return { kacheln, behaelter };
+        }
+
+        RF.sortierungAufheben = function () {
+          const { behaelter } = behaelterFinden();
+          if (behaelter && behaelter.dataset.rfUmgestellt) {
+            behaelter.style.display = behaelter.dataset.rfDisplay || "";
+            behaelter.style.gridTemplateColumns = "";
+            behaelter.style.gap = "";
+            delete behaelter.dataset.rfUmgestellt;
+            delete behaelter.dataset.rfDisplay;
+          }
+          for (const el of document.querySelectorAll("[data-rf-reihe]")) {
+            el.style.display = el.dataset.rfReiheDisplay || "";
+            delete el.dataset.rfReihe;
+            delete el.dataset.rfReiheDisplay;
+          }
+          for (const el of document.querySelectorAll("[data-rf-ordnung]")) {
+            el.style.order = "";
+            delete el.dataset.rfOrdnung;
+          }
+        };
+
+        RF.sortierungAnwenden = function () {
+          const feld = RF.sortierung.feld;
+          if (!feld) {
+            RF.sortierungAufheben();
+            return;
+          }
+          const { kacheln, behaelter } = behaelterFinden();
+          if (!behaelter || kacheln.length < 2) return;
+
+          let abstand = "4px";
+          for (const kind of behaelter.children) {
+            const g = getComputedStyle(kind).columnGap;
+            if (g && g !== "normal") { abstand = g; break; }
+          }
+          if (!behaelter.dataset.rfUmgestellt) {
+            behaelter.dataset.rfDisplay = behaelter.style.display || "";
+            behaelter.dataset.rfUmgestellt = "1";
+          }
+          behaelter.style.display = "grid";
+          behaelter.style.gridTemplateColumns = `repeat(${RF.spalten() || 4}, minmax(0, 1fr))`;
+          behaelter.style.gap = abstand;
+
+          for (const kind of behaelter.children) {
+            if (kind.dataset.rfReihe) continue;
+            kind.dataset.rfReihe = "1";
+            kind.dataset.rfReiheDisplay = kind.style.display || "";
+            kind.style.display = "contents";
+          }
+
+          // Die Zuordnung laeuft ueber den Code im Link -- genau wie bei den
+          // Schildern, nie ueber die Position.
+          const liste = kacheln.map((a) => {
+            const treffer = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
+            const code = treffer ? treffer[1] : null;
+            let traeger = a;
+            while (traeger.parentElement && !traeger.parentElement.dataset.rfReihe) traeger = traeger.parentElement;
+            return { traeger, wert: wertVon(code ? RF.daten.get(code) : null, feld) };
+          });
+          // Ohne Wert ans Ende -- nie raten, nie mit null mitsortieren.
+          const mitWert = liste.filter((e) => e.wert !== null);
+          const ohneWert = liste.filter((e) => e.wert === null);
+          mitWert.sort((x, y) => (RF.sortierung.richtung === "auf" ? x.wert - y.wert : y.wert - x.wert));
+          [...mitWert, ...ohneWert].forEach((e, i) => {
+            e.traeger.dataset.rfOrdnung = "1";
+            e.traeger.style.order = String(i);
+          });
+        };
+
+        // ===============================================================
+        // Die Research-Leiste ueber dem Raster
+        // ===============================================================
+        RF.leisteSetzen = function () {
+          const { behaelter } = behaelterFinden();
+          if (!behaelter || !behaelter.parentElement) return;
+          let leiste = document.getElementById("rf-leiste");
+          if (!leiste) {
+            leiste = document.createElement("div");
+            leiste.id = "rf-leiste";
+            leiste.style.cssText =
+              `display:flex;align-items:center;gap:${px(12)};flex-wrap:wrap;` +
+              `margin:0 0 ${px(12)};padding:${px(10)} ${px(14)};border-radius:${px(14)};` +
+              "background:linear-gradient(180deg,rgba(10,10,12,.96),rgba(6,6,7,.98));" +
+              `border:1px solid rgba(255,255,255,.10);box-shadow:0 ${px(8)} ${px(28)} rgba(0,0,0,.45);` +
+              `font:500 ${px(15)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#fff`;
+
+            const marke = document.createElement("div");
+            marke.textContent = "ReelForge Research";
+            marke.style.cssText = `color:${GOLD};font-weight:700;font-size:${px(15)};letter-spacing:.02em`;
+
+            const knopf = (text) => {
+              const b2 = document.createElement("button");
+              b2.type = "button";
+              b2.textContent = text;
+              b2.style.cssText =
+                `padding:${px(8)} ${px(14)};border-radius:${px(10)};cursor:pointer;` +
+                "background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);" +
+                `color:#fff;font:600 ${px(14)}/1 inherit`;
+              return b2;
+            };
+
+            const feldKnopf = knopf("Sortierung: Aus");
+            const richtungKnopf = knopf("Absteigend");
+            const stand = document.createElement("div");
+            stand.style.cssText = `margin-left:auto;font-size:${px(13)};color:rgba(255,255,255,.55)`;
+
+            feldKnopf.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              const i = FELDER.findIndex((f) => f.schluessel === RF.sortierung.feld);
+              const naechste = FELDER[(i + 1) % FELDER.length];
+              RF.sortierung.feld = naechste.schluessel;
+              feldKnopf.textContent = `Sortierung: ${naechste.name}`;
+              feldKnopf.style.background = naechste.schluessel ? "rgba(234,192,136,.18)" : "rgba(255,255,255,.07)";
+              feldKnopf.style.borderColor = naechste.schluessel ? "rgba(234,192,136,.45)" : "rgba(255,255,255,.13)";
+              RF.sortierungAnwenden();
+            });
+
+            richtungKnopf.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              RF.sortierung.richtung = RF.sortierung.richtung === "ab" ? "auf" : "ab";
+              richtungKnopf.textContent = RF.sortierung.richtung === "ab" ? "Absteigend" : "Aufsteigend";
+              RF.sortierungAnwenden();
+            });
+
+            leiste.append(marke, feldKnopf, richtungKnopf, stand);
+            RF.leisteStand = stand;
+          }
+          if (leiste.nextElementSibling !== behaelter) behaelter.parentElement.insertBefore(leiste, behaelter);
+          if (RF.leisteStand && RF.stand) {
+            RF.leisteStand.textContent = `${RF.stand.beschriftet} von ${RF.stand.kacheln} Kacheln mit Daten`;
+          }
+        };
+
+        RF.aufbau = function () {
+          const kacheln = [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')].filter((a) => {
+            const r = a.getBoundingClientRect();
+            return r.width >= 120 && r.height >= 120;
+          });
+          if (kacheln.length < 2) return { kacheln: kacheln.length };
+          // Gemeinsamer Vorfahr aller Kacheln.
+          let behaelter = kacheln[0].parentElement;
+          while (behaelter && !kacheln.every((k) => behaelter.contains(k))) behaelter = behaelter.parentElement;
+          if (!behaelter) return { kacheln: kacheln.length, behaelter: "keiner" };
+          // Auf welches direkte Kind des Behaelters faellt jede Kachel?
+          const kinder = kacheln.map((k) => {
+            let n = k;
+            while (n.parentElement && n.parentElement !== behaelter) n = n.parentElement;
+            return n;
+          });
+          const verschieden = new Set(kinder).size;
+          const s = getComputedStyle(behaelter);
+          return {
+            kacheln: kacheln.length,
+            behaelter: behaelter.tagName,
+            kinderDesBehaelters: behaelter.children.length,
+            kachelnAufVerschiedeneKinder: verschieden,
+            flach: verschieden === kacheln.length,
+            anzeige: s.display,
+            spalten: s.gridTemplateColumns ? s.gridTemplateColumns.split(" ").length : null,
+          };
+        };
+
+        // Zeichnen, wenn sich etwas tut -- plus ruhiger Takt, falls
+        // Instagram beim Neuzeichnen ein Schild entfernt.
+        let gleich = null;
+        // ===============================================================
+        // Wann wird gezeichnet -- und warum das die heikelste Stelle ist
+        // ===============================================================
+        //
+        // Hier stand eine Schleife, die sich SELBST angetrieben hat:
+        // "aendert sich irgendwas auf der Seite, zeichne neu" -- und das
+        // Zeichnen aendert die Seite. Also zeichnen, Beobachter schlaegt
+        // an, 120 ms spaeter wieder zeichnen, endlos, auch wenn niemand
+        // etwas tut. Jeder Durchgang misst jede Kachel aus und zwingt den
+        // Browser zur kompletten Layout-Rechnung.
+        //
+        // Das erklaert alles, was Emre am 10.10.2026 gemeldet hat: Bilder
+        // luden nicht (Instagram kam nie zur Ruhe), Schilder waren halb
+        // gezeichnet (die Aufnahme traf die Seite mitten im Neuaufbau),
+        // Zahlen standen doppelt uebereinander, Scrollen ruckelte, und
+        // selbst die Kommentare im Research kamen ins Stocken.
+        //
+        // Deshalb: waehrend wir zeichnen, hoert der Beobachter NICHT zu.
+        // Er wird erst im naechsten Bildrahmen wieder angeschaltet -- dann
+        // sind unsere eigenen Aenderungen durch und koennen uns nicht mehr
+        // selbst antreiben. Nur echte Aenderungen von Instagram loesen
+        // noch etwas aus.
+        let ichZeichne = false;
+        const beobachter = new MutationObserver(() => anstossen());
+        const zuhoeren = () => beobachter.observe(document.body, { childList: true, subtree: true });
+
+        function zeichnenGeschuetzt() {
+          if (ichZeichne) return;
+          ichZeichne = true;
+          beobachter.disconnect();
+          try {
+            RF.zeichnen();
+          } catch {
+            /* Darstellung darf die Seite nie aufhalten */
+          }
+          requestAnimationFrame(() => {
+            zuhoeren();
+            ichZeichne = false;
+          });
+        }
+
+        function anstossen() {
+          if (ichZeichne) return;
+          clearTimeout(gleich);
+          gleich = setTimeout(zeichnenGeschuetzt, 300);
+        }
+
+        RF.anstossen = anstossen;
+        // Auch der Connector zeichnet nur ueber den geschuetzten Weg --
+        // sonst stoesst sein Fuettern die Schleife von der anderen Seite an.
+        RF.jetztZeichnen = zeichnenGeschuetzt;
+        zuhoeren();
+        // Ruhiger Grundtakt, falls Instagram beim Neuaufbau ein Schild
+        // entfernt hat, ohne dass der Beobachter es gemeldet hat.
+        setInterval(zeichnenGeschuetzt, 1500);
+        return true;
+      }, this.profilVergroesserung ?? 1)
+      .catch((err) => {
+        console.log(`[forschung] Schicht konnte nicht gesetzt werden: ${err?.message}`);
+        return false;
+      });
+  }
+
+  // Die gesammelten Zahlen in die Seite geben und zeichnen lassen.
+  async profilSchichtFuettern() {
+    const seite = this.profilSeite;
+    if (!PROFIL_FORSCHUNG || !seite || seite.isClosed() || !this.profilBeitraege?.size) return;
+    const daten = [...this.profilBeitraege.values()];
+    const stand = await seite
+      .evaluate((liste) => {
+        const RF = window.__rfForschung;
+        if (!RF) return null;
+        for (const b of liste) RF.daten.set(b.code, b);
+        (RF.jetztZeichnen ?? RF.zeichnen)();
+        return RF.stand;
+      }, daten)
+      .catch(() => null);
+    if (stand) this.profilSchichtStand = stand;
   }
 
   async profilBedienen(art, x, y) {
@@ -3297,6 +3928,14 @@ class Session {
       return { ok: true, uebersprungen: true };
     }
     await this.profilStromStoppen();
+    // Mitlesen beenden und die gesammelten Zahlen vergessen -- sie gehoeren
+    // zu genau diesem Profil.
+    if (this.profilNetzCdp) {
+      await this.profilNetzCdp.detach().catch(() => {});
+      this.profilNetzCdp = null;
+    }
+    this.profilBeitraege = null;
+    this.profilSchichtStand = null;
     const seite = this.profilSeite;
     this.profilSeite = null;
     this.profilKennung = null;
@@ -4024,7 +4663,7 @@ const server = http.createServer(async (req, res) => {
     const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-strom|profil-ton|profil-ton-antwort|profil-bedienen|profil-schliessen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung, breite, hoehe, x, y } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung, breite, hoehe, anzeige, x, y } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
 
@@ -4097,7 +4736,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, result);
       }
       if (action === "profil-oeffnen") {
-        const erg = await session.profilOeffnen(wert, breite, hoehe);
+        const erg = await session.profilOeffnen(wert, breite, hoehe, anzeige);
         // Auch im Fehlerfall die Kennung mitgeben: nur damit kann die App
         // eine halb geoeffnete Seite drueben wieder schliessen lassen.
         return erg.ok ? json(res, 200, erg) : json(res, 502, { error: erg.fehler, lauf: erg.lauf ?? null });

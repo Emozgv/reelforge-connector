@@ -32,7 +32,7 @@ export function ProfilBuehne({
 }: {
   username: string;
   onSchliessen: () => void;
-  oeffnen: (username: string, breite: number, hoehe: number) => Promise<{ ok: boolean; bild?: string; lauf?: string; error?: string }>;
+  oeffnen: (username: string, breite: number, hoehe: number, anzeige?: number) => Promise<{ ok: boolean; bild?: string; lauf?: string; error?: string }>;
   strom: (onBild: (bild: string) => void, signal: AbortSignal) => Promise<void>;
   ton: () => Promise<{ ok: boolean; angebot?: string; error?: string }>;
   tonAntwort: (sdp: string) => Promise<void>;
@@ -124,7 +124,9 @@ export function ProfilBuehne({
     groesseRef.current = { w, h };
     setFehler(null);
     const abbruch = new AbortController();
-    void oeffnen(username, w, h).then((a) => {
+    // kastenB ist die Breite, in der das Bild bei uns WIRKLICH zu sehen
+    // ist -- der Connector braucht beide Zahlen fuer die Schildgroesse.
+    void oeffnen(username, w, h, kastenB).then((a) => {
       kennungRef.current = a.lauf ?? null;
       if (weg) return;
       if (!a.ok) {
