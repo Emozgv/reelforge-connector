@@ -14,7 +14,15 @@ const WAKE_TIMEOUT_MS = 15_000;
 // Purely a visible "let it start properly" pause after Connector just woke
 // up from a cold launch -- not an extra wait added on top of WAKE_TIMEOUT_MS
 // (which only bounds how long we wait for it to become reachable at all).
-const WAKE_STARTUP_DELAY_SEC = 10;
+// Null, und das ist nachgemessen (12.10.2026). Hier standen zehn Sekunden
+// sichtbares Warten nach einem Kaltstart -- und zwar NACHDEM die
+// Gesundheitspruefung schon bestaetigt hatte, dass der Connector bereit
+// ist. Eine Vorsichtsmassnahme ohne gemessenen Grund; der Sitzungsstart
+// bringt seine eigene Wartezeit ohnehin mit und wartet, bis alles steht.
+// Im Versuch startete Research ohne die zehn Sekunden sauber durch.
+// Zeigt sich doch einmal ein Haken, gehoert hierher eine echte
+// Bereitschaftspruefung -- nicht wieder eine feste Zahl.
+const WAKE_STARTUP_DELAY_SEC = 0;
 // Real, logged session-server timings show Connector's own cold-start
 // portion (chromium launch + navigation + first-reel polling) alone
 // legitimately taking up to ~27.6s in observed practice, with several
@@ -929,24 +937,29 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         return;
       }
 
-      // Connector is reachable now and not updating, but starting a real
-      // Research session is a separate, explicit action from waking
-      // Connector -- land back on the same ready screen startSession's
-      // "idle" status already shows (with its own "Start research" button)
-      // instead of chaining straight into the settle-time countdown and a
-      // session start. justWokeRef makes the *next* startSession() call
-      // show that countdown once, since this Connector process really did
-      // just cold-launch.
+      // Der Connector ist wach und hat kein Update -- also weiter, ohne
+      // einen zweiten Klick.
       //
-      // Nothing is held at this point -- no session, no lock -- so a real
-      // tab close can go back to being handled normally.
-      justWokeRef.current = true;
-      setStatus("idle");
+      // Hier wurde bisher auf dem Bereitschaftsschirm gehalten, und zwar
+      // mit genau einer Begruendung: man wollte nicht ungefragt in die
+      // zehn Sekunden Wartezeit hineinlaufen, die danach kamen. Die sind
+      // weg (siehe WAKE_STARTUP_DELAY_SEC) -- damit faellt auch der Grund
+      // fuer den zweiten Klick weg.
+      //
+      // Der Weg mit Update macht es ohnehin schon so: dort steht "no second
+      // 'Start research' click needed". Es waren also zwei Wege mit zwei
+      // Verhalten; jetzt sind es zwei Wege mit demselben.
+      //
+      // beginSession direkt, nicht startSession: dessen Sperre haelt diese
+      // Funktion gerade selbst, er wuerde sofort wieder aussteigen. Genau
+      // deshalb geht der Update-Weg daneben auch ueber beginSession.
+      justWokeRef.current = false;
+      await beginSession(pending.accountId, pending.platform);
     } finally {
       wakingRef.current = false;
       startInFlightRef.current = false;
     }
-  }, [waitForUpdateToFinish]);
+  }, [waitForUpdateToFinish, beginSession]);
 
   // The already-running-Connector counterpart to retryWithWake: fired from
   // the exact same "Start research" click startSession() already handles,
