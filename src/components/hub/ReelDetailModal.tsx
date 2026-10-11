@@ -224,7 +224,7 @@ export function ReelDetailModal({
           <div className="w-[360px] shrink-0 h-[min(85vh,720px)] overflow-y-auto flex flex-col">
             <div className="px-5 pt-5 pb-4 border-b border-white/[0.07]">
               <div className="flex items-center gap-2">
-                <span className="text-[14px] font-serif font-medium text-neutral-50 truncate">
+                <span className="text-[14px] font-semibold tracking-[-0.1px] text-neutral-50 truncate">
                   @{video.username}
                 </span>
                 <a

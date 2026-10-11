@@ -237,7 +237,7 @@ export function CollectionWorkspace({
                   onSwitch={onSwitchCollection}
                   onCreateNext={onStartNext}
                 >
-                  <h1 className="text-[19px] font-serif font-medium text-neutral-50 cursor-default">
+                  <h1 className="text-[19px] font-semibold tracking-[-0.1px] text-neutral-50 cursor-default">
                     {collection.name}
                     {family.length > 1 && (
                       <span className="ml-2 text-[11px] font-sans font-normal text-neutral-600">
@@ -247,7 +247,7 @@ export function CollectionWorkspace({
                   </h1>
                 </CollectionVersionMenu>
               ) : (
-                <h1 className="text-[19px] font-serif font-medium text-neutral-50">
+                <h1 className="text-[19px] font-semibold tracking-[-0.1px] text-neutral-50">
                   {collection.name}
                   {family.length > 1 && (
                     <span className="ml-2 text-[11px] font-sans font-normal text-neutral-600">

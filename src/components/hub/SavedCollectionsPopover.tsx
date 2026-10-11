@@ -60,7 +60,7 @@ export function SavedCollectionsPopover({
                   <img src={creator.profileImage} alt={creator.name} className="w-full h-full object-cover" />
                 )}
               </div>
-              <h2 className="text-[15px] font-serif font-medium text-neutral-50 truncate">
+              <h2 className="text-[15px] font-semibold tracking-[-0.1px] text-[#f5f5f5] truncate">
                 {creator.name}'s collections
               </h2>
             </div>

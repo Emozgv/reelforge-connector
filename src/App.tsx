@@ -54,6 +54,37 @@ function App() {
   // (e.g. opened from Library -> Back goes to Library, not the flat list).
   const [collectionOrigin, setCollectionOrigin] = useState<Page>("collections");
 
+  // Dasselbe fuer Creator: von welcher Seite aus ein Creator geoeffnet
+  // wurde. Ohne das landete man ueber "View creator" aus den Collections
+  // heraus beim Zurueckgehen in der Creator-Liste statt dort, wo man
+  // hergekommen war -- der Weg zurueck fuehrte woanders hin als der Weg
+  // hin.
+  const [creatorOrigin, setCreatorOrigin] = useState<Page>("creators");
+
+  // Zwei Listen, mit Absicht: `collections` laesst aus der Uebersicht
+  // genommene Collections weg, `alleCollections` enthaelt sie. Production
+  // und Library bekommen die vollstaendige -- eine entfernte Collection
+  // darf dort nicht verschwinden. Loeschen heisst "nicht mehr in den
+  // Collections", nicht "aus der Vergangenheit entfernt".
+
+  function navigateToCreator(creatorId: string) {
+    setCreatorOrigin(page);
+    setOpenCreatorId(creatorId);
+    setPage("creators");
+  }
+
+  // Das eine "Creator-Profil verlassen". Kam man von woanders, geht es
+  // genau dorthin zurueck; innerhalb der Creator-Seite bleibt es die
+  // Liste, wie bisher.
+  function closeCreatorProfile() {
+    setOpenCreatorId(null);
+    if (creatorOrigin !== "creators") {
+      const origin = creatorOrigin;
+      setCreatorOrigin("creators");
+      setPage(origin);
+    }
+  }
+
   function navigateToCollection(collectionId: string) {
     setCollectionOrigin(page);
     setOpenCollectionId(collectionId);
@@ -252,10 +283,7 @@ function App() {
                 onCloseCollection={closeCollectionWorkspace}
                 backLabel={PAGE_LABELS[collectionOrigin]}
                 isSydOwner={isSydOwner}
-                onOpenCreator={(creatorId) => {
-                  setOpenCreatorId(creatorId);
-                  setPage("creators");
-                }}
+                onOpenCreator={navigateToCreator}
               />
             )}
             {page === "creators" && (
@@ -267,19 +295,21 @@ function App() {
                 onOpenBilling={() => setPage("billing")}
                 openCreatorId={openCreatorId}
                 onOpenCreatorIdChange={setOpenCreatorId}
+                onCloseCreatorProfile={closeCreatorProfile}
+                creatorBackLabel={creatorOrigin === "creators" ? "All creators" : PAGE_LABELS[creatorOrigin]}
               />
             )}
             {page === "production" && (
               <ProductionPage
                 creators={creatorsStore.creators}
-                collections={collectionsStore.collections}
+                collections={collectionsStore.alleCollections}
                 onOpenCollection={navigateToCollection}
               />
             )}
             {page === "library" && (
               <LibraryPage
                 creators={creatorsStore.creators}
-                collections={collectionsStore.collections}
+                collections={collectionsStore.alleCollections}
                 onRequestRegeneration={collectionsStore.requestRegeneration}
                 onToggleFavorite={collectionsStore.toggleFavoriteSubmission}
                 onApprove={collectionsStore.approveSubmission}

@@ -366,6 +366,7 @@ export function CreatorProfilePage({
   plan,
   onOpenBilling,
   onBack,
+  backLabel,
   onOpenCollection,
   onCreateCollection,
 }: {
@@ -375,6 +376,10 @@ export function CreatorProfilePage({
   plan: CreatorPackage | undefined;
   onOpenBilling: () => void;
   onBack: () => void;
+  // Wohin der Weg zurueck fuehrt, in Worten. Kam man aus den Collections,
+  // steht hier "All collections" statt "All creators" -- sonst verspricht
+  // der Knopf etwas anderes, als er tut.
+  backLabel?: string;
   onOpenCollection: (collectionId: string) => void;
   onCreateCollection: (name: string, creatorId: string, note: string) => void;
 }) {
@@ -508,7 +513,7 @@ export function CreatorProfilePage({
             className="flex items-center gap-[8px] text-[12px] text-neutral-400 hover:text-neutral-100 transition-colors duration-150"
           >
             <ArrowLeft size={16} />
-            All creators
+            {backLabel ?? "All creators"}
           </button>
         </div>
 

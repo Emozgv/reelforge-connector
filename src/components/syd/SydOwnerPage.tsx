@@ -58,7 +58,7 @@ export function SydOwnerPage({ isOwner }: { isOwner: boolean }) {
 
   return (
     <div className="p-6 xl:p-8 max-w-3xl mx-auto">
-      <h1 className="text-[18px] font-serif font-medium text-neutral-50 mb-1">Sydney Studio</h1>
+      <h1 className="text-[18px] font-semibold tracking-[-0.1px] text-neutral-50 mb-1">Sydney Studio</h1>
       <p className="text-[12.5px] text-neutral-500 mb-6">
         {isOwner
           ? "Private production requests — visible only to you. Not part of normal ReelForge activity."

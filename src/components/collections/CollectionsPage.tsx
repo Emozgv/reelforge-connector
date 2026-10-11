@@ -476,7 +476,13 @@ export function CollectionsPage({
         onClose={() => setCreateOpen(false)}
         onCreate={(name, creatorId, note) => {
           void collectionsStore.createCollection(name, creatorId, note);
-          setActiveCreatorId(creatorId);
+          // Nur umschalten, wenn der aktuelle Filter die neue Collection
+          // sonst verstecken wuerde. Auf "All" ist sie ohnehin zu sehen --
+          // dort war der Sprung in den Reiter des Creators nur laestig und
+          // riss einen aus der Uebersicht, die man gerade offen hatte.
+          setActiveCreatorId((bisher) =>
+            bisher === "all" || bisher === creatorId ? bisher : creatorId
+          );
         }}
       />
     </div>

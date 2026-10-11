@@ -30,7 +30,7 @@ export function ProfileHeader({ profile }: { profile: ReelProfileInfo }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-[14.5px] font-serif font-medium text-neutral-50 truncate">
+          <span className="text-[14.5px] font-semibold tracking-[-0.1px] text-neutral-50 truncate">
             {profile.displayName || profile.username}
           </span>
           {profile.verified && <BadgeCheck size={14} className="shrink-0 text-[#D39448]" />}

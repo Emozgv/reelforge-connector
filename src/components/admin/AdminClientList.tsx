@@ -37,7 +37,7 @@ export function AdminClientList({
           <ShieldCheck size={11} />
           ReelForge Admin
         </span>
-        <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">All clients</h1>
+        <h1 className="mt-1 text-[20px] font-semibold tracking-[-0.1px] text-neutral-50">All clients</h1>
         <p className="mt-1 text-[12.5px] text-neutral-500 max-w-lg">
           Every agency workspace on ReelForge — search, open one, and manage its plan, credits, and status.
         </p>

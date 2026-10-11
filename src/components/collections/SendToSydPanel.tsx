@@ -61,7 +61,7 @@ export function SendToSydPanel({
           ) : (
             <>
               <div className="flex items-center justify-between px-5 h-14 border-b border-white/[0.07]">
-                <h2 className="text-[15px] font-serif font-medium text-neutral-50">Send to SYD</h2>
+                <h2 className="text-[15px] font-semibold tracking-[-0.1px] text-neutral-50">Send to SYD</h2>
                 <button
                   onClick={onClose}
                   className="w-7 h-7 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.06] transition-colors"

@@ -102,13 +102,13 @@ export function SavePanel({
                   {creators.length > 1 ? (
                     <button
                       onClick={() => setAssigneeMenuOpen((v) => !v)}
-                      className="flex items-center gap-1.5 text-[15px] font-serif font-medium text-neutral-50 hover:text-neutral-200 transition-colors"
+                      className="flex items-center gap-1.5 text-[15px] font-semibold tracking-[-0.1px] text-neutral-50 hover:text-neutral-200 transition-colors"
                     >
                       Save for <span className="text-[#D39448]">{creatorName}</span>
                       <ChevronDown size={13} className="text-neutral-500" />
                     </button>
                   ) : (
-                    <h2 className="text-[15px] font-serif font-medium text-neutral-50">
+                    <h2 className="text-[15px] font-semibold tracking-[-0.1px] text-neutral-50">
                       Save for <span className="text-[#D39448]">{creatorName}</span>
                     </h2>
                   )}

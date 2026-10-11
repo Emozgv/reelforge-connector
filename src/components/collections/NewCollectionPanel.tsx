@@ -43,7 +43,7 @@ export function NewCollectionPanel({
       <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
         <div className="pointer-events-auto w-full max-w-[380px] rounded-2xl bg-[#141416] border border-white/[0.09] shadow-2xl animate-rise-in overflow-hidden">
           <div className="flex items-center justify-between px-5 h-14 border-b border-white/[0.07]">
-            <h2 className="text-[15px] font-serif font-medium text-neutral-50">New Collection</h2>
+            <h2 className="text-[15px] font-semibold tracking-[-0.1px] text-neutral-50">New Collection</h2>
             <button
               onClick={onClose}
               className="w-7 h-7 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.06] transition-colors"
@@ -81,7 +81,17 @@ export function NewCollectionPanel({
                         : "border-white/[0.07] text-neutral-400 hover:text-neutral-200",
                     ].join(" ")}
                   >
-                    <span className="w-4 h-4 rounded-full shrink-0" style={{ background: c.avatarColor }} />
+                    {/* Dasselbe Bild wie in der Filterleiste: wer ein
+                        Profilbild hat, wird daran erkannt und nicht an einem
+                        Farbpunkt. Nur wer keines hat, behaelt die Farbe. */}
+                    <span
+                      className="w-4 h-4 rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
+                      style={c.profileImage ? undefined : { background: c.avatarColor }}
+                    >
+                      {c.profileImage && (
+                        <img src={c.profileImage} alt={c.name} className="w-full h-full object-cover" />
+                      )}
+                    </span>
                     {c.name}
                   </button>
                 ))}

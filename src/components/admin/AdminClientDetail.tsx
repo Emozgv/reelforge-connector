@@ -114,7 +114,7 @@ export function AdminClientDetail({ workspaceId, onBack }: { workspaceId: string
         </button>
 
         <div className="mt-3 flex items-center gap-3 flex-wrap">
-          <h1 className="text-[20px] font-serif font-medium text-neutral-50">{workspace.name}</h1>
+          <h1 className="text-[20px] font-semibold tracking-[-0.1px] text-neutral-50">{workspace.name}</h1>
           <span className={["text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] capitalize", STATUS_STYLE[workspace.status]].join(" ")}>
             {workspace.status}
           </span>

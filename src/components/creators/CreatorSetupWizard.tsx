@@ -101,7 +101,7 @@ export function CreatorSetupWizard({
                   <ArrowLeft size={13} />
                 </button>
               )}
-              <h2 className="text-[15px] font-serif font-medium text-neutral-50">New Creator</h2>
+              <h2 className="text-[15px] font-semibold tracking-[-0.1px] text-neutral-50">New Creator</h2>
             </div>
             <button
               onClick={onClose}

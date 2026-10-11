@@ -440,7 +440,7 @@ export function FinishedBatchView({
             <div className="flex items-center justify-between gap-6 flex-wrap pb-3 border-b border-white/[0.06]">
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-[19px] font-serif font-medium text-neutral-50">{collection.name}</h1>
+                  <h1 className="text-[19px] font-semibold tracking-[-0.1px] text-neutral-50">{collection.name}</h1>
                   <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-[2px] rounded-[4px] text-neutral-500 bg-white/[0.05]">
                     <Lock size={9} />
                     Finished · read-only

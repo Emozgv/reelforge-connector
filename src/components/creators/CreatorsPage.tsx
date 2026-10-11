@@ -155,6 +155,8 @@ export function CreatorsPage({
   onOpenBilling,
   openCreatorId,
   onOpenCreatorIdChange,
+  onCloseCreatorProfile,
+  creatorBackLabel,
 }: {
   creatorsStore: CreatorsStore;
   collectionsStore: CollectionsStore;
@@ -163,6 +165,10 @@ export function CreatorsPage({
   onOpenBilling: () => void;
   openCreatorId: string | null;
   onOpenCreatorIdChange: (id: string | null) => void;
+  // Das eine "Profil verlassen" -- es kennt die Seite, von der aus der
+  // Creator geoeffnet wurde. Fehlt es, bleibt es wie bisher die Liste.
+  onCloseCreatorProfile?: () => void;
+  creatorBackLabel?: string;
 }) {
   const activeCreatorId = openCreatorId;
   const setActiveCreatorId = onOpenCreatorIdChange;
@@ -246,7 +252,8 @@ export function CreatorsPage({
         creatorsStore={creatorsStore}
         plan={creatorPackages.get(activeCreator.id)}
         onOpenBilling={onOpenBilling}
-        onBack={() => setActiveCreatorId(null)}
+        onBack={() => (onCloseCreatorProfile ? onCloseCreatorProfile() : setActiveCreatorId(null))}
+        backLabel={creatorBackLabel}
         onOpenCollection={onOpenCollection}
         onCreateCollection={collectionsStore.createCollection}
       />

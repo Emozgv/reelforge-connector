@@ -124,7 +124,7 @@ function ChangePlanView({
           Back to Billing
         </button>
 
-        <h1 className="mt-3 text-[19px] font-serif font-medium text-neutral-50">Change plan for {creator.name}</h1>
+        <h1 className="mt-3 text-[19px] font-semibold tracking-[-0.1px] text-neutral-50">Change plan for {creator.name}</h1>
         <p className="mt-1 text-[12.5px] text-neutral-500">
           Currently on <span className="text-neutral-300">{summary.planLabel}</span>
           {summary.priceMonthly != null && <> · {money(summary.priceMonthly)}/mo</>} · {summary.reelsUsed} / {summary.reelsTotal} reels used this
@@ -234,7 +234,7 @@ function CancelSubscriptionView({
 
         <div className="mt-3 flex items-center gap-2">
           <ShieldAlert size={16} className="text-rose-400" />
-          <h1 className="text-[19px] font-serif font-medium text-neutral-50">Cancel subscription</h1>
+          <h1 className="text-[19px] font-semibold tracking-[-0.1px] text-neutral-50">Cancel subscription</h1>
         </div>
 
         <div className="mt-5 rounded-xl surface-panel p-4">

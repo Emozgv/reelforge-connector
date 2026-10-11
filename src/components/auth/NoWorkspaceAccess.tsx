@@ -42,7 +42,7 @@ export function NoWorkspaceAccess({
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-[#020508] px-4">
       <div className="w-full max-w-[380px] rounded-2xl surface-panel p-6 text-center">
-        <h1 className="text-[16px] font-serif font-medium text-neutral-50">{heading}</h1>
+        <h1 className="text-[16px] font-semibold tracking-[-0.1px] text-neutral-50">{heading}</h1>
         <p className="mt-2 text-[12.5px] text-neutral-400 leading-relaxed">
           {body}
           {email && (
