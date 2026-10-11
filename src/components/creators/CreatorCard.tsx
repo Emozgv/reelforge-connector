@@ -51,12 +51,6 @@ export function CreatorCard({
   onOpen: () => void;
 }) {
   const zustand = ZUSTAND[einrichtungsZustand(creator)];
-  const initialen = creator.name
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
   // Im Entwurf steht links ein Hochformat. Dafuer gibt es im Bestand die
   // Referenzfotos des Creators; fehlen sie, bleibt die Flaeche in seiner
   // Farbe statt ein fremdes Bild zu zeigen.
@@ -83,16 +77,6 @@ export function CreatorCard({
 
       <span className="flex-1 min-w-0 flex flex-col pl-[22px] pr-7 pt-[17px]">
         <span className="flex items-center gap-2.5 min-w-0">
-          <span
-            className="w-[44px] h-[44px] rounded-full shrink-0 flex items-center justify-center text-[13px] font-medium text-[#020508] overflow-hidden"
-            style={creator.profileImage ? undefined : { background: creator.avatarColor }}
-          >
-            {creator.profileImage ? (
-              <img src={creator.profileImage} alt={creator.name} className="w-full h-full object-cover" />
-            ) : (
-              initialen
-            )}
-          </span>
           <span className="min-w-0">
             <span className="block font-semibold text-[18px] leading-[23px] tracking-[-0.2px] text-[#f5f5f5] truncate">
               {creator.name}
