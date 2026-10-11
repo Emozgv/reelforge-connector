@@ -328,7 +328,14 @@ export function CollectionWorkspace({
             onAssignToAnother={onAssignConceptToAnother}
           />
 
-          <div className="sticky top-0 space-y-3">
+          {/* Die Spalte bleibt stehen und scrollt in sich selbst. Ohne die
+              Hoehenbegrenzung wuchs sie mit jeder Uebergabe weiter nach
+              unten und zog die ganze Seite in die Laenge -- bei einer
+              Collection mit zwoelf Submissions stand unter dem letzten Reel
+              nur noch Verlauf. Das Minus beim Rand gleicht die Luecke fuer
+              den Rollbalken wieder aus, damit die Spalte so breit bleibt
+              wie vorher. */}
+          <div className="sticky top-0 max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-contain pr-1 -mr-1 space-y-3">
             <div className="rounded-lg surface-panel p-3.5">
               <span className="text-[10.5px] tracking-wide uppercase text-neutral-500">
                 Direction &amp; notes

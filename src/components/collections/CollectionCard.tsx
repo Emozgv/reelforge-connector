@@ -49,7 +49,9 @@ export function CollectionCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [renaming, setRenaming] = useState(false);
-  const [thumbFailed, setThumbFailed] = useState(false);
+  // Je Feld eigenes Scheitern merken: faellt ein Bild aus, soll nur dieses
+  // eine auf die Farbflaeche zurueckfallen, nicht die ganze Kachel.
+  const [thumbFailed, setThumbFailed] = useState<Record<number, boolean>>({});
   const [draftName, setDraftName] = useState(current.name);
   const creator = creators.find((c) => c.id === current.creatorId);
 
@@ -57,8 +59,26 @@ export function CollectionCard({
   const used = current.concepts.filter((c) => c.status === "Used").length;
   const available = total - used;
   const status = effectiveCollectionStatus(current);
-  // Figma shows one tall cover per card (node 3368:71), not CollectionRow's
-  // 2x2 mosaic — the newest concept is the cover.
+  // Vier Reels statt einem: die Kachel zeigt jetzt, was in der Collection
+  // steckt, statt nur das erste Konzept. Dasselbe Vierfeld, das die
+  // Listenansicht (CollectionRow) schon benutzt -- eine Collection soll in
+  // beiden Ansichten gleich aussehen.
+  //
+  // Kein leeres Feld, egal wie viele drin sind. Ein Vierfeld mit drei
+  // Bildern sieht nicht nach drei Reels aus, sondern nach einem fehlenden
+  // vierten -- deshalb bekommt jede Anzahl ihre eigene, vollstaendig
+  // gefuellte Aufteilung:
+  //
+  //     1   eine ganze Flaeche
+  //     2   zwei Baender uebereinander
+  //     3   eines hoch links, zwei gestapelt rechts
+  //     4   das Vierfeld
+  const vorschau = current.concepts.slice(0, 4);
+  const anzahl = vorschau.length;
+  // Welches Feld wo liegt. Nur bei dreien weicht es vom gleichmaessigen
+  // Raster ab -- das erste nimmt die ganze linke Haelfte ein.
+  const platz = (i: number): React.CSSProperties =>
+    anzahl === 3 && i === 0 ? { gridRow: "1 / 3" } : {};
   const cover = current.concepts[0]?.video;
   const suggestedName = nextCollectionName(current.name, family.map((f) => f.name));
 
@@ -106,21 +126,40 @@ export function CollectionCard({
       style={{ background: KARTE_FUELLUNG, boxShadow: GOLD_RING_SOFT }}
       className="group relative flex h-[104px] items-stretch p-2.5 rounded-xl border border-white/[0.07] hover:border-[#D39448]/35 hover:bg-[#161613] transition-colors duration-150 cursor-pointer"
     >
-      <div className="w-[54px] shrink-0 mr-3 rounded-[6px] overflow-hidden bg-black/30">
-        {cover?.thumbnailUrl && !thumbFailed ? (
-          <img
-            src={cover.thumbnailUrl}
-            alt=""
-            loading="lazy"
-            onError={() => setThumbFailed(true)}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div
-            className="w-full h-full"
-            style={{ background: cover?.thumbGradient ?? DEFAULT_THUMB_GRADIENT }}
-          />
-        )}
+      <div
+        // Die Fuge ist 2 px, nicht 1,5 -- und das ist gerechnet, nicht gegriffen.
+        // Die Kachel ist 54 breit und 84 hoch (104 minus zweimal 10
+        // Innenabstand). Mit 1,5 ergaben die Haelften 26,25 und 41,25: der
+        // Browser rundet das, eine Haelfte wird einen Pixel groesser, und das
+        // Kreuz zwischen den Bildern sitzt sichtbar ausserhalb der Mitte.
+        // Mit 2 geht beides glatt auf -- 26+2+26=54 und 41+2+41=84 --, alle
+        // vier Bilder sind exakt gleich gross.
+        className="w-[54px] shrink-0 mr-3 rounded-[6px] overflow-hidden bg-black/30 grid gap-[2px]"
+        style={{
+          gridTemplateColumns: anzahl >= 3 ? "1fr 1fr" : "1fr",
+          gridTemplateRows: anzahl >= 2 ? "1fr 1fr" : "1fr",
+        }}
+      >
+        {Array.from({ length: Math.max(1, anzahl) }).map((_, i) => {
+          const v = vorschau[i]?.video;
+          return v?.thumbnailUrl && !thumbFailed[i] ? (
+            <img
+              key={i}
+              src={v.thumbnailUrl}
+              alt=""
+              loading="lazy"
+              onError={() => setThumbFailed((bisher) => ({ ...bisher, [i]: true }))}
+              style={platz(i)}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div
+              key={i}
+              className="w-full h-full"
+              style={{ ...platz(i), background: v?.thumbGradient ?? cover?.thumbGradient ?? DEFAULT_THUMB_GRADIENT }}
+            />
+          );
+        })}
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col">
