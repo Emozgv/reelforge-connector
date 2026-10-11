@@ -3,6 +3,8 @@ import { avatarColorForId } from "./avatarColor";
 
 // Shape of a row from client_os.creators (snake_case, as returned by PostgREST).
 export interface CreatorRow {
+  sort_order?: number | null;
+  collections_sort_order?: number | null;
   id: string;
   workspace_id: string;
   name: string;
@@ -34,6 +36,8 @@ export function creatorFromRow(row: CreatorRow): Creator {
   return {
     id: row.id,
     name: row.name,
+    sortOrder: row.sort_order ?? undefined,
+    collectionsSortOrder: row.collections_sort_order ?? undefined,
     handle: row.handle ?? "",
     avatarColor: avatarColorForId(row.id),
     profileImage: row.profile_image_url ?? undefined,

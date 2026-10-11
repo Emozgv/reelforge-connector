@@ -52,6 +52,9 @@ export function useCreatorsStore(workspaceId: string | undefined) {
         .from("creators")
         .select("*")
         .eq("workspace_id", workspaceId)
+        // Die selbst gezogene Reihenfolge zuerst; wer noch keine hat, haengt
+        // alphabetisch hinten an. So springt nichts, solange niemand zieht.
+        .order("sort_order", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true });
 
       if (!active) return;
@@ -191,9 +194,45 @@ export function useCreatorsStore(workspaceId: string | undefined) {
     return { id: created.id, error: null };
   }
 
+  // Die neue Reihenfolge festschreiben. Die Anzeige springt sofort um, die
+  // Datenbank zieht nach -- wer zieht, soll nicht auf das Netz warten.
+  // Abstaende von 10, damit ein spaeteres Einsortieren dazwischen passt,
+  // ohne alles neu durchzunummerieren.
+  async function reihenfolgeSetzen(ids: string[], feld: "creators" | "collections" = "creators") {
+    const spalte = feld === "collections" ? "collections_sort_order" : "sort_order";
+    const platz = new Map(ids.map((id, i) => [id, (i + 1) * 10]));
+    setCreators((bisher) => {
+      const naechste = bisher.map((c) =>
+        platz.has(c.id)
+          ? feld === "collections"
+            ? { ...c, collectionsSortOrder: platz.get(c.id) }
+            : { ...c, sortOrder: platz.get(c.id) }
+          : c
+      );
+      // Nur die Creators-Reihenfolge bestimmt, wie der Bestand selbst
+      // liegt. Die Collections-Seite sortiert sich daraus selbst -- sonst
+      // wuerde ein Zug dort die Creators-Seite umwerfen, und genau das
+      // sollen die beiden ja nicht tun.
+      return feld === "collections"
+        ? naechste
+        : [...naechste].sort(
+            (a, b) => (a.sortOrder ?? 1e9) - (b.sortOrder ?? 1e9) || a.name.localeCompare(b.name)
+          );
+    });
+    for (const [id, pos] of platz) {
+      const { error: err } = await supabase
+        .schema("client_os")
+        .from("creators")
+        .update({ [spalte]: pos })
+        .eq("id", id);
+      if (err) { setSaveError(err.message); return; }
+    }
+  }
+
   return {
     creators,
     loading,
+    reihenfolgeSetzen,
     error,
     saveError,
     updateTraits,

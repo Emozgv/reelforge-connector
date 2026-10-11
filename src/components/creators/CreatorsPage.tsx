@@ -58,9 +58,13 @@ const REITER: { wert: Reiter; label: string }[] = [
   { wert: "ohne_plan", label: "No plan" },
 ];
 
-type Sortierung = "neu" | "alt" | "name";
+type Sortierung = "eigene" | "neu" | "alt" | "name";
 
 const SORTIERUNGEN: { wert: Sortierung; label: string }[] = [
+  // Zuerst und als Standard: die selbst gezogene Reihenfolge. Nur in ihr
+  // laesst sich ziehen -- in jeder automatischen Sortierung wuerde ein
+  // gezogener Platz beim naechsten Laden sofort wieder ueberschrieben.
+  { wert: "eigene", label: "Your order" },
   { wert: "neu", label: "Newest" },
   { wert: "alt", label: "Oldest" },
   { wert: "name", label: "Name" },
@@ -166,7 +170,11 @@ export function CreatorsPage({
   const [reiter, setReiter] = useState<Reiter>("alle");
   const [suche, setSuche] = useState("");
   const [planFilter, setPlanFilter] = useState<string>("alle");
-  const [sortierung, setSortierung] = useState<Sortierung>("neu");
+  const [sortierung, setSortierung] = useState<Sortierung>("eigene");
+  // Ziehen nur in der eigenen Sortierung -- siehe SORTIERUNGEN.
+  const [gezogen, setGezogen] = useState<string | null>(null);
+  const [ueber, setUeber] = useState<{ id: string; vorher: boolean } | null>(null);
+  const ziehbar = sortierung === "eigene";
   const [offen, setOffen] = useState<string | null>(null);
 
   useEffect(() => {
@@ -218,6 +226,9 @@ export function CreatorsPage({
       );
     });
     return gefiltert.sort((a, b) => {
+      // "eigene" heisst: so lassen, wie es ankommt -- der Bestand liegt
+      // bereits in der gezogenen Reihenfolge vor (siehe useCreatorsStore).
+      if (sortierung === "eigene") return 0;
       if (sortierung === "name") return a.name.localeCompare(b.name);
       const av = a.updatedAt ?? "";
       const bv = b.updatedAt ?? "";
@@ -335,7 +346,7 @@ export function CreatorsPage({
 
           <Auswahlfeld
             label="Sort by"
-            wert={SORTIERUNGEN.find((s) => s.wert === sortierung)?.label ?? "Newest"}
+            wert={SORTIERUNGEN.find((s) => s.wert === sortierung)?.label ?? "Your order"}
             breite="w-[138px]"
             offen={offen === "sort"}
             setOffen={(v) => setOffen(v ? "sort" : null)}
@@ -406,13 +417,85 @@ export function CreatorsPage({
             ueber die ganze Breite zu strecken. */}
         <div className="relative mt-4 grid gap-x-[18px] gap-y-[11px] grid-cols-1 max-w-[640px] min-[1380px]:grid-cols-2 min-[1380px]:max-w-none">
           {sichtbar.map((creator) => (
-            <CreatorCard
+            <div
               key={creator.id}
-              creator={creator}
-              stats={computeCreatorStats(creator.id, collectionsStore.collections)}
-              plan={creatorPackages.get(creator.id)}
-              onOpen={() => setActiveCreatorId(creator.id)}
-            />
+              className={`relative transition-opacity duration-150${
+                gezogen === creator.id ? " opacity-40" : ""
+              }`}
+              onDragOver={(e) => {
+                if (!gezogen || gezogen === creator.id) return;
+                e.preventDefault();
+                const r = e.currentTarget.getBoundingClientRect();
+                const vorher = e.clientX < r.left + r.width / 2;
+                if (ueber?.id !== creator.id || ueber.vorher !== vorher) {
+                  setUeber({ id: creator.id, vorher });
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                if (ueber?.id === creator.id) setUeber(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const von = gezogen;
+                const ziel = ueber;
+                setGezogen(null);
+                setUeber(null);
+                if (!von || von === creator.id) return;
+                const ids = creatorsStore.creators.map((c) => c.id);
+                const alt = ids.indexOf(von);
+                let neu = ids.indexOf(creator.id);
+                if (alt < 0 || neu < 0) return;
+                if (ziel && ziel.id === creator.id && !ziel.vorher) neu += 1;
+                ids.splice(alt, 1);
+                if (alt < neu) neu -= 1;
+                ids.splice(neu, 0, von);
+                void creatorsStore.reihenfolgeSetzen(ids);
+              }}
+            >
+              {/* Der Strich zeigt die Luecke, in die die Karte faellt --
+                  hier senkrecht, weil die Karten nebeneinander stehen. */}
+              {gezogen && gezogen !== creator.id && ueber?.id === creator.id && (
+                <span
+                  aria-hidden
+                  className="absolute top-1 bottom-1 w-[2px] rounded-full pointer-events-none z-10"
+                  style={{
+                    [ueber.vorher ? "left" : "right"]: "-10px",
+                    background: "linear-gradient(180deg, rgba(211,148,72,0) 0%, #EAC088 12%, #EAC088 88%, rgba(211,148,72,0) 100%)",
+                    boxShadow: "0 0 10px rgba(211,148,72,0.55)",
+                  } as React.CSSProperties}
+                />
+              )}
+              {ziehbar && (
+                <span
+                  draggable
+                  onDragStart={(e) => { setGezogen(creator.id); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => { setGezogen(null); setUeber(null); }}
+                  title="Ziehen, um die Reihenfolge zu aendern"
+                  aria-label="Reihenfolge aendern"
+                  // Der Griff liegt ueber dem Coverbild. Ohne eigene
+                  // Flaeche verschwindet er darin -- auf einem hellen Foto
+                  // war er schlicht nicht zu finden. Deshalb eine dunkle
+                  // Pille mit Unschaerfe dahinter: sie traegt auf jedem
+                  // Bild, ohne sich in den Vordergrund zu draengen.
+                  className="absolute left-2 top-2 z-20 w-[22px] h-[26px] rounded-[7px] bg-black/55 backdrop-blur-sm border border-white/[0.09] flex items-center justify-center cursor-grab active:cursor-grabbing text-white/45 hover:text-white/90 hover:bg-black/70 transition-colors duration-150"
+                >
+                  <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden>
+                    {[0, 1, 2].map((r) =>
+                      [0, 1].map((c) => (
+                        <circle key={`${r}-${c}`} cx={2 + c * 6} cy={3 + r * 5} r="1.3" fill="currentColor" />
+                      ))
+                    )}
+                  </svg>
+                </span>
+              )}
+              <CreatorCard
+                creator={creator}
+                stats={computeCreatorStats(creator.id, collectionsStore.collections)}
+                plan={creatorPackages.get(creator.id)}
+                onOpen={() => setActiveCreatorId(creator.id)}
+              />
+            </div>
           ))}
         </div>
       </Auftritt>

@@ -30,6 +30,14 @@ export interface Creator {
   id: string;
   name: string;
   handle: string;
+  // Die vom Nutzer selbst gezogene Reihenfolge. Ohne sie stuenden die
+  // Creator alphabetisch -- und wer taeglich mit einer bestimmten Person
+  // arbeitet, muss dann jedes Mal daran vorbeiscrollen.
+  sortOrder?: number;
+  // Die Collections-Seite hat ihre eigene Reihenfolge. Dort ordnet man nach
+  // anderen Gesichtspunkten als auf der Creators-Seite, und ein Zug hier
+  // soll die andere Seite nicht umwerfen.
+  collectionsSortOrder?: number;
   avatarColor: string;
   profileImage?: string; // placeholder for now — falls back to an initials avatar
   // Free-form keyword tags (from a comma-separated input) describing this Creator's
@@ -356,4 +364,8 @@ export interface Collection {
   // (every version shares the same archived state together) — never set on
   // just one version of a family while its siblings stay active.
   archivedAt?: string;
+  // Aus der Collections-Ansicht genommen. Die Zeile bleibt, weil Production
+  // und die Uebergaben an Sydney und Kunden auf ihre Konzepte zeigen --
+  // von dort bleibt sie erreichbar, in der Liste taucht sie nie wieder auf.
+  deletedAt?: string;
 }

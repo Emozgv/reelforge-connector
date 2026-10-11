@@ -245,6 +245,7 @@ function App() {
             {page === "collections" && (
               <CollectionsPage
                 creators={creatorsStore.creators}
+                onReorderCreators={(ids: string[]) => creatorsStore.reihenfolgeSetzen(ids, "collections")}
                 collectionsStore={collectionsStore}
                 openCollectionId={openCollectionId}
                 onOpenCollectionIdChange={setOpenCollectionId}

@@ -22,6 +22,7 @@ const PANEL_STYLE = panelStil(true);
 
 export function CollectionsPage({
   creators,
+  onReorderCreators,
   collectionsStore,
   openCollectionId,
   onOpenCollectionIdChange,
@@ -49,6 +50,9 @@ export function CollectionsPage({
   // no new navigation concept, and the button simply isn't rendered when the
   // host doesn't provide one.
   onOpenCreator?: (creatorId: string) => void;
+  // Fehlt sie, gibt es keine Greifflaeche -- die Reihenfolge bleibt dann
+  // einfach wie bisher, statt dass ein Griff ins Leere laeuft.
+  onReorderCreators?: (ids: string[]) => void | Promise<void>;
 }) {
   const { collections, renameCollection, duplicateCollection, deleteCollection } = collectionsStore;
   const [activeCreatorId, setActiveCreatorId] = useState<string | "all">("all");
@@ -71,10 +75,39 @@ export function CollectionsPage({
     onOpenCollectionIdChange(id);
   };
 
+  // Ziehen und Ablegen der Creator-Bloecke. `gezogen` ist der Block an der
+  // Maus, `ueber` der, auf dem er gerade schwebt -- daraus entsteht die
+  // Vorschau, damit man vor dem Loslassen sieht, wo er landet.
+  const [gezogen, setGezogen] = useState<string | null>(null);
+  // Nicht nur WELCHER Block, sondern auch OB darueber oder darunter
+  // eingesetzt wird -- entschieden danach, in welcher Haelfte die Maus
+  // steht. Ein Rahmen um den Zielblock sagt das nicht; ein Strich an der
+  // Kante zeigt genau die Luecke, in die der Block faellt.
+  const [ueber, setUeber] = useState<{ id: string; oben: boolean } | null>(null);
+
+  // Diese Seite hat ihre eigene Reihenfolge -- unabhaengig von der auf der
+  // Creators-Seite. Ein Zug hier wirft die dortige nicht um und umgekehrt.
+  const nachEigenerFolge = useMemo(
+    () =>
+      [...creators].sort(
+        (a, b) =>
+          (a.collectionsSortOrder ?? 1e9) - (b.collectionsSortOrder ?? 1e9) ||
+          a.name.localeCompare(b.name)
+      ),
+    [creators]
+  );
+
   const groups = useMemo(() => {
     const relevantCreators =
-      activeCreatorId === "all" ? creators : creators.filter((c) => c.id === activeCreatorId);
-    const visible = collections.filter((c) => (viewMode === "archived" ? !!c.archivedAt : !c.archivedAt));
+      activeCreatorId === "all"
+        ? nachEigenerFolge
+        : nachEigenerFolge.filter((c) => c.id === activeCreatorId);
+    // Entfernte Collections tauchen in keiner der beiden Ansichten auf --
+    // auch nicht im Archiv. Im Bestand bleiben sie, weil Production und die
+    // Uebergaben sie weiter oeffnen koennen muessen.
+    const visible = collections.filter(
+      (c) => !c.deletedAt && (viewMode === "archived" ? !!c.archivedAt : !c.archivedAt)
+    );
     return relevantCreators
       .map((creator) => ({
         creator,
@@ -87,7 +120,10 @@ export function CollectionsPage({
         ),
       }))
       .filter((g) => g.families.length > 0);
-  }, [collections, activeCreatorId, viewMode]);
+    // `creators` gehoert zwingend dazu: die Reihenfolge der Bloecke kommt
+    // genau daher. Ohne das sortierte sich oben die Filterleiste um,
+    // waehrend die Bloecke darunter stehenblieben.
+  }, [nachEigenerFolge, collections, activeCreatorId, viewMode]);
 
   const activeCollection = collections.find((c) => c.id === activeCollectionId) ?? null;
 
@@ -254,10 +290,84 @@ export function CollectionsPage({
             return (
               <div
                 key={creator.id}
-                className={`${PANEL} pt-2.5 px-3 pb-3`}
+                className={`${PANEL} relative pt-4 px-4 pb-4 transition-opacity duration-150${
+                  gezogen === creator.id ? " opacity-40" : ""
+                }`}
                 style={PANEL_STYLE}
+                onDragOver={(e) => {
+                  if (!gezogen || gezogen === creator.id) return;
+                  e.preventDefault();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const oben = e.clientY < r.top + r.height / 2;
+                  if (ueber?.id !== creator.id || ueber.oben !== oben) {
+                    setUeber({ id: creator.id, oben });
+                  }
+                }}
+                onDragLeave={(e) => {
+                  // Nur wenn der Zeiger den Block wirklich verlaesst, nicht
+                  // bei jedem Wechsel auf ein Kindelement darin.
+                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                  if (ueber?.id === creator.id) setUeber(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const von = gezogen;
+                  const ziel = ueber;
+                  setGezogen(null);
+                  setUeber(null);
+                  if (!von || von === creator.id) return;
+                  // Auf der vollstaendigen Creator-Liste umsortieren, nicht
+                  // auf den gerade sichtbaren Bloecken: wer gefiltert ist
+                  // oder noch keine Collection hat, behaelt sonst keinen Platz.
+                  const ids = nachEigenerFolge.map((c) => c.id);
+                  const alt = ids.indexOf(von);
+                  let neu = ids.indexOf(creator.id);
+                  if (alt < 0 || neu < 0) return;
+                  // Unterhalb abgelegt heisst: hinter diesen Block.
+                  if (ziel && ziel.id === creator.id && !ziel.oben) neu += 1;
+                  ids.splice(alt, 1);
+                  if (alt < neu) neu -= 1;
+                  ids.splice(neu, 0, von);
+                  void onReorderCreators?.(ids);
+                }}
               >
-                <div className="flex items-start gap-3 pb-2.5">
+                {/* Der Strich, der die Luecke zeigt, in die der Block faellt. */}
+                {gezogen && gezogen !== creator.id && ueber?.id === creator.id && (
+                  <span
+                    aria-hidden
+                    className="absolute left-3 right-3 h-[2px] rounded-full pointer-events-none"
+                    style={{
+                      [ueber.oben ? "top" : "bottom"]: "-5px",
+                      background: "linear-gradient(90deg, rgba(211,148,72,0) 0%, #EAC088 12%, #EAC088 88%, rgba(211,148,72,0) 100%)",
+                      boxShadow: "0 0 10px rgba(211,148,72,0.55)",
+                    } as React.CSSProperties}
+                  />
+                )}
+                <div className="flex items-start gap-3 pb-3.5">
+                  {/* Die Greifflaeche. Nur sie ist ziehbar, nicht der ganze
+                      Block -- sonst startet jeder Klick auf eine Collection
+                      versehentlich eine Bewegung. */}
+                  {onReorderCreators && (
+                    <span
+                      draggable
+                      onDragStart={(e) => {
+                        setGezogen(creator.id);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => { setGezogen(null); setUeber(null); }}
+                      title="Ziehen, um die Reihenfolge zu aendern"
+                      aria-label="Reihenfolge aendern"
+                      className="shrink-0 self-center -ml-1 w-5 h-9 flex items-center justify-center cursor-grab active:cursor-grabbing text-neutral-700 hover:text-neutral-400 transition-colors duration-150"
+                    >
+                      <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden>
+                        {[0, 1, 2].map((r) =>
+                          [0, 1].map((c) => (
+                            <circle key={`${r}-${c}`} cx={2 + c * 6} cy={3 + r * 5} r="1.3" fill="currentColor" />
+                          ))
+                        )}
+                      </svg>
+                    </span>
+                  )}
                   <span
                     className="w-11 h-11 rounded-full shrink-0 overflow-hidden ring-1 ring-white/10"
                     style={creator.profileImage ? undefined : { background: creator.avatarColor }}
