@@ -186,7 +186,7 @@ async function fetchHealth(): Promise<ConnectorHealth> {
 // fehlgeschlagen war und die alte Fassung weiterlief. Lieber hier klar
 // abbrechen und sagen, was fehlt, als unten an einer fehlenden Route
 // scheitern.
-const MIN_CONNECTOR_VERSION = "0.1.35";
+const MIN_CONNECTOR_VERSION = "0.1.36";
 // Die Platzhalter-Fassung eines lokalen `tauri dev`-Starts (CI setzt die
 // echte Nummer erst beim Bauen, siehe connector-build.yml). Nie als
 // veraltet behandeln, sonst laesst sich lokal nichts mehr testen.
