@@ -514,8 +514,136 @@ fn take_pending_connect_url(state: State<Mutex<Option<ParsedConnectUrl>>>) -> Op
     state.lock().ok().and_then(|mut guard| guard.take())
 }
 
+// Ohne AppHandle protokollieren -- beim Umziehen gibt es noch keinen.
+// Schreibt in dieselbe updater.log, die auch spawn_update_check benutzt.
+#[cfg(target_os = "macos")]
+fn log_umzug(msg: &str) {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let line = format!("[{ts}] {msg}\n");
+    if let Some(home) = std::env::var_os("HOME") {
+        let dir = std::path::Path::new(&home).join("Library/Logs/net.reelforge.connector");
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("updater.log")) {
+            let _ = f.write_all(line.as_bytes());
+            return;
+        }
+    }
+    eprint!("{line}");
+}
+
+// Sich selbst nach /Applications umziehen -- und erst von dort arbeiten.
+//
+// WARUM DAS SEIN MUSS: Startet man die App aus dem Download-Ordner oder
+// direkt aus dem DMG, sperrt macOS sie in einen zufaelligen,
+// SCHREIBGESCHUETZTEN Pfad (/private/var/.../AppTranslocation/...). Der
+// Selbst-Updater findet dort zwar die neue Fassung, kann sie aber nicht
+// installieren -- "Read-only file system". Nach aussen sah das aus wie ein
+// laufendes Update, das einfach nie fertig wurde: die Web-App zeigte
+// "updating", danach lief weiter die alte Fassung, und die neue
+// Research-Buehne antwortete mit "Not found", weil der alte Connector ihre
+// Adressen gar nicht kennt (Emre, 11.10.2026).
+//
+// Von einem Menschen zu verlangen, die App vorher in den richtigen Ordner
+// zu ziehen, ist keine Loesung. Also macht sie es selbst: einmal kopieren,
+// Quarantaene entfernen, von dort neu starten, diese Fassung beenden.
+//
+// Gibt true zurueck, wenn ein Neustart angestossen wurde -- dann darf der
+// Aufrufer nichts weiter tun als sich zu beenden.
+#[cfg(target_os = "macos")]
+fn in_programme_umziehen() -> bool {
+    // Eine Entwicklungsfassung zieht nirgendwohin um.
+    if cfg!(debug_assertions) {
+        return false;
+    }
+    let Ok(exe) = std::env::current_exe() else { return false };
+    // Vom Programm aus nach oben, bis das .app-Buendel gefunden ist.
+    let Some(buendel) = exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app")) else {
+        return false;
+    };
+    let pfad = buendel.to_string_lossy().to_string();
+
+    // Nur die beiden Faelle anfassen, in denen sich die App NICHT selbst
+    // aktualisieren kann:
+    //   - macOS hat sie in einen schreibgeschuetzten Zufallspfad gesperrt
+    //     (Start aus Download-Ordner oder DMG)
+    //   - sie laeuft direkt aus einem eingehaengten Abbild (/Volumes/...)
+    // Liegt sie sonstwo -- /Applications, ~/Applications, ein eigener
+    // Ordner --, funktioniert der Updater, und dann wird nichts verschoben.
+    // Eine App gegen den Willen ihres Besitzers umzuraeumen waere
+    // uebergriffig.
+    let gesperrt = pfad.contains("/AppTranslocation/") || pfad.starts_with("/Volumes/");
+    if !gesperrt {
+        return false;
+    }
+    let Some(name) = buendel.file_name() else { return false };
+    let ziel = std::path::Path::new("/Applications").join(name);
+
+    log_umzug(&format!("App laeuft aus {pfad} -- Umzug nach {}", ziel.display()));
+
+    // Eine alte Fassung am Zielort weicht. Geht das nicht, wird sie einfach
+    // gestartet -- immer noch besser als eine, die sich nie aktualisieren kann.
+    if ziel.exists() {
+        if std::fs::remove_dir_all(&ziel).is_err() {
+            log_umzug("Zielordner nicht ersetzbar -- starte die vorhandene Fassung von dort");
+            let _ = std::process::Command::new("/usr/bin/open").arg("-n").arg(&ziel).spawn();
+            return true;
+        }
+    }
+
+    // ditto statt cp: es erhaelt Rechte, Symlinks und die Signatur.
+    let kopiert = std::process::Command::new("/usr/bin/ditto")
+        .arg(buendel)
+        .arg(&ziel)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !kopiert {
+        log_umzug("Umzug fehlgeschlagen -- die App laeuft weiter, kann sich aber nicht selbst aktualisieren");
+        return false;
+    }
+
+    // Ohne das bleibt die Kopie in Quarantaene und wuerde erneut gesperrt.
+    let _ = std::process::Command::new("/usr/bin/xattr")
+        .args(["-dr", "com.apple.quarantine"])
+        .arg(&ziel)
+        .status();
+
+    // Von dort neu starten und alle Aufrufargumente mitgeben, damit ein
+    // Start ueber den Verbindungs-Link nicht verlorengeht.
+    let mut start = std::process::Command::new("/usr/bin/open");
+    start.arg("-n").arg(&ziel);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if !args.is_empty() {
+        start.arg("--args");
+        for a in &args {
+            start.arg(a);
+        }
+    }
+    match start.spawn() {
+        Ok(_) => {
+            log_umzug("Umzug fertig, starte aus /Applications neu");
+            true
+        }
+        Err(e) => {
+            log_umzug(&format!("Neustart nach dem Umzug fehlgeschlagen: {e}"));
+            false
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Erst den Platz klaeren, dann alles andere. Laeuft die App aus einem
+    // schreibgeschuetzten Pfad, zieht sie sich nach /Applications um und
+    // startet von dort neu -- diese Fassung hat dann nichts mehr zu tun.
+    #[cfg(target_os = "macos")]
+    if in_programme_umziehen() {
+        std::process::exit(0);
+    }
+
     tauri::Builder::default()
         .manage(Mutex::new(None::<ParsedConnectUrl>))
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
