@@ -341,8 +341,17 @@ export function CommentsPanel({
     void (async () => {
       setLaedtMehr(true);
       const a = await fetchComments(video.id, video.sourceUrl, marke, sortierung).catch(() => null);
-      if (weg) return;
+      // ZUERST zurueckstellen, DANN erst aussteigen. Vorher stand das
+      // Zuruecksetzen hinter dem Ausstieg -- und weil dieser Effekt nach
+      // JEDER Neuzeichnung erneut laeuft und die vorherige Runde dabei
+      // abbricht (die Reel-Angaben werden alle zwei Sekunden aufgefrischt,
+      // es wird also staendig neu gezeichnet), wurde die laufende Abfrage
+      // fast immer unterbrochen. Damit blieb "laedt gerade" fuer den Rest
+      // der Sitzung stehen, und beide Wege zum Nachladen -- diese
+      // Selbstauffuellung UND das Scrollen -- stiegen sofort wieder aus.
+      // Ergebnis: Kommentare luden ueberhaupt nicht mehr nach.
       setLaedtMehr(false);
+      if (weg) return;
       if (!a || video.id !== displayReelId) return;
       markenRef.current.set(schluessel(displayReelId), a.naechste ?? null);
       const bisher = resultsRef.current.get(schluessel(displayReelId));
