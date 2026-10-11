@@ -326,13 +326,38 @@ const BUEHNE_SKRIPT = () => {
   const B = (window.__buehne = { pc: null, protokoll: [] });
   const sag = (t) => B.protokoll.push(t);
 
+  // WELCHES Video gerade auf der Buehne steht.
+  //
+  // Bis hierher wurde "das erste sichtbare, das laeuft" genommen. Genau
+  // das ist beim Wischen falsch: Instagram haelt sechs bis neun Videos
+  // uebereinander in der Seite, und waehrend es sie durchschiebt, laeuft
+  // noch das ALTE -- das neue hat oft noch nicht angefangen. Also wurde
+  // wieder das gegriffen, was der Mitarbeiter gerade schon gesehen hatte.
+  //
+  // GEMESSEN am 11.10.2026: die Selbstkorrektur meldete nach jedem Wisch
+  // "falschesElement", korrigierte sich also hinterher. Beim Zuschauer
+  // sah das so aus, als wische man kurz in dasselbe Video hinein, bevor
+  // das naechste kommt.
+  //
+  // Jetzt entscheidet die Lage, nicht der Abspielzustand: genommen wird
+  // das Video, dessen Mitte der Fenstermitte am naechsten liegt. Im Ruhe-
+  // zustand ist das dasselbe wie vorher -- das mittige Video ist das
+  // laufende. Mitten im Schieben ist es aber das richtige statt des alten.
   B.videoImBild = () => {
-    const alle = [...document.querySelectorAll("video")];
-    const sichtbar = alle.filter((v) => {
+    const sichtbar = [...document.querySelectorAll("video")].filter((v) => {
       const r = v.getBoundingClientRect();
       return r.height > 100 && r.top < innerHeight && r.bottom > 0;
     });
-    return sichtbar.find((v) => !v.paused) ?? sichtbar[0] ?? null;
+    if (!sichtbar.length) return null;
+    const mitte = innerHeight / 2;
+    let beste = null;
+    let bester = Infinity;
+    for (const v of sichtbar) {
+      const r = v.getBoundingClientRect();
+      const abstand = Math.abs((r.top + r.bottom) / 2 - mitte);
+      if (abstand < bester) { bester = abstand; beste = v; }
+    }
+    return beste;
   };
 
 
@@ -644,7 +669,23 @@ const BUEHNE_SKRIPT = () => {
 
   B.nachfuehrenEinzeln = async () => {
     if (!B.pc) return { fehler: "keine Buehne" };
-    const v = B.videoImBild();
+    // Erst zugreifen, wenn das Schieben zur Ruhe gekommen ist. Ohne das
+    // trifft die Auswahl mitten in Instagrams Bewegung -- und was dann in
+    // der Mitte steht, ist eine Momentaufnahme, keine Entscheidung. Zwei
+    // gleiche Messungen kurz hintereinander heissen: es steht. Gedeckelt,
+    // damit ein dauerhaft bewegtes Bild den Wisch nie blockieren kann.
+    let v = B.videoImBild();
+    {
+      const ende = Date.now() + 400;
+      let vorher = v;
+      while (Date.now() < ende) {
+        await new Promise((r) => setTimeout(r, 80));
+        const jetzt = B.videoImBild();
+        if (jetzt && jetzt === vorher) { v = jetzt; break; }
+        vorher = jetzt;
+        v = jetzt;
+      }
+    }
     if (!v) return { fehler: "kein Video im Bild" };
     // Zeigt Instagram noch dasselbe Element UND lebt die Spur, gibt es
     // nichts umzulegen -- jedes Umlegen unterbricht den Strom kurz, und das
@@ -2148,6 +2189,28 @@ class Session {
       } catch {}
       return await this.__netzAlt(response);
     });
+
+    // MESSUNG (11.10.2026, Emres Frage): Arbeitet Instagram nach jedem
+    // Reel oder in Paketen? Dafuer reicht Zuschauen -- keine einzige
+    // eigene Anfrage. Hier laeuft mit, was Instagrams Seite VON SICH AUS
+    // rausschickt, waehrend der Mitarbeiter wischt.
+    //
+    // Der Name der Abfrage steckt bei Instagram im Rumpf
+    // (fb_api_req_friendly_name) und sagt mehr als die Adresse, weil alle
+    // GraphQL-Aufrufe dieselbe Adresse haben. Genau daran laesst sich
+    // unterscheiden, ob gerade Reels nachgeholt oder nur gemeldet wird,
+    // was eben geschehen ist.
+    context.on("request", (req) => {
+      try {
+        const u = req.url();
+        if (!u.includes(domain) || istMedien(u)) return;
+        const rumpf = req.method() === "POST" ? (req.postData() ?? "") : "";
+        const name = /fb_api_req_friendly_name=([^&]+)/.exec(rumpf)?.[1]
+          ?? /"fb_api_req_friendly_name"\s*:\s*"([^"]+)"/.exec(rumpf)?.[1]
+          ?? "";
+        console.log(`[netz->] ${req.method()} ${kurz(u)}${name ? " :: " + decodeURIComponent(name) : ""}${rumpf ? " (" + rumpf.length + "B)" : ""}`);
+      } catch {}
+    });
     this.__netzAlt = (async (response) => {
       try {
         const url = response.url();
@@ -2228,6 +2291,20 @@ class Session {
         if (found.length > 0) {
           console.log(`[trace] session ${this.id}: response -> ${found.length} new id(s): ${idsThisResponse.join(", ")}`);
         }
+        // MESSUNG (11.10.2026): Die Zeile darueber zeigt nur, was NEU war
+        // -- deshalb sah es bisher so aus, als schicke Instagram 13 Reels.
+        // Das ist eine Untergrenze, keine Wahrheit. Hier steht die ganze
+        // Antwort in ihrer Reihenfolge. Tauchen in zwei aufeinander
+        // folgenden Antworten dieselben Reels an anderer Stelle auf, hat
+        // Instagram zwischendrin umsortiert -- genau die offene Frage.
+        // Leere Merkliste und kein Katalog: reines Lesen, ohne Nebenwirkung.
+        try {
+          const alle = [];
+          collectMediaFrom(body, alle, new Set(), adapter, 0, undefined, undefined);
+          if (alle.length > 0) {
+            console.log(`[reihenfolge] session ${this.id}: ${alle.length} Reel(s) in dieser Antwort: ${alle.map((x) => x.id).join(", ")}`);
+          }
+        } catch { /* die Messung darf den Ablauf nie stoeren */ }
         for (const item of found) {
           // DIAGNOSTIC (temporary): pending should never already contain
           // this id if seenIds is doing its job -- direct sanity check.
@@ -5268,7 +5345,13 @@ async function startSession(accountId, token, lockSecret, modus) {
     // ohne den ersten startet Instagram sein Video nur stumm, ohne den
     // zweiten fragt Chrome bei der Tab-Aufnahme nach einem Dialog, den in
     // einem unsichtbaren Browser niemand wegklicken kann.
-    browser = await starteBrowser({ headless: true, args: BUEHNE_ARGS });
+    // Normalerweise unsichtbar -- der Mitarbeiter soll die Buehne sehen,
+    // nicht ein zweites Chrome-Fenster auf dem Schreibtisch. Fuer eine
+    // Nachschau laesst sich das Fenster aber zeigen: mit
+    // REELFORGE_SICHTBAR=1 gestartet, arbeitet derselbe Ablauf offen vor
+    // den Augen. Nur fuer den lokalen Lauf gedacht; ohne die Umgebung
+    // bleibt alles wie ausgeliefert.
+    browser = await starteBrowser({ headless: !process.env.REELFORGE_SICHTBAR, args: BUEHNE_ARGS });
   } catch (err) {
     if (IS_MAC) {
       throw new Error("Research needs Google Chrome installed on this Mac. Install Chrome, then try again.");
