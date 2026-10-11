@@ -13,11 +13,12 @@ export interface CollectionRow {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
+  deleted_at?: string | null;
 }
 
 export function collectionMetaFromRow(
   row: CollectionRow
-): Pick<Collection, "id" | "creatorId" | "name" | "notes" | "status" | "updatedAt" | "archivedAt"> {
+): Pick<Collection, "id" | "creatorId" | "name" | "notes" | "status" | "updatedAt" | "archivedAt" | "deletedAt"> {
   return {
     id: row.id,
     creatorId: row.creator_id,
@@ -26,5 +27,6 @@ export function collectionMetaFromRow(
     status: row.status,
     updatedAt: row.updated_at,
     archivedAt: row.archived_at ?? undefined,
+    deletedAt: row.deleted_at ?? undefined,
   };
 }

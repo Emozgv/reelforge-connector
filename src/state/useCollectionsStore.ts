@@ -827,6 +827,35 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       .delete()
       .eq("id", collectionId);
 
+    // 23503 heisst: etwas zeigt noch darauf. Bei einer Collection ist das
+    // kein Zufall, sondern der Normalfall, sobald sie einmal in Production
+    // war oder an Sydney bzw. einen Kunden ging -- deren Belege haengen an
+    // ihren Konzepten. Vorher endete das in "please try again", was nie
+    // klappen konnte, egal wie oft man drueckte.
+    //
+    // Also: sie verschwindet aus der Collections-Ansicht, bleibt aber dort
+    // erreichbar, wo sie gebraucht wird. Production, Library und die
+    // Uebergaben behalten alles, auch zum Anklicken.
+    if (deleteError?.code === "23503") {
+      const jetzt = new Date().toISOString();
+      const { error: hideError } = await supabase
+        .schema("client_os")
+        .from("collections")
+        .update({ deleted_at: jetzt })
+        .eq("id", collectionId);
+      if (hideError) {
+        setCollections(previous);
+        setSaveError("Diese Collection liess sich nicht entfernen. Bitte noch einmal versuchen.");
+        return;
+      }
+      // Nicht aus dem Bestand werfen: Production oeffnet sie weiter ueber
+      // ihre Kennung. Nur markieren -- die Collections-Ansicht blendet sie
+      // daraufhin aus.
+      setCollections(previous.map((c) => (c.id === collectionId ? { ...c, deletedAt: jetzt } : c)));
+      setSaveError(null);
+      return;
+    }
+
     if (deleteError) {
       setCollections(previous);
       setSaveError("Couldn't delete that collection — please try again.");
