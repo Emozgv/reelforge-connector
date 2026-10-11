@@ -1907,6 +1907,22 @@ const sessions = new Map();
 // stale "updating" flag over from before.
 let connectorUpdating = false;
 
+// Der Grund, warum ein Update NICHT geklappt hat, und die Fassung, auf die
+// es haette gehen sollen -- beides setzt lib.rs ueber /update-status. Ohne
+// das sah "Update fertig" und "Update gescheitert, alte Fassung laeuft
+// weiter" von aussen gleich aus, und die Web-App hat danach eine
+// Research-Session auf der alten Fassung gestartet, die ihre Routen gar
+// nicht kennt. Startet leer: ein frischer Prozess (genau das ist ein
+// gelungener Neustart nach dem Update) traegt nie einen alten Fehler mit.
+let connectorUpdateError = null;
+let connectorUpdateTarget = null;
+
+// Die Fassung, die wirklich laeuft -- von lib.rs beim Starten mitgegeben
+// (REELFORGE_CONNECTOR_VERSION). Damit kann die Web-App erkennen, dass sie
+// mit einer zu alten Fassung redet, und das benennen, statt an einer
+// fehlenden Route zu scheitern.
+const connectorVersion = process.env.REELFORGE_CONNECTOR_VERSION || null;
+
 // research_accounts.sync_token is a single shared column per account -- a
 // second live session started for the same account (another tab, a
 // reconnect, another staff member) overwrites it in the DB, silently
@@ -5397,7 +5413,14 @@ const server = http.createServer(async (req, res) => {
       // already decided is safe to install now, so the web app can show a
       // clear "Connector is updating" state instead of misreading the
       // restart that follows as a generic failure.
-      json(res, 200, { ok: true, activeSessions: sessions.size, updating: connectorUpdating });
+      json(res, 200, {
+        ok: true,
+        activeSessions: sessions.size,
+        updating: connectorUpdating,
+        version: connectorVersion,
+        updateTarget: connectorUpdateTarget,
+        updateError: connectorUpdateError,
+      });
       return;
     }
 
@@ -5405,9 +5428,15 @@ const server = http.createServer(async (req, res) => {
       // Local-only signal from lib.rs, not from the web app -- no
       // sessionSecret to check, same trust level as this server itself
       // (both only ever bind 127.0.0.1). Never touches sessions/locks.
-      const { updating } = await readBody(req);
+      const { updating, updateTarget, updateError } = await readBody(req);
       connectorUpdating = !!updating;
-      console.log(`[update] connectorUpdating=${connectorUpdating}`);
+      connectorUpdateTarget = updateTarget || null;
+      connectorUpdateError = updateError || null;
+      console.log(
+        `[update] connectorUpdating=${connectorUpdating}` +
+          (connectorUpdateTarget ? ` ziel=${connectorUpdateTarget}` : "") +
+          (connectorUpdateError ? ` fehler=${connectorUpdateError}` : "")
+      );
       json(res, 200, { ok: true });
       return;
     }

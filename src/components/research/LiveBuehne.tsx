@@ -31,7 +31,19 @@ async function ruf(pfad: string, koerper: Record<string, unknown>, frist?: numbe
   });
   const text = await res.text();
   const daten = text ? JSON.parse(text) : {};
-  if (!res.ok) throw new Error(daten.error ?? "Der Connector hat die Buehne abgelehnt.");
+  if (!res.ok) {
+    // Ein nackter "Not found" auf eine Buehnen-Route heisst nicht, dass
+    // etwas abgelehnt wurde -- der laufende Connector kennt die Route
+    // schlicht noch nicht, ist also zu alt. Genau diese Meldung stand
+    // einmal fuer einen stillschweigend gescheiterten Update, und sie hat
+    // nichts darueber verraten. Die Fassungspruefung in
+    // useLiveResearchSession soll das vorher abfangen; falls es doch
+    // hierher durchkommt, steht jetzt wenigstens da, was wirklich fehlt.
+    if (res.status === 404 && daten.error === "Not found") {
+      throw new Error("Dieser Connector ist zu alt fuer die Live-Ansicht. Connector beenden und neu starten, damit er sich aktualisiert.");
+    }
+    throw new Error(daten.error ?? "Der Connector hat die Buehne abgelehnt.");
+  }
   return daten;
 }
 

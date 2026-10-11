@@ -39,6 +39,15 @@ const UPDATE_WAIT_MAX_MS = 120_000;
 // update is found, while still giving Connector's own update-manifest fetch
 // a real chance to answer first.
 const UPDATE_PRECHECK_MAX_MS = 1600;
+// Nur fuer den Fall, dass der laufende Connector zu alt ist (siehe
+// connectorZuAlt): dann gibt es kein "normal weitermachen", die Session
+// kann ohne Update gar nicht laufen. UPDATE_PRECHECK_MAX_MS ist absichtlich
+// winzig, damit ein Klick ohne Update nicht fuehlbar verzoegert wird -- zu
+// kurz aber, als dass der Connector in der Zeit sein Manifest geholt und
+// das Update angekuendigt haben koennte. Deshalb hier eine eigene,
+// deutlich groessere Frist, in der nur auf diese Ankuendigung gewartet
+// wird. Danach uebernimmt waitForUpdateToFinish.
+const UPDATE_ANNOUNCE_MAX_MS = 30_000;
 // A `next()` response with reel: null is Connector legitimately reporting
 // "the local buffer was empty and Instagram's own feed hasn't refilled it
 // yet" (see ensurePending() in session-server.mjs), not an error -- but
@@ -136,15 +145,71 @@ function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
 // updating" state instead of misreading the restart that follows as a
 // generic failure. Every existing checkHealth() caller only ever needed
 // reachability, so it stays a thin wrapper rather than being rewritten.
-async function fetchHealth(): Promise<{ reachable: boolean; updating: boolean }> {
+type ConnectorHealth = {
+  reachable: boolean;
+  updating: boolean;
+  // null bei jedem Connector, der seine Fassung noch nicht nennt -- also
+  // bei jeder Fassung aelter als MIN_CONNECTOR_VERSION, siehe dort.
+  version: string | null;
+  updateTarget: string | null;
+  updateError: string | null;
+};
+
+async function fetchHealth(): Promise<ConnectorHealth> {
+  const unreachable = {
+    reachable: false,
+    updating: false,
+    version: null,
+    updateTarget: null,
+    updateError: null,
+  };
   try {
     const res = await fetch(`${SESSION_SERVER_URL}/health`, { signal: AbortSignal.timeout(1500) });
-    if (!res.ok) return { reachable: false, updating: false };
+    if (!res.ok) return unreachable;
     const body = await res.json().catch(() => null);
-    return { reachable: true, updating: !!body?.updating };
+    return {
+      reachable: true,
+      updating: !!body?.updating,
+      version: typeof body?.version === "string" ? body.version : null,
+      updateTarget: typeof body?.updateTarget === "string" ? body.updateTarget : null,
+      updateError: typeof body?.updateError === "string" ? body.updateError : null,
+    };
   } catch {
-    return { reachable: false, updating: false };
+    return unreachable;
   }
+}
+
+// Die aelteste Connector-Fassung, mit der eine Research-Session ueberhaupt
+// funktionieren kann. Aeltere Fassungen kennen die Routen der Buehne nicht
+// und antworten darauf mit "Not found" -- genau der Fehler, der sich als
+// nichtssagender Abbruch gezeigt hat, nachdem ein Update stillschweigend
+// fehlgeschlagen war und die alte Fassung weiterlief. Lieber hier klar
+// abbrechen und sagen, was fehlt, als unten an einer fehlenden Route
+// scheitern.
+const MIN_CONNECTOR_VERSION = "0.1.35";
+// Die Platzhalter-Fassung eines lokalen `tauri dev`-Starts (CI setzt die
+// echte Nummer erst beim Bauen, siehe connector-build.yml). Nie als
+// veraltet behandeln, sonst laesst sich lokal nichts mehr testen.
+const DEV_CONNECTOR_VERSION = "0.1.0";
+
+function versionLower(a: string, b: string): boolean {
+  const za = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const zb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(za.length, zb.length); i += 1) {
+    const x = za[i] ?? 0;
+    const y = zb[i] ?? 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
+// true, wenn mit diesem Connector keine Session gestartet werden darf.
+// Eine fehlende Fassungsangabe zaehlt als zu alt: genannt wird sie erst ab
+// MIN_CONNECTOR_VERSION, eine aeltere kann sie also gar nicht mitschicken.
+function connectorZuAlt(version: string | null): boolean {
+  if (version === DEV_CONNECTOR_VERSION) return false;
+  if (!version) return true;
+  return versionLower(version, MIN_CONNECTOR_VERSION);
 }
 
 async function checkHealth(): Promise<boolean> {
@@ -540,6 +605,26 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
   // waking up first).
   const beginSession = useCallback(
     async (accountId: string, platform: Platform) => {
+      // Letzter Riegel, bevor ueberhaupt etwas gestartet wird: lief das
+      // Update nicht durch, oder ist die Fassung zu alt fuer die Buehne,
+      // dann hier abbrechen und sagen warum. Alle Wege in eine Session
+      // laufen durch diese Funktion, deshalb genau eine Pruefstelle.
+      const zustand = await fetchHealth();
+      if (zustand.reachable && zustand.updateError) {
+        setStatus("error");
+        setError(
+          `The Connector update to ${zustand.updateTarget ?? "the latest version"} failed, so research can't start on the old version. Please quit the ReelForge Connector and start it again. (${zustand.updateError})`
+        );
+        return;
+      }
+      if (zustand.reachable && connectorZuAlt(zustand.version)) {
+        setStatus("error");
+        setError(
+          `The ReelForge Connector is out of date (${zustand.version ?? "unknown version"}, needs ${MIN_CONNECTOR_VERSION}) and research can't run on it. Please quit the Connector and start it again so it can update itself.`
+        );
+        return;
+      }
+
       const attemptId = ++attemptRef.current;
       const isStale = () => attemptRef.current !== attemptId;
       setLockedByLabel(null);
@@ -713,6 +798,16 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
         await new Promise((r) => setTimeout(r, 800));
         const health = await fetchHealth();
         if (health.reachable && !health.updating) {
+          // Ein Update, das gescheitert ist, sieht hier sonst genauso aus
+          // wie ein gelungenes. beginSession unten faengt beides ab, aber
+          // der Fehler gehoert benannt, solange die Begruendung vorliegt.
+          if (health.updateError) {
+            setStatus("error");
+            setError(
+              `The Connector update to ${health.updateTarget ?? "the latest version"} failed and research can't run on the old version. Please quit the ReelForge Connector and start it again. (${health.updateError})`
+            );
+            return;
+          }
           // The update itself is over -- switch out of "updating" before
           // starting the (separately slow) session-start work below, so the
           // VA sees an explicit "the update finished" transition instead of
@@ -879,12 +974,30 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       let updating = false;
       try {
         wakeConnector();
-        const deadline = Date.now() + UPDATE_PRECHECK_MAX_MS;
+        let deadline = Date.now() + UPDATE_PRECHECK_MAX_MS;
+        let fristVerlaengert = false;
         while (Date.now() < deadline) {
           const health = await fetchHealth();
           if (health.reachable && health.updating) {
             updating = true;
             break;
+          }
+          // Zu alte Fassung, aber noch keine Ankuendigung: der Connector
+          // wurde gerade eben angestossen und holt sein Manifest noch.
+          // Einmalig laenger warten statt in die kurze Frist zu laufen und
+          // unten mit "veraltet" abzubrechen, obwohl das Update gleich
+          // beginnt. Ein vorliegender Fehlergrund beendet das Warten
+          // sofort -- dann ist das Update schon gescheitert und
+          // beginSession benennt es.
+          if (
+            !fristVerlaengert &&
+            health.reachable &&
+            !health.updateError &&
+            connectorZuAlt(health.version)
+          ) {
+            fristVerlaengert = true;
+            deadline = Date.now() + UPDATE_ANNOUNCE_MAX_MS;
+            setStatus("updating");
           }
           await new Promise((r) => setTimeout(r, 400));
         }

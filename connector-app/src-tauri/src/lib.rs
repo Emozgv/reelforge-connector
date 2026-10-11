@@ -130,7 +130,15 @@ fn spawn_session_server(handle: &AppHandle) {
     command
         .arg(&worker)
         .env("PLAYWRIGHT_BROWSERS_PATH", "0")
-        .env("REELFORGE_PARENT_PID", std::process::id().to_string());
+        .env("REELFORGE_PARENT_PID", std::process::id().to_string())
+        // Die eigene Fassung mitgeben, damit /health sie nennen kann. Ohne
+        // das hat die Web-App keine Moeglichkeit zu erkennen, dass sie mit
+        // einem veralteten Connector redet -- genau der Fall, der sich als
+        // nichtssagendes "Not found" gezeigt hat, nachdem ein Update
+        // stillschweigend fehlgeschlagen war und die alte Fassung
+        // weiterlief. Jetzt kann die Web-App das benennen statt an einer
+        // fehlenden Route zu scheitern.
+        .env("REELFORGE_CONNECTOR_VERSION", handle.package_info().version.to_string());
 
     // Logged to a file (session start/end/timeout — see session-server.mjs)
     // rather than discarded, so a real session-lifecycle problem can
@@ -229,6 +237,17 @@ async fn research_session_active() -> bool {
 // for this particular update -- it falls back to the existing generic
 // unreachable handling, not a crash or a stuck flag.
 async fn post_update_status(updating: bool) {
+    post_update_state(updating, None, None).await;
+}
+
+// Wie post_update_status, nur mit Begruendung: `ziel` ist die Fassung, auf
+// die aktualisiert werden sollte, `fehler` der Grund, warum es nicht
+// geklappt hat. Das ist der Unterschied zwischen "Update fertig" und
+// "Update gescheitert, es laeuft weiter die alte Fassung" -- vorher sah
+// beides von aussen identisch aus (updating: false), weshalb die Web-App
+// nach einem gescheiterten Update einfach eine Research-Session auf der
+// alten Fassung gestartet hat, statt den Fehler zu zeigen.
+async fn post_update_state(updating: bool, ziel: Option<String>, fehler: Option<String>) {
     let Ok(client) = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(1500))
         .build()
@@ -237,7 +256,11 @@ async fn post_update_status(updating: bool) {
     };
     let _ = client
         .post("http://127.0.0.1:48211/update-status")
-        .json(&serde_json::json!({ "updating": updating }))
+        .json(&serde_json::json!({
+            "updating": updating,
+            "updateTarget": ziel,
+            "updateError": fehler,
+        }))
         .send()
         .await;
 }
@@ -327,9 +350,13 @@ fn spawn_update_check(handle: &AppHandle) {
         // sees "updating" while an active session is intentionally still
         // being left alone during the deferred-install wait above.
         post_update_status(true).await;
+        let zielfassung = update.version.clone();
         if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
             log_updater(&handle, &format!("update download/install failed: {e}"));
-            post_update_status(false).await;
+            // Mit Grund melden, nicht nur "nicht mehr am Aktualisieren":
+            // die Web-App laesst danach bewusst keine Research-Session mehr
+            // auf dieser Fassung starten, sondern zeigt den Fehler.
+            post_update_state(false, Some(zielfassung), Some(e.to_string())).await;
             UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
             return;
         }
