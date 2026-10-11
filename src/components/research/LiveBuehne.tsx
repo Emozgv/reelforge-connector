@@ -58,6 +58,13 @@ async function ruf(pfad: string, koerper: Record<string, unknown>, frist?: numbe
 // hinkten hinterher oder zeigten noch das vorherige Reel.
 let sofortFragen: (() => void) | null = null;
 
+// Die Wischbewegung: das alte Reel faehrt raus, das neue kommt nach.
+// Zwei Griffe, weil das Standbild am ANFANG des Wischs entstehen muss --
+// ist die Antwort vom Connector da, laeuft im Strom laengst das neue Reel
+// und es gaebe nichts Altes mehr zum Rausschieben.
+let wischBeginn: ((art: "weiter" | "zurueck") => void) | null = null;
+let wischEnde: (() => void) | null = null;
+
 export function LiveBuehne({
   sessionId,
   sessionSecret,
@@ -328,8 +335,56 @@ export function LiveBuehne({
     return () => { gestoppt = true; sofortFragen = null; window.clearInterval(t); };
   }, [sessionId, sessionSecret]);
 
+  const standbildRef = useRef<HTMLCanvasElement | null>(null);
+  const richtungRef = useRef<"weiter" | "zurueck">("weiter");
+  const [standbildDa, setStandbildDa] = useState(false);
+  useEffect(() => {
+    wischBeginn = (art) => {
+      const v = videoRef.current;
+      const c = standbildRef.current;
+      // Ohne Bildmasse gibt es nichts einzufrieren -- dann lieber gar
+      // keine Bewegung als eine leere Flaeche ueber dem Reel.
+      if (!v || !c || !v.videoWidth || !v.videoHeight) return;
+      c.width = v.videoWidth;
+      c.height = v.videoHeight;
+      try { c.getContext("2d")?.drawImage(v, 0, 0, c.width, c.height); }
+      catch { return; }
+      richtungRef.current = art;
+      setStandbildDa(true);
+    };
+    wischEnde = () => {
+      const v = videoRef.current;
+      const c = standbildRef.current;
+      if (!v || !c) { setStandbildDa(false); return; }
+      const hoch = richtungRef.current === "weiter";
+      const dauer = 340;
+      const kurve = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+      let lauf: Animation | null = null;
+      try {
+        // fill: "forwards" -- ohne das springt das Standbild am Ende in
+        // seine Ausgangslage zurueck und deckt kurz wieder alles ab.
+        // translate3d -- schiebt die Ebene ueber die Grafikkarte, statt
+        // sie bei jedem Bild neu zu zeichnen.
+        lauf = c.animate(
+          [{ transform: "translate3d(0,0,0)" }, { transform: `translate3d(0,${hoch ? -100 : 100}%,0)` }],
+          { duration: dauer, easing: kurve, fill: "forwards" }
+        );
+        v.animate(
+          [{ transform: `translate3d(0,${hoch ? 100 : -100}%,0)` }, { transform: "translate3d(0,0,0)" }],
+          { duration: dauer, easing: kurve }
+        );
+      } catch { /* ohne Bewegung bleibt es der harte Wechsel, nicht kaputt */ }
+      const wegraeumen = () => setStandbildDa(false);
+      if (lauf) {
+        lauf.onfinish = wegraeumen;
+        window.setTimeout(wegraeumen, dauer + 120);
+      } else wegraeumen();
+    };
+    return () => { wischBeginn = null; wischEnde = null; };
+  }, []);
+
   return (
-    <div className="absolute inset-0 bg-black" onClick={onAntippen}>
+    <div className="absolute inset-0 bg-black overflow-hidden" onClick={onAntippen}>
       <video
         ref={videoRef}
         autoPlay
@@ -340,6 +395,14 @@ export function LiveBuehne({
         // kommt der Ton von allein zurueck.
         muted={stumm || !!laedt}
         className="absolute inset-0 w-full h-full object-cover"
+      />
+      {/* Das alte Reel als Standbild, waehrend der Wisch unterwegs ist.
+          Liegt ueber dem Video, aber unter Ladeanzeige und Pause. */}
+      <canvas
+        ref={standbildRef}
+        aria-hidden
+        style={{ willChange: "transform", backfaceVisibility: "hidden" }}
+        className={`absolute inset-0 w-full h-full object-cover z-[25] pointer-events-none${standbildDa ? "" : " hidden"}`}
       />
       {/* Ladezustand wie auf instagram.com: grauer Block in Player-Form,
           unten die Skelettzeilen fuer Name und Text. Er liegt UEBER dem
@@ -417,8 +480,16 @@ export async function buehneEingabe(
   // 60 s, weil der Connector am Ladepunkt bis zu 55 s auf Instagram
   // wartet, statt ins Leere zu klicken. Kuerzer hiesse: der Kunde bricht
   // ab, waehrend der Connector noch korrekt wartet.
-  const antwort = await ruf(`/sessions/${sessionId}/eingabe`, { sessionSecret, art }, 60000);
-  // Steht das neue Reel, sofort die Angaben nachziehen.
-  if (art === "weiter" || art === "zurueck") sofortFragen?.();
-  return antwort;
+  const wisch = art === "weiter" || art === "zurueck";
+  if (wisch) wischBeginn?.(art);
+  try {
+    const antwort = await ruf(`/sessions/${sessionId}/eingabe`, { sessionSecret, art }, 60000);
+    // Steht das neue Reel, sofort die Angaben nachziehen.
+    if (wisch) sofortFragen?.();
+    return antwort;
+  } finally {
+    // Auch wenn der Wisch schiefgeht: das Standbild muss weg, sonst saehe
+    // es aus, als haenge die Buehne.
+    if (wisch) wischEnde?.();
+  }
 }
