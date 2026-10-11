@@ -48,8 +48,8 @@ export function SettingsPage({
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-[720px] mx-auto px-8 pt-6 pb-8">
-        <span className="text-[10.5px] tracking-[0.14em] uppercase text-[#D39448]/75 font-medium">Settings</span>
-        <h1 className="mt-1 text-[20px] font-serif font-medium text-neutral-50">Workspace</h1>
+        <span className="text-[11px] font-semibold tracking-[0.06em] uppercase text-[#D39448]">Settings</span>
+        <h1 className="mt-[5px] text-[20px] leading-[26px] font-bold tracking-[-0.3px] text-[#f2f0ef]">Workspace</h1>
 
         <div className="mt-6 rounded-xl surface-panel p-4">
           <div className="flex items-center gap-3">

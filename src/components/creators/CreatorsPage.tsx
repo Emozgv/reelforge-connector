@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Auftritt } from "../shared/v3";
+import { KOPF_ABSTAND, KOPF_KUERZEL, KOPF_TITEL, KOPF_UNTERZEILE } from "../../lib/pageHeader";
 import {
   BadgeCheck,
   CalendarClock,
@@ -249,18 +251,20 @@ export function CreatorsPage({
         }
       `}</style>
 
-      <div className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
+      {/* Die Seite blendet beim Oeffnen weich auf, statt auf einen Schlag
+          dazustehen -- derselbe Auftritt wie auf Billing (11.10.2026). */}
+      <Auftritt className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
         <div className="dashboard-starfield-boost rf-creators-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
           <StarfieldBackground starCount={110} />
         </div>
 
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="block text-[11.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Creators</span>
-            <h1 className="mt-1 font-serif font-medium text-[36px] tracking-[-0.6px] text-[#f2f0ef]">
+            <span className={KOPF_KUERZEL}>Creators</span>
+            <h1 className={KOPF_TITEL}>
               Your creator roster.
             </h1>
-            <p className="mt-1.5 text-[12.5px] text-[#bdbdc1]">
+            <p className={`${KOPF_UNTERZEILE} text-[#bdbdc1]`}>
               Manage all your creators, their content, and creative profiles — in one place.
             </p>
           </div>
@@ -276,7 +280,7 @@ export function CreatorsPage({
         </div>
 
         {/* Kennzahlen und Suche -- im Entwurf eine Reihe, Kaesten 60 hoch. */}
-        <div className="relative mt-6 flex items-center gap-[14px]">
+        <div className={`relative ${KOPF_ABSTAND} flex items-center gap-[14px]`}>
           <Kennzahlkasten Zeichen={Users} wert={zahlen.gesamt} label="Total creators" />
           <Kennzahlkasten punkt="#3fd096" wert={zahlen.fertig} label="Setup complete" />
           <Kennzahlkasten punkt="#f2b552" wert={zahlen.offen} label="Setup incomplete" />
@@ -411,7 +415,7 @@ export function CreatorsPage({
             />
           ))}
         </div>
-      </div>
+      </Auftritt>
 
       <CreatorSetupWizard
         open={createOpen}

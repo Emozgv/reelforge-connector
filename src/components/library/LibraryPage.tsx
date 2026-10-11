@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Auftritt } from "../shared/v3";
+import { KOPF_ABSTAND, KOPF_KUERZEL, KOPF_TITEL, KOPF_UNTERZEILE } from "../../lib/pageHeader";
 import {
   CalendarDays,
   CheckCircle2,
@@ -326,7 +328,10 @@ export function LibraryPage({
           zu wenig Platz und sie wurden abgeschnitten -- gemessen: 127 statt
           der noetigen 165. Deshalb hier die Geometrie des Entwurfs. Die
           Seite steht damit etwas weiter links als ihre Nachbarn. */}
-      <div className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
+      {/* Die Seite blendet beim Oeffnen weich auf, statt auf einen
+          Schlag dazustehen -- derselbe Auftritt wie auf Billing
+          (Emre, 11.10.2026). */}
+      <Auftritt className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
         <div className="dashboard-starfield-boost rf-library-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
           <StarfieldBackground starCount={110} />
         </div>
@@ -335,11 +340,11 @@ export function LibraryPage({
             13px Unterzeile, Hauptknopf rechts im festgelegten Gold. */}
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="block text-[11.5px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Library</span>
-            <h1 className="mt-1 font-serif font-medium text-[36px] tracking-[-0.6px] text-[#f2f0ef]">
+            <span className={KOPF_KUERZEL}>Library</span>
+            <h1 className={KOPF_TITEL}>
               Your content, organized.
             </h1>
-            <p className="mt-1.5 text-[13px] text-[#bdbdc1]">
+            <p className={`${KOPF_UNTERZEILE} text-[#bdbdc1]`}>
               Every delivered batch, searchable, grouped, and ready to review.
             </p>
           </div>
@@ -362,7 +367,7 @@ export function LibraryPage({
 
         {/* Steuerleiste — Umschalter, Suche, Filter, Sortierung. */}
         {/* Leiste 76 hoch, innen 13 Luft, Kaesten 49 -- am Bild abgelesen. */}
-        <div className={`relative mt-6 ${PANEL} px-3 py-[11px] flex items-center gap-2.5`} style={PANEL_STYLE}>
+        <div className={`relative ${KOPF_ABSTAND} ${PANEL} px-3 py-[11px] flex items-center gap-2.5`} style={PANEL_STYLE}>
           {/* Der Entwurf zeigt einen zweiten Reiter "Assets". Eine
               Einzelbild-Ansicht gibt es im Bestand nicht; sie zu erfinden
               waere eine neue Seite. Der Umschalter bleibt deshalb sichtbar
@@ -494,7 +499,7 @@ export function LibraryPage({
 
                     <span className="flex-1 min-w-0 flex flex-col gap-1.5">
                       <span className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="font-serif font-medium text-[15.5px] text-[#f2f0ef] truncate">
+                        <span className="font-semibold text-[15.5px] tracking-[-0.1px] text-[#f5f5f5] truncate">
                           {b.collectionName}
                         </span>
                         <span className="text-[12.5px] text-[#6d6e73] shrink-0">·</span>
@@ -630,7 +635,7 @@ export function LibraryPage({
 
                 <div className="mt-3.5 flex items-center gap-2">
                   <h2 className="min-w-0 flex items-baseline gap-1.5">
-                    <span className="font-serif font-medium text-[15.5px] text-[#f2f0ef] truncate">{aktiv.collectionName}</span>
+                    <span className="font-semibold text-[15.5px] tracking-[-0.1px] text-[#f5f5f5] truncate">{aktiv.collectionName}</span>
                     <span className="text-[14px] text-[#6d6e73] shrink-0">·</span>
                     <span className="text-[14px] text-[#a9aaae] shrink-0">Batch #{aktiv.index}</span>
                   </h2>
@@ -774,7 +779,7 @@ export function LibraryPage({
             )}
           </div>
         )}
-      </div>
+      </Auftritt>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { formatRelativeTime } from "../../lib/relativeTime";
 import { PlatformIcon } from "../hub/PlatformIcon";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
 import { panelStil, KARTE_FUELLUNG } from "../../lib/panelLook";
+import { Auftritt } from "../shared/v3";
 
 // Panel surface — deep, warm-black (not neutral/cool-black). Deliberately
 // close to the page background so the panel nearly disappears into the
@@ -30,7 +31,10 @@ const PANEL_STYLE: React.CSSProperties = panelStil();
 // step up in value from the panel behind it (not a gradient, not a white
 // highlight) — genuinely lighter, and warm-toned like the panel, so these
 // read as distinct raised surfaces instead of blending into the panel.
-const CARD = "rounded-[10px] border border-[#202024]";
+// Der Rand folgt seit dem 11.10.2026 V3: dunkelgolden statt neutral, wie
+// die Innenkacheln auf Billing, Library und Collections. Die Flaeche kam
+// schon vorher von dort.
+const CARD = "rounded-[10px] border border-[#1a130b]";
 const CARD_STYLE: React.CSSProperties = {
   background: KARTE_FUELLUNG,
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6)",
@@ -302,7 +306,9 @@ export function DashboardPage({
 
   return (
     <div className="h-full overflow-auto" style={{ background: "#020203" }}>
-      <div className="mx-auto w-full max-w-[1560px]">
+      {/* Das Dashboard blendet beim Oeffnen weich auf, wie die uebrigen
+          Reiter (Emre, 11.10.2026). */}
+      <Auftritt className="mx-auto w-full max-w-[1560px]">
         {/* Hero — same night-sky starfield used across Login/Hub. Background
             is the Figma reference's exact cool dark radial (near-black
             fading to near-black, not a warm/brown wash) — gold only shows
@@ -342,8 +348,11 @@ export function DashboardPage({
             className="pointer-events-none absolute inset-x-0 bottom-0 h-24"
             style={{ background: "linear-gradient(to bottom, transparent, #000000)" }}
           />
+          {/* Kuerzel, Groesse und Farben bleiben die des Dashboards -- nur
+              die Begruessung traegt den fetten Schnitt der uebrigen Reiter
+              (Emre, 11.10.2026). */}
           <p className="relative text-[10.5px] tracking-[1.8px] text-[#c08e4e]">REELFORGE COMMAND CENTER</p>
-          <h1 className="relative font-mn font-light text-[42px] tracking-[-0.8px] text-[#f2ece1]">
+          <h1 className="relative text-[38px] leading-[45px] font-bold tracking-[-0.8px] text-[#f2ece1]">
             {greeting()}
             {firstName && <>, {firstName}</>}.
           </h1>
@@ -453,21 +462,21 @@ export function DashboardPage({
                 <PanelHeading title="CONTENT MOMENTUM" subtitle="Your ideas. Saved. Organized." />
                 <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
                   <div className="flex flex-1 min-w-[130px] flex-col gap-[8px]">
-                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
+                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #d9a86322" }}>
                         <FolderOpen size={13} className="text-[#d9a863]" style={{ filter: "drop-shadow(0 0 2px #d9a86380)" }} />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Saved Concepts</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{savedTotal}</span>
                     </button>
-                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
+                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4a90d926, #4a90d908 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4a90d922" }}>
                         <Clapperboard size={13} className="text-[#6ba3d9]" style={{ filter: "drop-shadow(0 0 2px #6ba3d980)" }} />
                       </span>
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Active Collections</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{activeCollectionsCount}</span>
                     </button>
-                    <button onClick={onOpenProduction} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
+                    <button onClick={onOpenProduction} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span
                         className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]"
                         style={{
@@ -484,7 +493,7 @@ export function DashboardPage({
                       <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Needs Attention</span>
                       <span className="text-[10.5px] text-[#aaa49a]">{needsAttention.length}</span>
                     </button>
-                    <button onClick={onOpenHub} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#202024] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
+                    <button onClick={onOpenHub} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
                       <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4fb37a26, #4fb37a08 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4fb37a22" }}>
                         <Radar size={13} className="text-[#6bc797]" style={{ filter: "drop-shadow(0 0 2px #6bc79780)" }} />
                       </span>
@@ -646,7 +655,7 @@ export function DashboardPage({
             </div>
           </div>
         </div>
-      </div>
+      </Auftritt>
     </div>
   );
 }

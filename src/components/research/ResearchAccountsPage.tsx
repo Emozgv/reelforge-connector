@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Auftritt } from "../shared/v3";
+import { KOPF_ABSTAND, KOPF_KUERZEL, KOPF_TITEL, KOPF_UNTERZEILE } from "../../lib/pageHeader";
 import {
   Plus,
   X,
@@ -889,7 +891,9 @@ export function ResearchAccountsPage({
           .rf-research-starfield .star-twinkle { animation-name: star-twinkle-boosted !important; }
         }
       `}</style>
-      <div className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+      {/* Die Seite blendet beim Oeffnen weich auf, statt auf einen Schlag
+          dazustehen -- derselbe Auftritt wie auf Billing (11.10.2026). */}
+      <Auftritt className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
         {/* Confined to the header/hero band only — not the whole scrollable
             page — same as how Dashboard/Creativity Hub scope their
             starfield to just the hero, not every panel below it. */}
@@ -898,20 +902,22 @@ export function ResearchAccountsPage({
         </div>
         <div className="relative flex items-start justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2.5 mb-1">
-              <span className="text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">
-                Research Accounts
-              </span>
-            </div>
-            <h1 className="text-[34px] font-serif font-medium text-neutral-50 flex items-center gap-2">
+            <span className={KOPF_KUERZEL}>Research Accounts</span>
+            <h1 className={`${KOPF_TITEL} flex items-center gap-2`}>
               Live research. Real insights.
               <ResearchInfoPopover />
             </h1>
-            <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
+            <p className={`${KOPF_UNTERZEILE} text-neutral-500 max-w-xl`}>
               Monitor creator content, capture winning concepts, and save directly into your Collections.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-11 shrink-0">
+          <div className="flex flex-col items-end gap-3 shrink-0">
+            {/* Der Abstand stand auf 44 Punkt. Dadurch war diese Spalte
+                136 Punkt hoch, der Kopftext links nur rund 100 -- und weil
+                sich die Kopfzeile nach der hoeheren Seite richtet, klaffte
+                unter dem Kopf eine Luecke, die es auf keinem anderen
+                Reiter gab (Emre, 11.10.2026). Mit 12 Punkt sind beide
+                Seiten gleich hoch. */}
             <DownloadConnectorButton />
             {/* Reachability is real, driven straight off liveSession.status
                 (the same signal the player uses for "Connector needs to
@@ -948,7 +954,7 @@ export function ResearchAccountsPage({
         {/* consolidated toolbar — Creator, platform, and connected-account
             chips in one row, matching the reference. Same account rail as
             before, just no longer a separate row underneath. */}
-        <div className={PANEL + " mt-4 flex items-center gap-3 flex-wrap px-4 py-3"} style={PANEL_STYLE}>
+        <div className={`${PANEL} ${KOPF_ABSTAND} flex items-center gap-3 flex-wrap px-4 py-3`} style={PANEL_STYLE}>
           <CreatorSelector creators={creators} selected={selectedCreator} onSelect={setSelectedCreator} />
 
           <span className="w-px h-8 bg-white/[0.08] shrink-0" />
@@ -1421,7 +1427,7 @@ export function ResearchAccountsPage({
             </div>
           </>
         )}
-      </div>
+      </Auftritt>
 
       <SavePanel
         open={!!savePanelVideo}

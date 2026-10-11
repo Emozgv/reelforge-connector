@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Auftritt } from "../shared/v3";
+import { KOPF_ABSTAND, KOPF_KUERZEL, KOPF_TITEL, KOPF_UNTERZEILE } from "../../lib/pageHeader";
 import { FolderHeart, Plus, Archive, ArchiveRestore } from "lucide-react";
 import type { Creator } from "../../types";
 import type { CollectionsStore } from "../../state/useCollectionsStore";
@@ -161,7 +163,9 @@ export function CollectionsPage({
           Container (1400 breit, 40 Rand) nur 1214 Punkte fuer den Inhalt und
           die Seite wirkte herangezoomt. Jetzt starten alle drei Seiten an
           derselben Stelle. */}
-      <div className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
+      {/* Die Seite blendet beim Oeffnen weich auf, statt auf einen Schlag
+          dazustehen -- derselbe Auftritt wie auf Billing (11.10.2026). */}
+      <Auftritt className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
         {/* Confined to the header band only, never the whole scrollable page —
             same scoping as Research Accounts / Dashboard / Creativity Hub. */}
         <div className="dashboard-starfield-boost rf-collections-starfield pointer-events-none absolute inset-x-0 top-0 h-[160px] overflow-hidden">
@@ -170,13 +174,13 @@ export function CollectionsPage({
 
         <div className="relative flex items-start justify-between gap-6 flex-wrap">
           <div>
-            <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">
+            <span className={KOPF_KUERZEL}>
               Collections
             </span>
-            <h1 className="mt-1 font-serif font-medium text-[36px] text-neutral-50">
+            <h1 className={KOPF_TITEL}>
               {viewMode === "archived" ? "Archived collections" : "Creative collections"}
             </h1>
-            <p className="mt-1.5 text-[13px] text-neutral-500 max-w-xl">
+            <p className={`${KOPF_UNTERZEILE} text-neutral-500 max-w-xl`}>
               {viewMode === "archived"
                 ? "Restore a Collection to bring it — and every version of it — back to the active list."
                 : "Organize your concepts, manage versions, and keep your best ideas ready for production."}
@@ -234,7 +238,7 @@ export function CollectionsPage({
           </p>
         )}
 
-        <div className="relative mt-5 pb-4 border-b border-white/[0.06]">
+        <div className={`relative ${KOPF_ABSTAND} pb-4 border-b border-white/[0.06]`}>
           <CreatorFilterBar creators={creators} activeId={activeCreatorId} onSelect={setActiveCreatorId} />
         </div>
 
@@ -263,7 +267,7 @@ export function CollectionsPage({
                     )}
                   </span>
                   <div className="min-w-0 pt-0.5">
-                    <h2 className="font-serif font-medium text-[16px] leading-none text-neutral-50 truncate">
+                    <h2 className="font-semibold text-[16px] leading-[20px] tracking-[-0.1px] text-[#f5f5f5] truncate">
                       {creator.name}
                     </h2>
                     <p className="mt-1.5 text-[11.5px] text-neutral-500">
@@ -348,7 +352,7 @@ export function CollectionsPage({
             </div>
           )}
         </div>
-      </div>
+      </Auftritt>
 
       <NewCollectionPanel
         open={createOpen}

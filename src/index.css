@@ -92,9 +92,12 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* Dashboard 2.0's Figma reference uses Manrope ExtraLight for its display
-   numerals and headline — distinct from every other headline typeface in
-   the app on purpose, scoped to just that page. */
+/* Manrope Light — die Schrift der Seitenueberschriften.
+   Kam aus der Dashboard-Vorlage und stand zuerst nur dort. Seit dem
+   11.10.2026 traegt sie jede Abschnittsueberschrift: Dashboard, Research
+   Accounts, Collections, Production, Library, Creators, Settings. Die
+   einzige Ausnahme ist der Creativity Hub -- der behaelt bewusst seine
+   eigene Schrift. */
 .font-mn {
   font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
 }

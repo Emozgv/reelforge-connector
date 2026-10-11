@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Auftritt } from "../shared/v3";
+import { KOPF_ABSTAND, KOPF_KUERZEL, KOPF_TITEL, KOPF_UNTERZEILE } from "../../lib/pageHeader";
 import { Activity, AlertTriangle, Ban, CheckCircle2, ChevronDown, Circle, Clapperboard, Database, Plus, Search, Sparkles } from "lucide-react";
 import type { Collection, Creator, SubmissionStatus } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
@@ -183,7 +185,9 @@ export function ProductionPage({
           Container (1400 breit, 40 Rand) nur 1214 Punkte fuer den Inhalt und
           die Seite wirkte herangezoomt. Jetzt starten alle drei Seiten an
           derselben Stelle. */}
-      <div className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
+      {/* Die Seite blendet beim Oeffnen weich auf, statt auf einen Schlag
+          dazustehen -- derselbe Auftritt wie auf Billing (11.10.2026). */}
+      <Auftritt className="relative max-w-[1900px] mx-auto px-6 xl:px-8 pt-8 pb-8">
         {/* Wortgleich der Sternenhimmel aus Collections: 160 hoch, 110
             Sterne, kein Verlauf darueber. Vorher 190 mit 130 Sternen und
             einem Verlauf aus dem Entwurf -- damit sah er anders aus als auf
@@ -199,11 +203,11 @@ export function ProductionPage({
             haengt er an der Kopfzeile und bleibt oben, wo er hingehoert. */}
         <div className="relative flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="block text-[11px] tracking-[0.22em] uppercase text-[#D39448] font-medium">Production</span>
-            <h1 className="mt-1 font-serif font-medium text-[36px] tracking-[-0.6px] text-[#f2f0ef]">
+            <span className={KOPF_KUERZEL}>Production</span>
+            <h1 className={KOPF_TITEL}>
               Everything in motion.
             </h1>
-            <p className="mt-1.5 text-[13px] tracking-[0.1px] text-[#bdbdc1] max-w-[920px]">
+            <p className={`${KOPF_UNTERZEILE} tracking-[0.1px] text-[#bdbdc1] max-w-[920px]`}>
               Turn concepts into high-performing content. Track, produce, and ship across all creators and sources.
             </p>
           </div>
@@ -230,7 +234,7 @@ export function ProductionPage({
             eine Ebene hoeher, ausserhalb der beschnittenen Flaeche -- darin
             wurde es an der Leistenkante abgeschnitten und verschwand hinter den
             Panels darunter. */}
-        <div className="relative mt-7">
+        <div className={`relative ${KOPF_ABSTAND}`}>
         <div
           className="h-[52px] p-[7px] rounded-xl border border-[#1a130b] flex flex-nowrap items-center gap-2 overflow-hidden"
           style={{ background: PANEL_FUELLUNG, borderColor: PANEL_RAND }}
@@ -417,7 +421,7 @@ export function ProductionPage({
             </div>
           </div>
         )}
-      </div>
+      </Auftritt>
     </div>
   );
 }

@@ -94,7 +94,7 @@ export function CreatorCard({
             )}
           </span>
           <span className="min-w-0">
-            <span className="block font-serif font-medium text-[19px] leading-[23px] text-white truncate">
+            <span className="block font-semibold text-[18px] leading-[23px] tracking-[-0.2px] text-[#f5f5f5] truncate">
               {creator.name}
             </span>
             <span className="block text-[12px] text-[#cfd0d3] truncate">{creator.handle}</span>
