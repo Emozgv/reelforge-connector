@@ -214,7 +214,30 @@ function reelNotieren(sitzung, reel) {
 // heisst hier: man koennte den eigenen Browser des Nutzers erwischen.
 const CONNECTOR_STEMPEL = "--reelforge-connector";
 
-const BUEHNE_ARGS = ["--autoplay-policy=no-user-gesture-required", CONNECTOR_STEMPEL];
+// Der dritte Schalter betrifft, wie sich die beiden Browser finden.
+//
+// Chrome verraet die Adresse des Rechners normalerweise nicht direkt,
+// sondern nur als Deckname (".local"), den die Gegenseite erst aufloesen
+// muss. Hier sitzen beide Seiten auf demselben Rechner -- aber eben in
+// zwei verschiedenen Chrome-Fassungen, seit Chrome sich am 09.10.2026
+// erneuert hat: der Connector startet die neue, der Mitarbeiter schaut
+// noch mit der alten zu. Gemessen am 11.10.2026: Angebot und Antwort
+// wurden sauber ausgetauscht, die Verbindung blieb danach fuer immer auf
+// "new" stehen, kein einziges Bild ging raus, und zwar ohne jede
+// Fehlermeldung -- genau das Bild, das ein nicht aufloesbarer Deckname
+// macht.
+//
+// Mit diesem Schalter nennt der Connector seine Adresse im Klartext, die
+// Gegenseite kann sie direkt ansprechen, und keine Namensaufloesung muss
+// mehr gelingen. Nebenwirkung, die dazugehoert: die geoeffnete Seite --
+// also Instagram -- kann die Adresse dieses Rechners im Heimnetz sehen.
+// Nach aussen gibt das nichts preis, was Instagram ueber die oeffentliche
+// Adresse nicht ohnehin schon weiss.
+const BUEHNE_ARGS = [
+  "--autoplay-policy=no-user-gesture-required",
+  "--disable-features=WebRtcHideLocalIpsWithMdns",
+  CONNECTOR_STEMPEL,
+];
 
 // Liegengebliebene Browser von frueher wegraeumen.
 //
@@ -582,7 +605,14 @@ const BUEHNE_SKRIPT = () => {
     if (aufbauId && aufbauId !== B.aufbauId) return { ok: true, uebergangen: "veraltetes Angebot" };
     if (B.pc.signalingState !== "have-local-offer") return { ok: true, uebergangen: B.pc.signalingState };
     await B.pc.setRemoteDescription({ type: "answer", sdp });
-    return { ok: true };
+    // MESSUNG: "Antwort angenommen" allein hat schon einmal getaeuscht --
+    // angenommen wurde sie, nur fand danach nie jemand den anderen. Also
+    // festhalten, ob die Antwort ueberhaupt Adressen mitbringt, und wie
+    // die Verbindung drei Sekunden spaeter dasteht. Dieselbe Messung, die
+    // es beim Profilton laengst gibt.
+    const adressen = (sdp.match(/a=candidate/g) ?? []).length;
+    setTimeout(() => { B.standNachDreiSekunden = B.pc?.connectionState ?? "-"; }, 3000);
+    return { ok: true, adressen };
   };
 
   // Nach einem Wisch haengt Instagram ein anderes <video> ins Bild. Beide
@@ -2254,7 +2284,15 @@ class Session {
     const erg = await this.page
       .evaluate(({ x, id }) => (window.__buehne ? window.__buehne.antwort(x, id) : { fehler: "Buehne war nicht mehr da" }), { x: sdp, id: aufbauId })
       .catch((e) => ({ fehler: String(e?.message ?? e) }));
-    console.log(`[buehne] session ${this.id}: Antwort ${erg?.ok ? (erg.uebergangen ? "uebergangen (" + erg.uebergangen + ")" : "angenommen") : "ABGELEHNT -- " + erg?.fehler}`);
+    console.log(`[buehne] session ${this.id}: Antwort ${erg?.ok ? (erg.uebergangen ? "uebergangen (" + erg.uebergangen + ")" : "angenommen") : "ABGELEHNT -- " + erg?.fehler} | Adressen in der Antwort: ${erg?.adressen ?? "?"}`);
+    // Und drei Sekunden spaeter: steht sie wirklich? "Angenommen" ist noch
+    // keine Verbindung -- das war der ganze blinde Fleck.
+    setTimeout(async () => {
+      const stand = await this.page
+        ?.evaluate(() => window.__buehne?.pc?.connectionState ?? "-")
+        .catch(() => "-");
+      console.log(`[buehne] session ${this.id}: Verbindung nach 3s: ${stand}`);
+    }, 3200);
     return erg;
   }
 
