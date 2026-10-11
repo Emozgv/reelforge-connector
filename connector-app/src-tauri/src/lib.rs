@@ -690,6 +690,16 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Als Erstes ins Protokoll: welche Fassung hier wirklich
+            // laeuft. Am 11.10.2026 war genau das die Frage, die sich von
+            // aussen nur muehsam beantworten liess -- die App meldete
+            // "Updating", danach lief weiter die alte Fassung, und im
+            // Protokoll stand nirgends, welche. Eine Zeile pro Start, und
+            // die Frage stellt sich nie wieder.
+            log_updater(
+                app.handle(),
+                &format!("gestartet als {}", app.handle().package_info().version),
+            );
             spawn_session_server(app.handle());
             spawn_update_check(app.handle());
 
