@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { collectionMetaFromRow, type CollectionRow } from "../lib/collectionMapping";
 import { conceptFromRow, conceptToInsertRow, type ConceptRow } from "../lib/conceptMapping";
@@ -962,8 +962,24 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     setSaveError(null);
   }
 
+  // Entfernte Collections tauchen in KEINER Liste mehr auf -- und zwar
+  // hier an der Quelle, nicht an jeder der fuenfzehn Stellen, die diese
+  // Liste lesen. Genau daran ist es beim ersten Anlauf gescheitert: in den
+  // Collections ausgeblendet, im Fenster "Lara's collections" unter
+  // Research Accounts aber weiter aufgefuehrt.
+  //
+  // `alleCollections` behaelt den vollstaendigen Bestand. Das braucht
+  // genau eine Stelle: das Oeffnen einer Collection ueber ihre Kennung,
+  // etwa aus Production heraus. Entfernt heisst "nicht mehr in der
+  // Uebersicht", nicht "aus der Vergangenheit verschwunden".
+  const sichtbareCollections = useMemo(
+    () => collections.filter((c) => !c.deletedAt),
+    [collections]
+  );
+
   return {
-    collections,
+    collections: sichtbareCollections,
+    alleCollections: collections,
     loading,
     error,
     saveError,

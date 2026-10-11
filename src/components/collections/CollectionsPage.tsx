@@ -125,7 +125,12 @@ export function CollectionsPage({
     // waehrend die Bloecke darunter stehenblieben.
   }, [nachEigenerFolge, collections, activeCreatorId, viewMode]);
 
-  const activeCollection = collections.find((c) => c.id === activeCollectionId) ?? null;
+  // Bewusst auf dem vollstaendigen Bestand: eine entfernte Collection ist
+  // aus der Uebersicht verschwunden, muss sich aus Production oder Library
+  // heraus aber weiter oeffnen lassen. Mit der gefilterten Liste liefe
+  // genau dieser Weg ins Leere.
+  const activeCollection =
+    collectionsStore.alleCollections.find((c) => c.id === activeCollectionId) ?? null;
 
   if (activeCollection) {
     return (
