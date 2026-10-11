@@ -375,6 +375,11 @@ const BUEHNE_SKRIPT = () => {
       for (const w of puffer) {
         const a = Math.abs(w - 128);
         if (a > B.__pegelHoechst) B.__pegelHoechst = a;
+        // Zweiter Hoechstwert, den NUR das Anklemmen zuruecksetzt. Der
+        // erste wird vom Blick alle drei Sekunden geleert -- der Waechter
+        // braucht aber die Frage "kam seit dem Anklemmen ueberhaupt je
+        // etwas?", und die darf ihm niemand wegwischen.
+        if (a > (B.__pegelSeitAnklemmen ?? 0)) B.__pegelSeitAnklemmen = a;
       }
     }, 100);
   };
@@ -405,6 +410,8 @@ const BUEHNE_SKRIPT = () => {
     if (B.tonQuelle === v && B.tonEingangSpur && B.tonEingangSpur.readyState === "live") {
       return true;
     }
+    // Neues Element -> die Versuche fangen von vorn an.
+    if (B.__stilleFuer !== v) { B.__stilleFuer = v; B.__stilleVersuche = 0; }
 
     // Der Ton kommt aus captureStream(), NICHT direkt vom Element.
     //
@@ -438,6 +445,8 @@ const BUEHNE_SKRIPT = () => {
       B.tonEingangSpur = strom.getAudioTracks()[0] ?? null;
     } catch { return false; }
     B.tonQuelle = v;
+    B.__pegelSeitAnklemmen = 0;
+    B.__angeklemmtSeit = Date.now();
     return true;
   };
 
@@ -1124,10 +1133,40 @@ const BUEHNE_SKRIPT = () => {
         const eingangTot = !B.tonEingangSpur || B.tonEingangSpur.readyState !== "live";
         const tonTot = eingangTot || !tonSpur || tonSpur.readyState !== "live";
         const tonVomFalschenElement = B.tonQuelle !== B.quelle;
-        if (tonTot || tonVomFalschenElement) {
+        // Lebend, richtiges Element -- und trotzdem still.
+        //
+        // GEMESSEN am 11.10.2026: Beim ersten Reel einer Sitzung blieb der
+        // Pegel am Bus bei 0, waehrend das Video nachweislich lief (Zeit
+        // 3,25 -> 6,25 -> 9,25 s). Ab dem zweiten Reel standen 0,37 bis
+        // 0,52. Der Abgriff ueber captureStream() war also lebend, aber
+        // leer: er wurde erwischt, bevor das Video wirklich Ton lieferte,
+        // und danach nie wieder angefasst -- weil "Spur lebt" als gesund
+        // galt. Beim zweiten Reel tauscht Instagram das Element, dadurch
+        // wird neu abgegriffen, und deshalb war der Ton dann da.
+        //
+        // Hier wird genau das von selbst nachgeholt: bleibt es nach dem
+        // Anklemmen laenger still, obwohl das Video laeuft, wird der
+        // Abgriff einmal erneuert. Hoechstens zweimal je Element -- ein
+        // Reel ohne Ton gibt es wirklich, und dagegen hilft kein Erneuern.
+        const stillTrotzLauf =
+          !tonTot &&
+          !tonVomFalschenElement &&
+          !jetzt.paused &&
+          jetzt.currentTime > 1 &&
+          (B.__pegelSeitAnklemmen ?? 0) === 0 &&
+          Date.now() - (B.__angeklemmtSeit ?? 0) > 4000 &&
+          (B.__stilleVersuche ?? 0) < 2;
+
+        if (tonTot || tonVomFalschenElement || stillTrotzLauf) {
           B.heiltGerade = true;
+          if (stillTrotzLauf) {
+            B.__stilleVersuche = (B.__stilleVersuche ?? 0) + 1;
+            // Den Abgriff ausdruecklich fuer ungueltig erklaeren, sonst
+            // steigt tonAnklemmen mit "ist ja schon angeklemmt" aus.
+            B.tonQuelle = null;
+          }
           const erg = await B.tonNachziehen().catch(() => ({ ok: false }));
-          B.letzteTonHeilung = { tonTot, tonVomFalschenElement, erfolg: !!erg.ok, zeit: Date.now() };
+          B.letzteTonHeilung = { tonTot, tonVomFalschenElement, stillTrotzLauf, erfolg: !!erg.ok, zeit: Date.now() };
           B.heiltGerade = false;
         }
       }
@@ -3217,7 +3256,8 @@ class Session {
     this.profilNetzCdp = cdp;
     this.profilBeitraege = new Map();
     this.profilName = name;
-    this.aufrufeGemeldet = false;
+    this.aufrufeGemeldet = new Set();
+    this.datumGemeldet = false;
     this.reelsAntwortGemeldet = false;
     await cdp.send("Network.enable").catch(() => {});
 
@@ -3234,6 +3274,26 @@ class Session {
       // Eine Zahl, die nichts bedeutet, ist schlimmer als keine: wir
       // zeigen sie nicht.
       const verborgen = e.like_and_view_counts_disabled === true;
+
+      // Nur zum Nachsehen (11.10.2026): Bei manchen Profilen fehlen Datum
+      // und Uhrzeit auf ALLEN Kacheln -- bei `toppick` 0 von 35, ueber die
+      // ganze Zeit, waehrend `rusnakg80` sie vollstaendig hatte. Beide
+      // Profile kamen ueber dieselbe Adresse. Hier wird EINMAL je Profil
+      // aufgeschrieben, welche Felder Instagram fuer so einen Beitrag
+      // mitschickt -- damit sich entscheiden laesst, ob der Zeitstempel
+      // woanders steht oder wirklich fehlt. Fliegt danach wieder raus.
+      if (!this.datumGemeldet && zahl(e.taken_at, e.taken_at_timestamp) === null && (e.code ?? e.shortcode)) {
+        this.datumGemeldet = true;
+        const zeitVerdaechtig = Object.keys(e).filter((k) =>
+          /taken|time|date|created|posted|publish|ts$|_at$/i.test(k)
+        );
+        console.log(
+          `[datum] ohne Datum: ${code} | product_type=${e.product_type} media_type=${e.media_type} | ` +
+            `zeitverdaechtige Felder: ${zeitVerdaechtig.map((k) => `${k}=${JSON.stringify(e[k])}`).join(", ") || "KEINE"} | ` +
+            `alle Felder: ${Object.keys(e).join(",")}`
+        );
+      }
+
       return {
         code,
         likes: verborgen ? null : zahl(e.like_count, e.edge_liked_by?.count, e.edge_media_preview_like?.count),
@@ -3256,14 +3316,24 @@ class Session {
           // oft fehlen. Hier wird EINMAL je Profil aufgeschrieben, welche
           // Felder Instagram fuer einen Beitrag ohne Aufrufe ueberhaupt
           // mitschickt. Fliegt danach wieder raus.
-          if (b && b.aufrufe === null && !this.aufrufeGemeldet) {
-            this.aufrufeGemeldet = true;
+          // Je BEITRAGSART einmal melden, nicht einmal pro Profil.
+          //
+          // Vorher wurde genau ein Beitrag je Profil gemeldet -- und das war
+          // am 11.10.2026 ausgerechnet ein Foto (media_type=1). Fotos haben
+          // naturgemaess keine Aufrufe; ueber Emres Reels sagte die Messung
+          // damit gar nichts. Jetzt wird je Art einmal berichtet, dann
+          // steht auch ein Reel dabei.
+          const art = `${(e.node ?? e.media ?? e)?.product_type ?? "?"}/${(e.node ?? e.media ?? e)?.media_type ?? "?"}`;
+          this.aufrufeGemeldet = this.aufrufeGemeldet instanceof Set ? this.aufrufeGemeldet : new Set();
+          if (b && b.aufrufe === null && !this.aufrufeGemeldet.has(art)) {
+            this.aufrufeGemeldet.add(art);
             const roh = e.node ?? e.media ?? e;
             const felder = Object.keys(roh).filter((k) =>
               /count|view|play|disabled|product_type|media_type/i.test(k)
             );
             console.log(
               `[aufrufe] ohne Aufrufe: ${b.code} | product_type=${roh.product_type} media_type=${roh.media_type} | ` +
+                `play_count=${JSON.stringify(roh.play_count)} view_count=${JSON.stringify(roh.view_count)} ig_play_count=${JSON.stringify(roh.ig_play_count)} | ` +
                 `passende Felder: ${felder.map((k) => `${k}=${JSON.stringify(roh[k])}`).join(", ")}`
             );
           }

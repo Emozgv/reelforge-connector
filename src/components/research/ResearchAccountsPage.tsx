@@ -16,7 +16,19 @@ import {
   FolderOpen,
   Bookmark,
   Diamond,
+  // Die Zeichen fuer die Kennzahlen des laufenden Reels. Bewusst aus
+  // demselben Satz wie der Rest der Oberflaeche -- gleiche Strichstaerke,
+  // gleiche Rundungen. Ein fremder Satz (oder Emoji) faellt sofort auf.
+  Flame,
+  Heart,
+  MessageCircle,
+  Repeat2,
+  Eye,
+  Timer,
+  CalendarDays,
+  Clock,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { formatViews, formatDuration } from "../../lib/researchFeedMapping";
 import { supabase } from "../../lib/supabase";
 import { researchFeedItemToVideo, type ResearchFeedItemRow } from "../../lib/researchFeedMapping";
@@ -96,10 +108,18 @@ function dauerText(ms: number) {
   return `${zwei(Math.floor(s / 3600))}:${zwei(Math.floor((s % 3600) / 60))}:${zwei(s % 60)}`;
 }
 
-function SessionRow({ label, value, muted, genau }: { label: string; value: React.ReactNode; muted?: boolean; genau?: string }) {
+function SessionRow({ label, value, muted, genau, icon: Icon }: { label: string; value: React.ReactNode; muted?: boolean; genau?: string; icon?: LucideIcon }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-[11px] text-neutral-500">{label}</span>
+      {/* Zeichen und Beschriftung stehen zusammen links. Das Zeichen ist
+          eine Spur blasser als die Schrift -- es soll die Zeile lesbarer
+          machen, nicht um Aufmerksamkeit mit der Zahl rechts streiten.
+          shrink-0, damit die Beschriftung beim Umbrechen nicht ins Zeichen
+          laeuft. */}
+      <span className="flex items-center gap-2 min-w-0">
+        {Icon && <Icon size={12.5} strokeWidth={1.75} className="shrink-0 text-neutral-600" />}
+        <span className="text-[11px] text-neutral-500 truncate">{label}</span>
+      </span>
       {/* genau: die ungerundete Zahl beim Darueberfahren -- "250.8K" sagt
           nicht, ob 250.798 oder 250.850 gemeint ist.
           Bewusst NICHT der eingebaute Hinweis des Browsers: der kommt erst
@@ -1163,14 +1183,14 @@ export function ResearchAccountsPage({
                       zurueckgewiesen). Engagement muss mit: die Rate ohne
                       Likes waere eine andere Zahl unter demselben Namen. */}
                   <div className="flex flex-col gap-2.5">
-                    <SessionRow label="Engagement" value={reelKennzahlen(currentSwipeVideo).engagement} muted={!currentSwipeVideo} />
-                    <SessionRow label="Likes" value={reelKennzahlen(currentSwipeVideo).likes} genau={reelKennzahlen(currentSwipeVideo).exaktLikes} muted={!currentSwipeVideo} />
-                    <SessionRow label="Comments" value={reelKennzahlen(currentSwipeVideo).comments} genau={reelKennzahlen(currentSwipeVideo).exaktComments} muted={!currentSwipeVideo} />
-                    <SessionRow label="Reposts" value={reelKennzahlen(currentSwipeVideo).reposts} genau={reelKennzahlen(currentSwipeVideo).exaktReposts} muted={!currentSwipeVideo} />
-                    <SessionRow label="Views" value={reelKennzahlen(currentSwipeVideo).views} genau={reelKennzahlen(currentSwipeVideo).exaktViews} muted={!currentSwipeVideo} />
-                    <SessionRow label="Length" value={reelKennzahlen(currentSwipeVideo).laenge} muted={!currentSwipeVideo} />
-                    <SessionRow label="Posted" value={reelKennzahlen(currentSwipeVideo).datum} muted={!currentSwipeVideo} />
-                    <SessionRow label="Time" value={reelKennzahlen(currentSwipeVideo).zeit} muted={!currentSwipeVideo} />
+                    <SessionRow icon={Flame} label="Engagement" value={reelKennzahlen(currentSwipeVideo).engagement} muted={!currentSwipeVideo} />
+                    <SessionRow icon={Heart} label="Likes" value={reelKennzahlen(currentSwipeVideo).likes} genau={reelKennzahlen(currentSwipeVideo).exaktLikes} muted={!currentSwipeVideo} />
+                    <SessionRow icon={Eye} label="Views" value={reelKennzahlen(currentSwipeVideo).views} genau={reelKennzahlen(currentSwipeVideo).exaktViews} muted={!currentSwipeVideo} />
+                    <SessionRow icon={MessageCircle} label="Comments" value={reelKennzahlen(currentSwipeVideo).comments} genau={reelKennzahlen(currentSwipeVideo).exaktComments} muted={!currentSwipeVideo} />
+                    <SessionRow icon={Repeat2} label="Reposts" value={reelKennzahlen(currentSwipeVideo).reposts} genau={reelKennzahlen(currentSwipeVideo).exaktReposts} muted={!currentSwipeVideo} />
+                    <SessionRow icon={Timer} label="Length" value={reelKennzahlen(currentSwipeVideo).laenge} muted={!currentSwipeVideo} />
+                    <SessionRow icon={CalendarDays} label="Posted" value={reelKennzahlen(currentSwipeVideo).datum} muted={!currentSwipeVideo} />
+                    <SessionRow icon={Clock} label="Time" value={reelKennzahlen(currentSwipeVideo).zeit} muted={!currentSwipeVideo} />
                   </div>
                 </div>
               </div>
