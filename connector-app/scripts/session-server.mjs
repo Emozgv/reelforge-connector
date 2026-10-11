@@ -1951,7 +1951,13 @@ let connectorUpdateTarget = null;
 // (REELFORGE_CONNECTOR_VERSION). Damit kann die Web-App erkennen, dass sie
 // mit einer zu alten Fassung redet, und das benennen, statt an einer
 // fehlenden Route zu scheitern.
-const connectorVersion = process.env.REELFORGE_CONNECTOR_VERSION || null;
+// Wird das Skript direkt aus dem Projekt gestartet (der gewohnte lokale
+// Lauf, ohne gepackte App), gibt es keine Fassungsnummer von aussen. Dann
+// ist der Code per Definition der aktuelle -- er liegt ja genau hier. Also
+// dieselbe Entwicklungs-Kennung melden, die die Web-App von der
+// Fassungspruefung ohnehin ausnimmt, statt gar keine: ohne Angabe gaelte
+// der lokale Lauf faelschlich als veraltet und wuerde abgewiesen.
+const connectorVersion = process.env.REELFORGE_CONNECTOR_VERSION || "0.1.0";
 
 // research_accounts.sync_token is a single shared column per account -- a
 // second live session started for the same account (another tab, a
