@@ -2130,6 +2130,10 @@ class Session {
     // den Meldungen, die ich dafuer gehalten habe.
     this.videoStuecke = 0;
     this.videoBytes = 0;
+    // Wie viele Ereignis-Meldungen Instagram von sich aus rausgeschickt
+    // hat. Gebraucht beim Schliessen: daran laesst sich sehen, ob die
+    // Abschlussmeldung wirklich noch rausging -- siehe abschiedNehmen.
+    this.meldungenRaus = 0;
     this.feldNamenGemeldet = false;
     const istMedien = (u) => /\.(mp4|m4a|webm|jpg|jpeg|png|webp|heic|svg|css|js|woff2?)(\?|$)/i.test(u)
       || u.includes("cdninstagram") || u.includes("fbcdn");
@@ -2204,6 +2208,32 @@ class Session {
       try {
         const u = req.url();
         if (!u.includes(domain) || istMedien(u)) return;
+        if (u.includes("logging_client_events") || u.includes("unified_cvc")) this.meldungenRaus += 1;
+        // MESSUNG (12.10.2026, Emres Frage "kommt der Konsum echt an?"):
+        // Bisher wurde nur GEZAEHLT, dass Instagram meldet -- nie
+        // hineingesehen, WAS gemeldet wird. Genau daran haengt die Frage,
+        // ob die Verweildauer mitgeht oder nur das Like. Nur Lesen, der
+        // Rumpf liegt ohnehin vor; es wird nichts abgefangen.
+        if (u.includes("logging_client_events") && req.method() === "POST") {
+          this.paketeGesehen = (this.paketeGesehen ?? 0) + 1;
+          try {
+            const roh = req.postData() ?? "";
+            const text = decodeURIComponent(roh);
+            // Ereignisnamen und alles, was nach Dauer aussieht.
+            const namen = [...text.matchAll(/"(?:name|event|event_name)"\s*:\s*"([^"]{2,60})"/g)].map((m) => m[1]);
+            const dauern = [...text.matchAll(/"([a-z_0-9]*(?:time|dur|watch|play|elapsed|ms|sec)[a-z_0-9]*)"\s*:\s*([0-9.]+)/gi)]
+              .map((m) => `${m[1]}=${m[2]}`);
+            const einmalig = (a) => [...new Set(a)];
+            if (namen.length || dauern.length) {
+              console.log(
+                `[paket] #${this.paketeGesehen} ${roh.length}B | Ereignisse: ${einmalig(namen).slice(0, 8).join(", ") || "-"}` +
+                  ` | Zeitfelder: ${einmalig(dauern).slice(0, 10).join(", ") || "KEINE"}`
+              );
+            } else {
+              console.log(`[paket] #${this.paketeGesehen} ${roh.length}B | nichts Lesbares gefunden`);
+            }
+          } catch { /* die Messung darf nie stoeren */ }
+        }
         const rumpf = req.method() === "POST" ? (req.postData() ?? "") : "";
         const name = /fb_api_req_friendly_name=([^&]+)/.exec(rumpf)?.[1]
           ?? /"fb_api_req_friendly_name"\s*:\s*"([^"]+)"/.exec(rumpf)?.[1]
@@ -5314,7 +5344,42 @@ class Session {
     if (this.closed) return;
     if (this.beobachtung) clearInterval(this.beobachtung);
     this.closed = true;
+    // Scheitert der Abschied aus irgendeinem Grund, wird trotzdem
+    // geschlossen. Ein offener Browser waere der groessere Schaden.
+    await this.abschiedNehmen().catch(() => {});
     await this.browser.close().catch(() => {});
+  }
+
+  // GEMESSEN am 11.10.2026: Instagram meldet nicht sofort, sondern sammelt
+  // Ereignisse und schickt sie etwa alle 20 Sekunden als Paket. Beim
+  // Beenden wurde der Browser bisher augenblicklich zugemacht -- zwischen
+  // der letzten Meldung und dem Schliessen lagen in echten Sitzungen 1 bis
+  // 127 Sekunden. Was in diesem Fenster geschah, hat Instagram nie
+  // erfahren: meist das letzte Reel, manchmal die letzten drei.
+  //
+  // Erschlossen, nicht gemessen: ein geoeffnetes Reel ohne gemeldete
+  // Betrachtungszeit koennte fuer Instagram wie weggewischt aussehen --
+  // am Ende jeder Sitzung also das Gegenteil dessen, was der Mitarbeiter
+  // getan hat. Das passt zu "der Algorithmus reagiert unzuverlaessig".
+  //
+  // Hier wird nichts nachgeahmt und keine eigene Anfrage gestellt: die
+  // Seite wird verlassen, wie beim Schliessen eines Tabs auch, und
+  // Instagrams eigener Code schickt daraufhin sein Paket los. Danach eine
+  // kurze Frist, damit es die Leitung noch verlaesst.
+  async abschiedNehmen() {
+    const vorher = this.meldungenRaus;
+    const t0 = Date.now();
+    try {
+      if (this.page && !this.page.isClosed()) {
+        await this.page
+          .goto("about:blank", { timeout: 1500, waitUntil: "commit" })
+          .catch(() => {});
+      }
+    } catch { /* der Abschied darf das Schliessen nie aufhalten */ }
+    await new Promise((r) => setTimeout(r, 1000));
+    console.log(
+      `[abschied] ${this.meldungenRaus - vorher} Abschlussmeldung(en) gingen noch raus (${Date.now() - t0}ms)`
+    );
   }
 }
 
