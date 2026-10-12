@@ -617,7 +617,29 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
       // Update nicht durch, oder ist die Fassung zu alt fuer die Buehne,
       // dann hier abbrechen und sagen warum. Alle Wege in eine Session
       // laufen durch diese Funktion, deshalb genau eine Pruefstelle.
-      const zustand = await fetchHealth();
+      let zustand = await fetchHealth();
+      // Laeuft gerade ein Update, waere jede jetzt gestartete Sitzung zum
+      // Tode verurteilt: der Connector startet gleich neu. Am 12.10.2026
+      // genau so passiert -- beim Kaltstart lief das Update schon, die
+      // Sitzung begann drei Sekunden spaeter, und der Neustart hat sie
+      // erschlagen. Beim Mitarbeiter stand nur "Couldn't open the real
+      // Reels session".
+      if (zustand.reachable && zustand.updating) {
+        setStatus("updating");
+        setError(null);
+        const frist = Date.now() + UPDATE_WAIT_MAX_MS;
+        while (Date.now() < frist) {
+          await new Promise((r) => setTimeout(r, 800));
+          zustand = await fetchHealth();
+          if (zustand.reachable && !zustand.updating) break;
+        }
+        if (zustand.updating) {
+          setStatus("error");
+          setError("The Connector update is taking longer than expected. Please try again in a moment.");
+          return;
+        }
+        setStatus("connecting");
+      }
       if (zustand.reachable && zustand.updateError) {
         setStatus("error");
         setError(

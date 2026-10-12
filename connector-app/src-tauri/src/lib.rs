@@ -361,6 +361,33 @@ fn spawn_update_check(handle: &AppHandle) {
             return;
         }
 
+        // NOCHMAL nachsehen, bevor neu gestartet wird.
+        //
+        // Die Pruefung weiter oben lag vor dem Herunterladen, und dazwischen
+        // vergehen Sekunden. Am 12.10.2026 hat genau diese Luecke
+        // zugeschlagen: Beim Kaltstart fand der Connector ein Update und lud
+        // es, waehrend drei Sekunden spaeter eine Research-Sitzung begann.
+        // Der Neustart hat sie mitten im Lauf erschlagen -- beim Mitarbeiter
+        // stand "Couldn't open the real Reels session", ohne dass je ein
+        // Update angekuendigt worden waere.
+        //
+        // Die Produktregel war immer: ein Update unterbricht nie eine
+        // laufende Sitzung. Sie wurde bisher nur zu frueh geprueft.
+        // Eingespielt ist das Update an dieser Stelle laengst -- es geht
+        // allein darum, WANN neu gestartet wird. Also warten, bis die
+        // Sitzung vorbei ist, statt sie abzuschiessen.
+        if research_session_active().await {
+            log_updater(
+                &handle,
+                "update installiert, aber inzwischen laeuft eine Research-Sitzung -- Neustart wird aufgeschoben",
+            );
+            post_update_status(false).await;
+            while research_session_active().await {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            }
+            log_updater(&handle, "Sitzung beendet, Neustart wird nachgeholt");
+        }
+
         log_updater(&handle, "update installed, restarting");
         UPDATE_CHECK_IN_FLIGHT.store(false, Ordering::SeqCst);
         handle.request_restart();
