@@ -503,3 +503,64 @@ html[data-tab-hidden="true"] .hero-photo-layer {
   margin: 12px 0;
 }
 .rf-notiz b, .rf-notiz strong { color: #fafafa; font-weight: 650; }
+
+/* Die goldene Kante am linken Rand der Seitenleiste (Emre, 12.10.2026).
+   Gedacht als AMBIENTE: eine warme Lichtquelle, die an der Kante sitzt
+   und ihren Schein in die Flaeche wirft. Kein wanderndes Stueck, kein
+   Blinken -- das Licht wird nur langsam heller und wieder dunkler, so
+   wie eine Lampe atmet.
+
+   Erster Versuch war eine Leuchtmarke, die auf und ab lief. Emre:
+   "ambiente Beleuchtung, nicht ambiente Animation."
+
+   Bewegt wird nichts, veraendert wird nur die Deckkraft -- das kostet
+   den Browser praktisch nichts. Kein Weichzeichner, aus denselben
+   Gruenden wie bei den Kachel-Schildern. */
+.rf-kante {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(211, 148, 72, 0) 0%,
+    rgba(211, 148, 72, 0.48) 22%,
+    rgba(211, 148, 72, 0.55) 50%,
+    rgba(211, 148, 72, 0.48) 78%,
+    rgba(211, 148, 72, 0) 100%
+  );
+  animation: rf-kante-atem 11s ease-in-out infinite;
+}
+
+/* Der Schein, den die Kante in die Leiste wirft: breit, sehr schwach,
+   nach rechts auslaufend. Das ist der Teil, der es nach Beleuchtung
+   aussehen laesst statt nach einem Strich. */
+.rf-kante::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 48px;
+  background: linear-gradient(
+    90deg,
+    rgba(211, 148, 72, 0.085) 0%,
+    rgba(211, 148, 72, 0.028) 35%,
+    rgba(211, 148, 72, 0) 100%
+  );
+  mask-image: linear-gradient(180deg, transparent 0%, #000 25%, #000 75%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 25%, #000 75%, transparent 100%);
+}
+
+@keyframes rf-kante-atem {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+/* Wer in den Systemeinstellungen weniger Bewegung wuenscht, bekommt das
+   Licht ruhig stehend. */
+@media (prefers-reduced-motion: reduce) {
+  .rf-kante { animation: none; opacity: 0.85; }
+}

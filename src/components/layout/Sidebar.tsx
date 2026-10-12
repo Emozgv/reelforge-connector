@@ -12,6 +12,7 @@ import {
   Bell,
   Radar,
   ShieldCheck,
+  Building2,
   ChevronRight,
 } from "lucide-react";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
@@ -47,20 +48,53 @@ export type Page =
   | "admin"
   | "syd";
 
-// Same real routes as before, just one flat list now instead of three
-// labelled groups — a presentation-only change (see the Executive Black
-// pass) to match the reference's simpler, denser nav composition. No new
-// items, no reordering of what each id navigates to.
-const NAV_ITEMS: { id: Page; label: string; icon: React.ReactNode }[] = [
-  { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={13} strokeWidth={1.75} /> },
-  { id: "hub", label: "Creativity Hub", icon: <Sparkles size={13} strokeWidth={1.75} /> },
-  { id: "research", label: "Research Accounts", icon: <Radar size={13} strokeWidth={1.75} /> },
-  { id: "collections", label: "Collections", icon: <FolderHeart size={13} strokeWidth={1.75} /> },
-  { id: "production", label: "Production", icon: <Clapperboard size={13} strokeWidth={1.75} /> },
-  { id: "library", label: "Library", icon: <Library size={13} strokeWidth={1.75} /> },
-  { id: "creators", label: "Creators", icon: <Users size={13} strokeWidth={1.75} /> },
-  { id: "billing", label: "Billing", icon: <CreditCard size={13} strokeWidth={1.75} /> },
-  { id: "settings", label: "Settings", icon: <Settings size={13} strokeWidth={1.75} /> },
+// Die Navigation nach Emres Vorlage vom 12.10.2026: dieselben Routen wie
+// vorher, nur in vier benannte Gruppen gelegt. Keine neuen Eintraege,
+// keine andere Reihenfolge innerhalb einer Gruppe, keine geaenderte
+// Zielseite -- rein die Darstellung.
+//
+// Admin Dashboard und Sydney Studio stehen jetzt mit in der Gruppe
+// SYSTEM, statt einzeln unten zu haengen. Wer sie sehen darf, entscheidet
+// unveraendert `sichtbar` weiter unten (isPlatformAdmin bzw. hasSydAccess)
+// -- die Gruppierung aendert daran nichts.
+type NavEintrag = {
+  id: Page;
+  label: string;
+  icon: React.ReactNode;
+  // Fehlt das Feld, ist der Eintrag immer sichtbar.
+  sichtbar?: (b: { role?: string; isPlatformAdmin?: boolean; hasSydAccess?: boolean }) => boolean;
+};
+
+const ICON = { size: 15, strokeWidth: 1.6 } as const;
+
+const NAV_GRUPPEN: { label: string; items: NavEintrag[] }[] = [
+  {
+    label: "Main",
+    items: [
+      { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard {...ICON} /> },
+      { id: "hub", label: "Creativity Hub", icon: <Sparkles {...ICON} /> },
+      { id: "research", label: "Research Accounts", icon: <Radar {...ICON} /> },
+    ],
+  },
+  {
+    label: "Workflow",
+    items: [
+      { id: "collections", label: "Collections", icon: <FolderHeart {...ICON} /> },
+      { id: "production", label: "Production", icon: <Clapperboard {...ICON} /> },
+      { id: "library", label: "Library", icon: <Library {...ICON} /> },
+    ],
+  },
+  {
+    label: "Organization",
+    items: [
+      { id: "creators", label: "Creators", icon: <Users {...ICON} /> },
+      { id: "billing", label: "Billing", icon: <CreditCard {...ICON} />, sichtbar: (b) => canViewBilling(b.role) },
+    ],
+  },
+  {
+    label: "System",
+    items: [{ id: "settings", label: "Settings", icon: <Settings {...ICON} /> }],
+  },
 ];
 
 export function Sidebar({
@@ -76,8 +110,6 @@ export function Sidebar({
   onSignOut,
   activity,
   onOpenCollection,
-  creators,
-  creatorPackages,
 }: {
   page: Page;
   onNavigate: (p: Page) => void;
@@ -115,7 +147,6 @@ export function Sidebar({
   // same way the reference shows "Owner" under "Noah", instead of always
   // falling back to email.
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : userEmail;
-  const creatorsWithPlan = creators.filter((c) => creatorPackages.has(c.id)).length;
 
   function markAllRead() {
     const now = Date.now();
@@ -125,25 +156,27 @@ export function Sidebar({
 
   return (
     <aside
-      className="relative z-20 w-[216px] shrink-0 h-full border-r border-[#0e0e10] bg-[#020203] flex flex-col"
+      className="relative z-20 w-[230px] shrink-0 h-full border-r border-[#111113] bg-[#030304] flex flex-col"
       style={{ boxShadow: "inset -14px 0 22px -20px rgba(0,0,0,0.85), inset 0 1px 0 rgba(0,0,0,0.6)" }}
     >
-      <div className="flex items-center justify-between gap-1.5 pt-[26px] pb-[24px] pl-[22px] pr-[14px]">
+      <span className="rf-kante" aria-hidden="true" />
+
+      <div className="flex items-center justify-between gap-1.5 pt-[24px] pb-[16px] pl-[18px] pr-[14px]">
         <div className="flex items-center gap-[10px] min-w-0">
-          <img src="/rf-logo-lockup.svg" alt="" className="w-[26px] h-[20px] shrink-0" />
-          <span className="font-mn font-extralight text-[16px] tracking-[1.6px] text-[#ede5d6] uppercase truncate">ReelForge</span>
+          <img src="/rf-logo-lockup.svg" alt="" className="w-[30px] h-[23px] shrink-0" />
+          <span className="font-mn font-extralight text-[17px] tracking-[2.1px] text-[#ede5d6] uppercase truncate">ReelForge</span>
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
           <div className="relative">
             <button
               onClick={() => setNotifOpen((v) => !v)}
-              className="press-feedback relative w-[28px] h-[28px] rounded-[9px] border border-[#202024] bg-[#111114] flex items-center justify-center text-neutral-500 hover:text-neutral-50 transition-colors duration-150"
+              className="press-feedback relative w-[28px] h-[28px] rounded-[9px] border border-[#1d1d21] bg-[#0d0d10] flex items-center justify-center text-neutral-400 hover:text-neutral-50 transition-colors duration-150"
             >
-              <Bell size={12} strokeWidth={1.75} />
+              <Bell size={12} strokeWidth={1.6} />
               {unread && (
                 <span
-                  className="pulse-live absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#D39448]"
+                  className="pulse-live absolute top-[5px] right-[5px] w-[6px] h-[6px] rounded-full bg-[#D39448]"
                   style={{ ["--pulse-live-color" as string]: "rgba(211,148,72,0.55)" }}
                 />
               )}
@@ -189,85 +222,145 @@ export function Sidebar({
         </div>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-[4px] px-[14px] overflow-y-auto">
-        {NAV_ITEMS.filter((item) => item.id !== "billing" || canViewBilling(role)).map((item) => {
-          const active = item.id === page;
+      {/* Die Gruppen stehen oben in ihrem natuerlichen Abstand. Unser
+          Fenster ist hoeher als die Vorlage -- die Luecke darunter bleibt
+          bewusst stehen, statt die Zeilen auseinanderzuziehen (Emre,
+          12.10.2026). Der Nutzerbereich haengt dafuer unten fest. */}
+      <nav className="flex-1 min-h-0 flex flex-col px-[12px] pb-[6px]">
+        {NAV_GRUPPEN.map((gruppe, i) => {
+          const sichtbare = gruppe.items.filter((item) => !item.sichtbar || item.sichtbar({ role, isPlatformAdmin, hasSydAccess }));
+          // Eine Gruppe, aus der alles weggefiltert wurde, hinterlaesst
+          // weder Beschriftung noch Trennlinie.
+          if (!sichtbare.length) return null;
           return (
-            <button
-              key={item.id}
-              onClick={() => {
-                setNotifOpen(false);
-                onNavigate(item.id);
-              }}
-              className={[
-                "press-feedback relative w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[9px] text-[11.5px] border transition-colors duration-150",
-                active
-                  ? "border-[#141009] text-[#f0c58c]"
-                  : "border-transparent text-[#e2dbcd] hover:text-neutral-50 hover:bg-white/[0.03]",
-              ].join(" ")}
-              style={active ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
-            >
-              {active && (
-                <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-full bg-[#D39448]" style={{ boxShadow: "0 0 6px rgba(211,148,72,0.6)" }} />
-              )}
-              <span
-                className="shrink-0 opacity-85"
-                style={active ? { filter: "drop-shadow(0 0 2px #D3944880)" } : undefined}
-              >
-                {item.icon}
-              </span>
-              {item.label}
-            </button>
+            <div key={gruppe.label}>
+              {i > 0 && <div className="mx-[8px] my-[13px] border-t border-[#161619]" />}
+              <p className="px-[13px] pb-[8px] text-[9px] font-medium uppercase tracking-[1.8px] text-[#6e6a64]">
+                {gruppe.label}
+              </p>
+              <div className="flex flex-col gap-[2px]">
+                {sichtbare.map((item) => {
+                  const active = item.id === page;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setNotifOpen(false);
+                        onNavigate(item.id);
+                      }}
+                      className={[
+                        "press-feedback relative w-full flex items-center gap-[12px] h-[37px] pl-[13px] pr-[10px] rounded-[9px] text-[12px] border transition-colors duration-150",
+                        active
+                          ? "border-[#3a2a17] text-[#eab97c]"
+                          : "border-transparent text-[#dcd7ce] hover:text-neutral-50 hover:bg-white/[0.035]",
+                      ].join(" ")}
+                      style={
+                        active
+                          ? {
+                              background: "linear-gradient(90deg, #271c10, #16110c)",
+                              boxShadow: "0 0 14px -4px rgba(211,148,72,0.28)",
+                            }
+                          : undefined
+                      }
+                    >
+                      {active && (
+                        <span
+                          className="absolute left-0 top-[7px] bottom-[7px] w-[3px] rounded-full bg-[#D39448]"
+                          style={{ boxShadow: "0 0 7px rgba(211,148,72,0.65)" }}
+                        />
+                      )}
+                      <span className={active ? "shrink-0 text-[#EAC088]" : "shrink-0 text-[#b9b4ab]"}>{item.icon}</span>
+                      <span className="truncate">{item.label}</span>
+                      {active && <ChevronRight size={14} strokeWidth={1.6} className="ml-auto shrink-0 text-[#D39448]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </nav>
 
-      <div className="p-[14px]">
-        {isPlatformAdmin && (
-          <button
-            onClick={() => onNavigate("admin")}
-            className={[
-              "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
-              page === "admin"
-                ? "border-[#141009] text-[#f0c58c]"
-                : "border-transparent text-[#e2dbcd] hover:text-neutral-50 hover:bg-white/[0.03]",
-            ].join(" ")}
-            style={page === "admin" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
-          >
-            {page === "admin" && (
-              <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-full bg-[#D39448]" style={{ boxShadow: "0 0 6px rgba(211,148,72,0.6)" }} />
+      {/* Unten, direkt ueber dem Namen: Admin Dashboard und Sydney Studio
+          ausgeschrieben, in derselben Machart wie die Eintraege oben
+          (Emre, 12.10.2026). Sie stehen bewusst hier statt in der Gruppe
+          SYSTEM -- oben bleibt es dadurch ruhig.
+
+          Wer sie sieht, entscheiden dieselben beiden Bedingungen wie
+          vorher; an Zielen und Berechtigungen aendert sich nichts. */}
+      <div className="px-[12px] pb-[14px]">
+        {(isPlatformAdmin || hasSydAccess) && (
+          <div className="flex flex-col gap-[2px] pb-[10px]">
+            {isPlatformAdmin && (
+              <button
+                onClick={() => onNavigate("admin")}
+                className={[
+                  "press-feedback relative w-full flex items-center gap-[12px] h-[37px] pl-[13px] pr-[10px] rounded-[9px] text-[12px] border transition-colors duration-150",
+                  page === "admin"
+                    ? "border-[#3a2a17] text-[#eab97c]"
+                    : "border-transparent text-[#dcd7ce] hover:text-neutral-50 hover:bg-white/[0.035]",
+                ].join(" ")}
+                style={
+                  page === "admin"
+                    ? { background: "linear-gradient(90deg, #271c10, #16110c)", boxShadow: "0 0 14px -4px rgba(211,148,72,0.28)" }
+                    : undefined
+                }
+              >
+                {page === "admin" && (
+                  <span
+                    className="absolute left-0 top-[7px] bottom-[7px] w-[3px] rounded-full bg-[#D39448]"
+                    style={{ boxShadow: "0 0 7px rgba(211,148,72,0.65)" }}
+                  />
+                )}
+                <span className={page === "admin" ? "shrink-0 text-[#EAC088]" : "shrink-0 text-[#b9b4ab]"}>
+                  <ShieldCheck {...ICON} />
+                </span>
+                <span className="truncate">Admin Dashboard</span>
+                {page === "admin" && <ChevronRight size={14} strokeWidth={1.6} className="ml-auto shrink-0 text-[#D39448]" />}
+              </button>
             )}
-            <ShieldCheck size={11} className="shrink-0 opacity-85" />
-            Admin Dashboard
-          </button>
-        )}
-        {hasSydAccess && (
-          <button
-            onClick={() => onNavigate("syd")}
-            className={[
-              "relative mb-[4px] w-full flex items-center gap-[12px] px-[13px] py-[11px] rounded-[8px] text-[10px] border transition-colors duration-150",
-              page === "syd"
-                ? "border-[#141009] text-[#f0c58c]"
-                : "border-transparent text-[#e2dbcd] hover:text-neutral-50 hover:bg-white/[0.03]",
-            ].join(" ")}
-            style={page === "syd" ? { background: "linear-gradient(90deg, #2a1e11, #1a1510)" } : undefined}
-          >
-            {page === "syd" && (
-              <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-full bg-[#D39448]" style={{ boxShadow: "0 0 6px rgba(211,148,72,0.6)" }} />
+            {hasSydAccess && (
+              <button
+                onClick={() => onNavigate("syd")}
+                className={[
+                  "press-feedback relative w-full flex items-center gap-[12px] h-[37px] pl-[13px] pr-[10px] rounded-[9px] text-[12px] border transition-colors duration-150",
+                  page === "syd"
+                    ? "border-[#3a2a17] text-[#eab97c]"
+                    : "border-transparent text-[#dcd7ce] hover:text-neutral-50 hover:bg-white/[0.035]",
+                ].join(" ")}
+                style={
+                  page === "syd"
+                    ? { background: "linear-gradient(90deg, #271c10, #16110c)", boxShadow: "0 0 14px -4px rgba(211,148,72,0.28)" }
+                    : undefined
+                }
+              >
+                {page === "syd" && (
+                  <span
+                    className="absolute left-0 top-[7px] bottom-[7px] w-[3px] rounded-full bg-[#D39448]"
+                    style={{ boxShadow: "0 0 7px rgba(211,148,72,0.65)" }}
+                  />
+                )}
+                <span className={page === "syd" ? "shrink-0 text-[#EAC088]" : "shrink-0 text-[#b9b4ab]"}>
+                  <Building2 {...ICON} />
+                </span>
+                <span className="truncate">Sydney Studio</span>
+                {page === "syd" && <ChevronRight size={14} strokeWidth={1.6} className="ml-auto shrink-0 text-[#D39448]" />}
+              </button>
             )}
-            <ShieldCheck size={11} className="shrink-0 opacity-85" />
-            Sydney Studio
-          </button>
+          </div>
         )}
-        <div className="group flex items-center gap-[10px] border-t border-[#131316] pt-[10px] pb-[11px] px-[6px]">
-          <div className="w-[32px] h-[32px] rounded-[16px] bg-gradient-to-br from-[#D39448] to-[#A97942] flex items-center justify-center text-[10px] font-medium text-[#020508] shrink-0">
+
+        <div className="group flex items-center gap-[10px] border-t border-[#161619] pt-[11px] pb-[2px] px-[6px]">
+          <div className="w-[32px] h-[32px] rounded-full bg-gradient-to-br from-[#EAC088] to-[#C08A45] flex items-center justify-center text-[10px] font-medium text-[#1a1208] shrink-0">
             {initials}
           </div>
-          <div className="flex flex-col gap-[4px] leading-tight min-w-0">
-            <span className="text-[11px] text-[#e7e2d8] truncate">{displayName || workspaceName || "Client workspace"}</span>
-            <span className="text-[9.5px] text-[#948d82] truncate">{roleLabel ?? "Emre"}</span>
+          <div className="flex-1 flex flex-col gap-[2px] leading-tight min-w-0">
+            <span className="text-[11.5px] text-[#e7e2d8] truncate">{displayName || workspaceName || "Client workspace"}</span>
+            <span className="text-[10px] text-[#8b857b] truncate">{roleLabel ?? "Emre"}</span>
           </div>
-          <div className="ml-auto flex items-center gap-0.5 shrink-0">
+          {/* Blendet ueber die Deckkraft ein und aus, nie ueber display --
+              sonst springt die Zeile beim Darueberfahren. */}
+          <div className="flex items-center gap-[2px] shrink-0">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150">
               <TestAccountButton workspaceId={workspaceId} canManage={Boolean(isPlatformAdmin)} />
             </div>
@@ -275,41 +368,13 @@ export function Sidebar({
               <button
                 onClick={onSignOut}
                 title="Sign out"
-                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-neutral-50 hover:bg-white/[0.06] transition-all duration-150"
+                className="shrink-0 w-[24px] h-[24px] rounded-[7px] flex items-center justify-center text-[#6e6a64] opacity-0 group-hover:opacity-100 hover:text-neutral-50 hover:bg-white/[0.06] transition-all duration-150"
               >
-                <LogOut size={11} />
+                <LogOut size={12} />
               </button>
             )}
           </div>
         </div>
-
-        {/* Plan card — same premium bottom-of-sidebar placement/treatment as
-            the reference's "PRO PLAN" card, but showing the real workspace
-            figure (creators on an active plan) since ReelForge sells plans
-            per creator, not as one workspace-wide subscription with a single
-            renewal date to display. */}
-        {creators.length > 0 && (
-          <div className="mt-[10px] rounded-[10px] border border-[#202024] bg-[#111114] overflow-hidden">
-            <div className="px-[13px] pt-[12px] pb-[10px]">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] tracking-[1px] text-[#c8c2b6]">WORKSPACE PLAN</span>
-                <span className={["text-[9px]", creatorsWithPlan > 0 ? "text-[#63c07f]" : "text-[#878278]"].join(" ")}>
-                  {creatorsWithPlan > 0 ? "Active" : "None"}
-                </span>
-              </div>
-              <p className="mt-[6px] text-[9.5px] text-[#888278]">
-                <span className="text-[#cfc8bc] font-medium tabular-nums">{creatorsWithPlan}</span> / {creators.length} creators on a plan
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("billing")}
-              className="flex w-full items-center justify-between border-t border-[#202024] bg-[#0c0c0f] px-[13px] py-[10px] text-[10.5px] text-[#d6d0c5] hover:bg-[#101013] transition-colors duration-150"
-            >
-              Manage Plan
-              <ChevronRight size={12} className="opacity-60" />
-            </button>
-          </div>
-        )}
       </div>
     </aside>
   );
