@@ -328,14 +328,7 @@ export function CollectionWorkspace({
             onAssignToAnother={onAssignConceptToAnother}
           />
 
-          {/* Die Spalte bleibt stehen und scrollt in sich selbst. Ohne die
-              Hoehenbegrenzung wuchs sie mit jeder Uebergabe weiter nach
-              unten und zog die ganze Seite in die Laenge -- bei einer
-              Collection mit zwoelf Submissions stand unter dem letzten Reel
-              nur noch Verlauf. Das Minus beim Rand gleicht die Luecke fuer
-              den Rollbalken wieder aus, damit die Spalte so breit bleibt
-              wie vorher. */}
-          <div className="sticky top-0 max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-contain pr-1 -mr-1 space-y-3">
+          <div className="sticky top-0 space-y-3">
             <div className="rounded-lg surface-panel p-3.5">
               <span className="text-[10.5px] tracking-wide uppercase text-neutral-500">
                 Direction &amp; notes
@@ -462,11 +455,22 @@ export function CollectionWorkspace({
                 <Clock size={10} />
                 History
               </span>
-              <div className="mt-2.5 space-y-2.5">
+              {/* Feste Hoehe, eigener Rollbalken. Vorher wuchs der Verlauf
+                  mit jedem Eintrag weiter nach unten und zog die ganze
+                  Seite in die Laenge -- bei einer Collection mit vielen
+                  Eintraegen stand unter dem letzten Reel nur noch Verlauf.
+                  Begrenzt wird hier und nur hier, nicht die ganze Spalte:
+                  Richtung und Notizen sowie die Uebergaben sollen immer
+                  vollstaendig zu sehen sein. */}
+              <div className="mt-2.5 space-y-2.5 max-h-[260px] overflow-y-auto overscroll-contain pr-1 -mr-1">
                 {collection.history.length === 0 && (
                   <p className="text-[11.5px] text-neutral-600">No activity yet.</p>
                 )}
-                {collection.history.map((entry, i) => (
+                {/* Das Neueste oben: ein Verlauf waechst nach oben, sonst
+                    muss man jedes Mal ans Ende scrollen, um zu sehen, was
+                    gerade passiert ist. Die Uebergaben daneben machen es
+                    schon so. */}
+                {[...collection.history].reverse().map((entry, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <div className="mt-[5px] w-1 h-1 rounded-full bg-[#D39448]/60 shrink-0" />
                     <div className="min-w-0">
