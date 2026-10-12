@@ -97,6 +97,10 @@ export interface ReelVideo {
   id: string;
   platform: Platform;
   username: string;
+  // Profilbild und Haekchen des Urhebers. Nur bei Live-Reels gefuellt --
+  // die Buehne zeigt damit denselben Kopf wie Instagram selbst.
+  avatarUrl?: string;
+  verified?: boolean;
   // Real permalink for ingested reels; still the dedup key when saving into a Collection.
   sourceUrl: string;
   // Real preview image for ingested reels. Mock/legacy items have no image and

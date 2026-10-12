@@ -180,20 +180,49 @@ function SwipeSlide({
 
       {/* bottom-left: who/what */}
       <div className="pointer-events-auto absolute bottom-4 left-4 right-20">
-        <div className="flex items-center gap-2">
-          {/* Der Name oeffnet das Profil -- auf einer zweiten Seite im
-              Connector, nicht in dieser Sitzung. Auf Instagram selbst
-              verliert man dabei den Feed; genau das darf hier nicht
-              passieren (10.10.2026). */}
+        <div className="flex items-center gap-2.5">
+          {/* Kopfzeile wie bei Instagram selbst: Profilbild, Name ohne @,
+              Haekchen, dann ein Punkt und erst danach "Follow". Vorher
+              stand hier nur "@name" -- dieselbe Angabe, aber in einer
+              Form, die es auf Instagram nirgends gibt. */}
+          {video.avatarUrl && (
+            <img
+              src={video.avatarUrl}
+              alt=""
+              loading="lazy"
+              className="w-7 h-7 rounded-full shrink-0 object-cover ring-1 ring-white/15"
+            />
+          )}
           <button
             type="button"
             onClick={() => onProfil?.(video.username)}
             disabled={!onProfil}
             title={onProfil ? `Open @${video.username} on the research account` : undefined}
-            className="text-[14px] text-white font-medium hover:underline underline-offset-2 disabled:cursor-default disabled:no-underline"
+            className="flex items-center gap-1 text-[14px] text-white font-semibold hover:underline underline-offset-2 disabled:cursor-default disabled:no-underline"
           >
-            @{video.username}
+            {video.username}
+            {video.verified && (
+              // Instagrams Haekchen, nachgezeichnet: blaues Siegel mit
+              // weissem Haken. Nur gesetzt, wenn Instagram den Account
+              // wirklich als verifiziert meldet.
+              // Instagrams Siegel ist ein Kranz gleichmaessiger runder Zacken.
+              // Von Hand nachgezeichnet wurde es krumm -- deshalb gerechnet:
+              // zwoelf Zacken, innere Ecken auf Radius 10, Scheitel exakt auf
+              // 12. Dadurch sitzt jede Woelbung gleich tief und gleich weit.
+              <svg width="13" height="13" viewBox="0 0 24 24" aria-label="Verifiziert" className="shrink-0">
+                <path fill="#0095F6" d="M12.00 2.00Q15.71 -1.85 17.00 3.34Q22.14 1.86 20.66 7.00Q25.85 8.29 22.00 12.00Q25.85 15.71 20.66 17.00Q22.14 22.14 17.00 20.66Q15.71 25.85 12.00 22.00Q8.29 25.85 7.00 20.66Q1.86 22.14 3.34 17.00Q-1.85 15.71 2.00 12.00Q-1.85 8.29 3.34 7.00Q1.86 1.86 7.00 3.34Q8.29 -1.85 12.00 2.00Z" />
+                <path
+                  fill="none"
+                  stroke="#fff"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8.2 12.1l2.6 2.6 5-5.4"
+                />
+              </svg>
+            )}
           </button>
+          <span aria-hidden className="-mx-1 text-white/55 text-[13px] leading-none">·</span>
           {canLike && (
             <button
               type="button"
@@ -203,7 +232,7 @@ function SwipeSlide({
               // einmal gebaut und wieder verworfen, siehe session-server.mjs).
               disabled={followStatus === "pending" || followStatus === "following"}
               className={[
-                "text-[11px] font-medium disabled:cursor-default",
+                "text-[11.5px] font-semibold disabled:cursor-default",
                 followStatus === "following" ? "text-white/50" : "text-[#D39448] hover:text-[#e0a860]",
               ].join(" ")}
               title={
@@ -230,7 +259,10 @@ function SwipeSlide({
           <button
             type="button"
             onClick={() => setCaptionExpanded((v) => !v)}
-            className={["mt-1 text-left text-[12.5px] text-white/95 leading-snug", captionExpanded ? "" : "line-clamp-2"].join(" ")}
+            // Mehr Luft zur Kopfzeile darueber: bei Instagram stehen Name
+            // und Text nicht aufeinander, sondern durch eine klare Zeile
+            // getrennt. Mit mt-1 klebten sie zusammen.
+            className={["mt-2 text-left text-[12.5px] text-white/95 leading-snug", captionExpanded ? "" : "line-clamp-2"].join(" ")}
           >
             {video.caption}
           </button>

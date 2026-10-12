@@ -465,6 +465,32 @@ export async function teilenSuchen(sessionId: string, sessionSecret: string, beg
 export async function teilenSenden(sessionId: string, sessionSecret: string, ziel: string, text: string) {
   return (await ruf(`/sessions/${sessionId}/teilen-senden`, { sessionSecret, reelId: ziel, wert: text }, 30000)) as { ok: boolean; fehler?: string };
 }
+// Instagrams eigener Umschalter zwischen "For you" und "Following" --
+// er aendert die Quelle, nicht nur die Anzeige.
+// "Refresh Feed" auf Instagrams eigenem Weg: Home, Seite neu laden, zurueck
+// auf Reels. Die Sitzung bleibt bestehen -- kein neuer Browser, keine neue
+// Anmeldung, keine neue Sperre.
+export async function feedAuffrischen(sessionId: string, sessionSecret: string) {
+  return (await ruf(`/sessions/${sessionId}/feed-auffrischen`, { sessionSecret }, 45000)) as {
+    ok?: boolean;
+    fehler?: string;
+  };
+}
+
+export async function quelleLesen(sessionId: string, sessionSecret: string) {
+  return (await ruf(`/sessions/${sessionId}/feed-modus`, { sessionSecret }, 8000)) as {
+    modus?: string | null;
+    fehler?: string;
+  };
+}
+export async function quelleWechseln(sessionId: string, sessionSecret: string, ziel: string) {
+  return (await ruf(`/sessions/${sessionId}/feed-wechseln`, { sessionSecret, ziel }, 20000)) as {
+    ok?: boolean;
+    modus?: string;
+    fehler?: string;
+  };
+}
+
 export function teilenSchliessen(sessionId: string, sessionSecret: string) {
   void ruf(`/sessions/${sessionId}/teilen-schliessen`, { sessionSecret }, 10000).catch(() => {});
 }

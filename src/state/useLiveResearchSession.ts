@@ -104,6 +104,10 @@ interface RawLiveReel {
   videoUrl: string | null;
   caption: string | null;
   username: string | null;
+  // Profilbild und Haekchen des Urhebers -- vom Connector aus derselben
+  // Instagram-Antwort gelesen, aus der auch der Name kommt.
+  avatar?: string | null;
+  verifiziert?: boolean;
   viewsRaw: number | null;
   likes: number | null;
   likesVerborgen?: boolean;
@@ -119,6 +123,10 @@ function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
     id: raw.id,
     platform,
     username: raw.username ?? "unknown",
+    // Profilbild und Haekchen des Urhebers -- damit die Buehne denselben
+    // Kopf zeigt wie Instagram selbst, statt nur den Namen.
+    avatarUrl: typeof raw.avatar === "string" ? raw.avatar : undefined,
+    verified: raw.verifiziert === true,
     sourceUrl: raw.sourceUrl,
     thumbnailUrl: raw.thumbnailUrl ?? undefined,
     videoUrl: raw.videoUrl ?? undefined,

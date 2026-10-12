@@ -99,6 +99,34 @@ const PLATFORM_DOMAIN = { instagram: "instagram.com", tiktok: "tiktok.com" };
 // Same reasoning as connect-worker.mjs: force English so the real Like
 // button's accessible name ("Like"/"Unlike") is actually there to find,
 // regardless of the host machine's own locale.
+// Der WIRKLICHE Bildschirm des Rechners.
+//
+// Die Fernsteuerung setzt den gemeldeten Bildschirm standardmaessig auf
+// Fenstergroesse -- bei uns also 420x860. Einen Bildschirm, der exakt so
+// gross ist wie das Fenster darin, gibt es auf keinem echten Geraet; auf
+// diesem Mac sind es 1512x982 (12.10.2026 nachgemessen).
+//
+// Das ist keine Vortaeuschung, sondern eine Richtigstellung: der Browser
+// LAEUFT auf diesem Bildschirm. Gelesen wird er zur Laufzeit, nicht fest
+// eingetragen -- auf dem Rechner eines Mitarbeiters mit anderem Monitor
+// waere eine feste Zahl wieder falsch.
+//
+// Einmal je Connector-Lauf gemessen und gemerkt: die erste Sitzung zahlt
+// ein paar Millisekunden, jede weitere nichts.
+let echterBildschirm = null;
+async function bildschirmMessen(browser) {
+  if (echterBildschirm) return echterBildschirm;
+  let ctx = null;
+  try {
+    ctx = await browser.newContext({ viewport: null });
+    const seite = await ctx.newPage();
+    const d = await seite.evaluate(() => ({ width: screen.width, height: screen.height }));
+    if (d?.width > 0 && d?.height > 0) echterBildschirm = d;
+  } catch { /* ohne Messung bleibt es beim bisherigen Verhalten */ }
+  finally { await ctx?.close().catch(() => {}); }
+  return echterBildschirm;
+}
+
 const AUTOMATION_CONTEXT_OPTIONS = {
   locale: "en-US",
   extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
@@ -1455,6 +1483,12 @@ function parseInstagramMedia(node) {
       videoUrl,
       caption: typeof node.caption?.text === "string" ? node.caption.text : null,
       username: node.user?.username ?? node.owner?.username ?? null,
+      // Profilbild und Haekchen des Urhebers. Instagram schickt beides in
+      // derselben Antwort mit; bisher wurde es nur bei Kommentaren gelesen,
+      // und die Buehne zeigte deshalb nur den Namen, wo Instagram selbst
+      // Bild, Name und Haekchen nebeneinander stellt.
+      avatar: node.user?.profile_pic_url ?? node.owner?.profile_pic_url ?? null,
+      verifiziert: (node.user?.is_verified ?? node.owner?.is_verified) === true,
       // Confirmed via live capture: Instagram's own Reels response regularly
       // sends view_count as an explicit null (not merely absent) rather than
       // a real number — this endpoint often just doesn't expose a view
@@ -2409,6 +2443,142 @@ class Session {
     return erg;
   }
 
+  // Instagrams eigener Umschalter zwischen "For you" und "Following" --
+  // oben links im Reel-Fenster, derselbe, den ein Mensch dort anklickt.
+  // Er aendert die QUELLE: "Following" zeigt nur noch Reels von Accounts,
+  // denen der Research-Account folgt.
+  //
+  // Die Beschriftung ist englisch, weil der Browser auf en-US steht (siehe
+  // AUTOMATION_CONTEXT_OPTIONS) -- deshalb wird auf genau diese zwei
+  // Woerter geprueft und nicht geraten.
+  async feedModus() {
+    if (!this.page || this.page.isClosed()) return { fehler: "keine Seite" };
+    return await this.page
+      .evaluate(() => {
+        const sichtbar = (e) => {
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.top < 260;
+        };
+        const kopf = [...document.querySelectorAll('div[role="button"], button')].find(
+          (e) => /^(For you|Following)$/.test((e.textContent || "").trim()) && sichtbar(e)
+        );
+        return { modus: kopf ? kopf.textContent.trim() : null };
+      })
+      .catch((e) => ({ fehler: String(e?.message ?? e) }));
+  }
+
+  async feedWechseln(ziel) {
+    if (!this.page || this.page.isClosed()) return { fehler: "keine Seite" };
+    if (ziel !== "For you" && ziel !== "Following") return { fehler: "unbekannte Quelle" };
+    const erg = await this.page
+      .evaluate(async (wohin) => {
+        const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+        const sichtbar = (e) => {
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.top < 260;
+        };
+        const kopfFinden = () =>
+          [...document.querySelectorAll('div[role="button"], button')].find(
+            (e) => /^(For you|Following)$/.test((e.textContent || "").trim()) && sichtbar(e)
+          );
+        const kopf = kopfFinden();
+        if (!kopf) return { fehler: "Umschalter nicht gefunden" };
+        const vorher = kopf.textContent.trim();
+        if (vorher === wohin) return { ok: true, modus: vorher, unveraendert: true };
+
+        kopf.click();
+        // Das Menue braucht einen Augenblick. Mehrfach nachsehen, statt
+        // einmal blind zu warten.
+        let eintrag = null;
+        for (let i = 0; i < 20 && !eintrag; i++) {
+          await warte(100);
+          eintrag = [...document.querySelectorAll('div[role="menuitem"], div[role="button"], span')].find(
+            (e) => (e.textContent || "").trim() === wohin && e !== kopf && e.getBoundingClientRect().width > 0
+          );
+        }
+        if (!eintrag) return { fehler: "Eintrag im Menue nicht gefunden" };
+        eintrag.click();
+
+        // NACHPRUEFEN statt annehmen: erst wenn die Beschriftung oben
+        // wirklich umgesprungen ist, hat es geklappt.
+        for (let i = 0; i < 30; i++) {
+          await warte(100);
+          const jetzt = kopfFinden();
+          if (jetzt && jetzt.textContent.trim() === wohin) return { ok: true, modus: wohin };
+        }
+        return { fehler: "Umschalten nicht bestaetigt" };
+      }, ziel)
+      .catch((e) => ({ fehler: String(e?.message ?? e) }));
+    console.log(`[quelle] session ${this.id}: ${ziel} -> ${erg?.ok ? "umgeschaltet" : "FEHLER: " + (erg?.fehler ?? "?")}`);
+    return erg;
+  }
+
+  // "Refresh Feed" -- aber auf Instagrams eigenem Weg.
+  //
+  // Bisher wurde dafuer die ganze Sitzung neu aufgebaut: Browser zu, Browser
+  // auf, neu anmelden. Das ist schwer, dauert, und niemand macht das so.
+  // Die Reel-Adresse einfach neu zu laden hilft auch nicht -- dann steht
+  // dasselbe Reel wieder da.
+  //
+  // Der Weg eines Menschen: auf Home, Seite neu laden, zurueck auf Reels.
+  // Danach steht ein frischer Feed, ohne dass die Sitzung, die Anmeldung
+  // oder die Historie verloren gehen.
+  async feedAuffrischen() {
+    if (!this.page || this.page.isClosed()) return { fehler: "keine Seite" };
+    const klick = async (muster, was) => {
+      const treffer = await this.page
+        .evaluate((m) => {
+          const a = [...document.querySelectorAll("a")].find((e) => {
+            const h = e.getAttribute("href") || "";
+            return h === m && e.getBoundingClientRect().width > 0;
+          });
+          if (!a) return false;
+          a.click();
+          return true;
+        }, muster)
+        .catch(() => false);
+      console.log(`[auffrischen] ${was}: ${treffer ? "geklickt" : "NICHT GEFUNDEN"}`);
+      return treffer;
+    };
+
+    try {
+      // 1. Home. Findet sich der Verweis nicht, fuehrt kein Weg vorbei --
+      //    dann lieber ehrlich abbrechen als blind die Adresse zu setzen.
+      if (!(await klick("/", "Home"))) return { fehler: "Home nicht gefunden" };
+      await this.page.waitForLoadState("domcontentloaded", { timeout: 8000 }).catch(() => {});
+      await this.page.waitForTimeout(600);
+
+      // 2. Seite neu laden -- das ist der Teil, der den Feed wirklich neu
+      //    zieht statt den alten Stand weiterzuzeigen.
+      await this.page.reload({ waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => {});
+      await this.page.waitForTimeout(800);
+
+      // 3. Zurueck auf Reels.
+      if (!(await klick("/reels/", "Reels"))) return { fehler: "Reels nicht gefunden" };
+
+      // NACHPRUEFEN: erst wenn wirklich ein Reel laeuft, war es ein Erfolg.
+      let steht = false;
+      for (let i = 0; i < 40 && !steht; i++) {
+        await this.page.waitForTimeout(250);
+        steht = await this.page
+          .evaluate(() => location.pathname.startsWith("/reels") && !!document.querySelector("video"))
+          .catch(() => false);
+      }
+      if (!steht) return { fehler: "Feed kam nicht zurueck" };
+
+      // Der Vorrat gehoert zum alten Feed -- sonst kaemen nach dem
+      // Auffrischen erst wieder die alten Reels. Die Historie bleibt, damit
+      // Zurueckblaettern weiter funktioniert.
+      this.pending = [];
+      // Bild und Ton auf das neue Element umhaengen.
+      await this.buehneNachfuehren().catch(() => {});
+      console.log(`[auffrischen] session ${this.id}: Feed neu geladen.`);
+      return { ok: true };
+    } catch (e) {
+      return { fehler: String(e?.message ?? e) };
+    }
+  }
+
   async buehneNachfuehren() {
     if (!this.buehneSteht) return { ok: false, fehler: "keine Buehne" };
     return await this.page.evaluate(() => window.__buehne.nachfuehren()).catch((e) => ({ fehler: e.message }));
@@ -2539,6 +2709,18 @@ class Session {
     // Zahl leer.
     this.__aufrufe = this.__aufrufe ?? new Map();
     const nr = bekannt?.pk ?? null;
+    // ATEMPAUSE, WENN INSTAGRAM NICHT MEHR ANTWORTET (12.10.2026).
+    //
+    // Pro Reel geht genau eine Anfrage raus -- das ist nicht zu viel. An
+    // einem Tag mit ueber 460 durchgelaufenen Reels reicht es Instagram
+    // trotzdem: Es beantwortet die Abfrage dann nicht mehr, sondern
+    // schickt die normale Webseite zurueck (HTTP 200, 848 KB HTML).
+    //
+    // Weiterzufragen macht es nur schlimmer und fuellt das Protokoll.
+    // Nach drei Fehlschlaegen hintereinander also fuenfzehn Minuten Ruhe,
+    // danach ein Versuch. Die Zahl bleibt derweil leer -- erfunden wird
+    // nichts.
+    if ((this.__aufrufeStill ?? 0) > Date.now()) return sicht;
     if (nr && !this.__aufrufe.has(nr)) {
       this.__aufrufe.set(nr, null); // Platz belegen, damit es nur einmal laeuft
       const geholt = await this.page
@@ -2549,7 +2731,16 @@ class Session {
               credentials: "include",
             });
             if (!r.ok) return { fehler: `HTTP ${r.status}` };
-            const j = await r.json();
+            // MESSUNG (12.10.2026): Seit heute Mittag kommt hier HTML statt
+            // Daten, und zwar mit HTTP 200 -- Instagram liefert die normale
+            // Webseite aus, statt die Abfrage zu beantworten. Die blosse
+            // Parse-Fehlermeldung sagte nie, WAS geliefert wurde.
+            const roh = await r.text();
+            if (roh.trimStart().startsWith("<")) {
+              const titel = /<title[^>]*>([^<]{0,80})/i.exec(roh)?.[1] ?? "";
+              return { fehler: `HTML statt Daten (HTTP ${r.status}, Titel: "${titel.trim()}", ${roh.length}B)` };
+            }
+            const j = JSON.parse(roh);
             const m = j?.items?.[0] ?? {};
             for (const k of ["play_count", "ig_play_count", "view_count", "video_view_count", "content_views_count"]) {
               if (typeof m[k] === "number") return { wert: m[k], feld: k };
@@ -2560,9 +2751,19 @@ class Session {
         .catch((e) => ({ fehler: String(e?.message ?? e) }));
       if (typeof geholt?.wert === "number") {
         this.__aufrufe.set(nr, geholt.wert);
+        // Der Zaehler gilt nur fuer Fehlschlaege HINTEREINANDER. Ohne das
+        // Zuruecksetzen summierten sich vereinzelte Ausfaelle ueber Stunden
+        // und loesten irgendwann grundlos eine Pause aus.
+        this.__aufrufeFehler = 0;
         console.log(`[aufrufe] ${sicht.code}: ${geholt.wert} (${geholt.feld})`);
       } else {
         console.log(`[aufrufe] ${sicht.code}: nicht bekommen -- ${geholt?.fehler ?? "?"}`);
+        this.__aufrufeFehler = (this.__aufrufeFehler ?? 0) + 1;
+        if (this.__aufrufeFehler >= 3) {
+          this.__aufrufeStill = Date.now() + 15 * 60 * 1000;
+          this.__aufrufeFehler = 0;
+          console.log(`[aufrufe] dreimal hintereinander nichts bekommen -- fuenfzehn Minuten Pause.`);
+        }
       }
     }
     const aufrufe = nr ? this.__aufrufe.get(nr) : null;
@@ -3054,6 +3255,23 @@ class Session {
     try { return this.context.pages().filter((s) => !s.isClosed()).length; } catch { return -1; }
   }
 
+  // MESSUNG (12.10.2026, Emre: "warum oeffnet sich das Profil zweimal?"):
+  // Die Zahl oben sagt WIE VIELE Seiten offen sind, nie WELCHE. Damit liess
+  // sich nicht unterscheiden, ob ein Profil-Tab liegengeblieben ist oder ob
+  // es die kurzlebige Kommentar-Seite war.
+  tabListe() {
+    try {
+      return this.context
+        .pages()
+        .filter((s) => !s.isClosed())
+        .map((s) => {
+          const u = s.url();
+          return u.replace(/^https?:\/\/(www\.)?instagram\.com/, "") || "(leer)";
+        })
+        .join(" | ");
+    } catch { return "(nicht lesbar)"; }
+  }
+
   // Macht jeden Profil-Tab zu ausser dem, der gerade gelten soll.
   async profilTabsAufraeumen(behalten) {
     const offen = [...(this.profilTabs ?? [])];
@@ -3355,11 +3573,30 @@ class Session {
         console.error(`[profil] session ${this.id}: ${name} -- kein Bild von der Seite bekommen.`);
         return { ok: false, fehler: "Couldn't capture the profile.", lauf: meinLauf };
       }
-      console.log(`[profil] session ${this.id}: ${name} geoeffnet (${w}x${h}), Kennung ${meinLauf} | Tabs offen: ${this.tabs()}`);
+      console.log(`[profil] session ${this.id}: ${name} geoeffnet (${w}x${h}), Kennung ${meinLauf} | Tabs offen: ${this.tabs()} -> ${this.tabListe()}`);
       return { ok: true, bild, username: name, lauf: meinLauf };
     } catch (err) {
       console.error(`[profil] session ${this.id}: ${name} FEHLER ${err?.message} | Seite ${seite ? (seite.isClosed() ? "geschlossen" : "offen") : "fehlt"}, ueberholt=${ueberholt()} | Tabs offen: ${this.tabs()}`);
       return { ok: false, fehler: err?.message ?? "Couldn't open this profile.", lauf: meinLauf };
+    } finally {
+      // DEN EIGENEN TAB WEGRAEUMEN, WENN DIESER LAUF NICHT MEHR GILT.
+      //
+      // Beim Klick startet dieser Vorgang zweimal -- die Oberflaeche baut
+      // sich beim ersten Mal doppelt auf. Der zweite ueberholt den ersten,
+      // und der erste steigt an einer der Stellen oben aus. Bisher liess er
+      // dabei seine eigene, frisch geoeffnete Seite liegen: im Browser blieb
+      // ein leerer Tab stehen (12.10.2026 gemessen, "about:blank" neben dem
+      // echten Profil).
+      //
+      // Der Aufraeumer weiter oben konnte das nicht fangen: er laeuft, BEVOR
+      // der ueberholte Lauf seine Seite ueberhaupt angelegt hat.
+      try {
+        if (seite && !seite.isClosed() && this.profilSeite !== seite) {
+          this.profilTabs?.delete(seite);
+          await seite.close().catch(() => {});
+          console.log(`[profil] session ${this.id}: ueberholter Tab (Kennung ${meinLauf}) weggeraeumt | Tabs offen: ${this.tabs()}`);
+        }
+      } catch { /* das Aufraeumen darf nie etwas kaputtmachen */ }
     }
   }
 
@@ -5427,7 +5664,13 @@ async function startSession(accountId, token, lockSecret, modus) {
   // genau dieses Fenster. Bei 1280x720 sass das Reel als Briefmarke in der
   // Mitte -- gemessen kam das Bild dann als 1280x520 heraus.
   const context = await browser.newContext({
-    storageState, ...AUTOMATION_CONTEXT_OPTIONS, viewport: { ...BUEHNE_FENSTER },
+    storageState,
+    ...AUTOMATION_CONTEXT_OPTIONS,
+    viewport: { ...BUEHNE_FENSTER },
+    // Den echten Bildschirm melden statt der Fenstergroesse -- siehe
+    // bildschirmMessen. Schlaegt die Messung fehl, bleibt es beim alten
+    // Verhalten, statt etwas Erfundenes einzutragen.
+    ...((await bildschirmMessen(browser)) ? { screen: await bildschirmMessen(browser) } : {}),
   });
   console.log(`[timing] chromium launch + context: ${Date.now() - t1}ms`);
 
@@ -5644,10 +5887,10 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-strom|profil-ton|profil-ton-antwort|profil-bedienen|profil-schliessen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-strom|profil-ton|profil-ton-antwort|profil-bedienen|profil-schliessen|feed-modus|feed-wechseln|feed-auffrischen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
-      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung, breite, hoehe, anzeige, x, y } = await readBody(req);
+      const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung, breite, hoehe, anzeige, x, y, ziel } = await readBody(req);
       const session = requireSession(res, id, sessionSecret);
       if (!session) return;
 
@@ -5695,6 +5938,15 @@ const server = http.createServer(async (req, res) => {
       if (action === "like") {
         const result = await session.like();
         return json(res, 200, result);
+      }
+      if (action === "feed-auffrischen") {
+        return json(res, 200, await session.feedAuffrischen());
+      }
+      if (action === "feed-modus") {
+        return json(res, 200, await session.feedModus());
+      }
+      if (action === "feed-wechseln") {
+        return json(res, 200, await session.feedWechseln(ziel));
       }
       if (action === "follow") {
         const result = await session.follow();

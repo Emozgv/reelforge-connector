@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Auftritt } from "../shared/v3";
 import { KOPF_ABSTAND, KOPF_KUERZEL, KOPF_TITEL, KOPF_UNTERZEILE } from "../../lib/pageHeader";
+import { feedAuffrischen, quelleLesen, quelleWechseln } from "./LiveBuehne";
 import {
   Plus,
   X,
@@ -482,6 +483,83 @@ function ConnectAccountModal({
 }
 
 type Mode = "swipe" | "archive";
+
+// Instagrams Umschalter der Quelle, in unserer Form. "Following" zeigt nur
+// noch Reels von Accounts, denen der Research-Account folgt -- das ist ein
+// anderer Strom, kein Filter. Ohne laufende Sitzung gibt es drueben keine
+// Seite, auf der etwas zu druecken waere: dann ausgegraut.
+function QuellenWahl({ sitzung }: { sitzung: { sessionId: string; sessionSecret: string } | null }) {
+  const [modus, setModus] = useState<string | null>(null);
+  const [offen, setOffen] = useState(false);
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sitzung) { setModus(null); setOffen(false); return; }
+    let weg = false;
+    void quelleLesen(sitzung.sessionId, sitzung.sessionSecret)
+      .then((a) => { if (!weg && a?.modus) setModus(a.modus); })
+      .catch(() => {});
+    return () => { weg = true; };
+  }, [sitzung]);
+
+  const aus = !sitzung || laeuft;
+
+  async function waehle(ziel: string) {
+    setOffen(false);
+    if (!sitzung || ziel === modus) return;
+    setLaeuft(true);
+    setFehler(null);
+    const a = await quelleWechseln(sitzung.sessionId, sitzung.sessionSecret, ziel).catch(() => null);
+    setLaeuft(false);
+    // Erst uebernehmen, wenn der Connector bestaetigt hat -- nicht beim Klick.
+    if (a?.ok) setModus(a.modus ?? ziel);
+    else setFehler(a?.fehler ?? "Umschalten hat nicht geklappt");
+  }
+
+  return (
+    <span className="relative shrink-0">
+      <button
+        type="button"
+        disabled={aus}
+        onClick={() => setOffen((v) => !v)}
+        title={sitzung ? "Switch Instagram's source" : "Only while a research session is running"}
+        className={[
+          "flex items-center gap-1 h-[22px] px-2 rounded-[7px] border text-[11px] transition-colors duration-150",
+          aus
+            ? "border-white/[0.06] text-neutral-700 cursor-default"
+            : "border-white/[0.09] text-neutral-300 hover:text-neutral-50 hover:border-[#D39448]/35",
+        ].join(" ")}
+      >
+        {laeuft ? "Switching…" : (modus ?? "For you")}
+        <span aria-hidden className="text-[9px] leading-none opacity-70">▾</span>
+      </button>
+      {offen && !aus && (
+        <span className="absolute right-0 top-[26px] z-30 w-[118px] rounded-[9px] bg-[#141416] border border-white/[0.09] shadow-2xl p-1">
+          {["For you", "Following"].map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => void waehle(w)}
+              className={[
+                "w-full flex items-center justify-between h-7 px-2 rounded-[6px] text-[11.5px] transition-colors duration-150",
+                w === modus ? "text-[#D39448]" : "text-neutral-300 hover:text-neutral-50 hover:bg-white/[0.06]",
+              ].join(" ")}
+            >
+              {w}
+              {w === modus && <span aria-hidden>✓</span>}
+            </button>
+          ))}
+        </span>
+      )}
+      {fehler && (
+        <span className="absolute right-0 top-[26px] z-30 whitespace-nowrap rounded-[7px] bg-[#141416] border border-rose-500/30 px-2 py-1 text-[10.5px] text-rose-300">
+          {fehler}
+        </span>
+      )}
+    </span>
+  );
+}
 
 export function ResearchAccountsPage({
   creators,
@@ -1216,8 +1294,17 @@ export function ResearchAccountsPage({
                     spinning={frischtAuf && liveSession.status !== "active"}
                     disabled={liveSession.status !== "active"}
                     onClick={() => {
+                      // Nicht mehr die ganze Sitzung neu aufbauen: Instagram
+                      // wird drueben auf Home geschickt, die Seite neu
+                      // geladen und wieder auf Reels gegangen -- der Weg
+                      // eines Menschen. Anmeldung, Sitzung und Historie
+                      // bleiben dabei bestehen.
+                      const sitzung = liveSession.sitzung;
+                      if (!sitzung) return;
                       setFrischtAuf(true);
-                      void liveSession.startResearchFromClick(currentAccount.id, currentAccount.platform);
+                      void feedAuffrischen(sitzung.sessionId, sitzung.sessionSecret)
+                        .catch(() => null)
+                        .finally(() => setFrischtAuf(false));
                     }}
                   />
                   <QuickActionButton
@@ -1266,9 +1353,15 @@ export function ResearchAccountsPage({
                 {/* The logged-in research account itself — already shown in
                     Session Context on the left, repeated here so this panel
                     is self-explanatory on its own too. */}
-                <div className="w-full max-w-[345px] flex items-center gap-1.5 mb-4 text-[11px] text-neutral-500">
-                  <PlatformIcon platform={currentAccount.platform} size={11} />
-                  Logged in as <span className="text-neutral-50 font-medium">@{currentAccount.username || currentAccount.label}</span>
+                <div className="w-full max-w-[345px] flex items-center justify-between gap-2 mb-4 text-[11px] text-neutral-500">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <PlatformIcon platform={currentAccount.platform} size={11} />
+                    Logged in as <span className="text-neutral-50 font-medium truncate">@{currentAccount.username || currentAccount.label}</span>
+                  </span>
+                  {/* Instagrams eigener Umschalter der Quelle. Vor dem Start
+                      der Research gibt es keine Seite, auf der man ihn
+                      druecken koennte -- deshalb bis dahin ausgegraut. */}
+                  <QuellenWahl sitzung={liveSession.sitzung} />
                 </div>
                 <SwipeResearchPlayer
                   sitzung={liveSession.sitzung}
