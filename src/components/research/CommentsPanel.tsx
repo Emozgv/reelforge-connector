@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Loader2, Heart, ChevronDown, Check, AlertTriangle, Smile } from "lucide-react";
+import { MessageCircle, Loader2, Heart, ChevronDown, Check, AlertTriangle, Smile, NotebookPen, Bold, Italic, Underline, List, ListOrdered, CheckSquare, Quote, Minus } from "lucide-react";
 import type { ReelVideo } from "../../types";
 import type { LiveComment, KommentarSortierung } from "../../state/useLiveResearchSession";
+import { supabase } from "../../lib/supabase";
 
 // Instagrams eigenes Platzhalter-Bild: heller Kreis mit grauer Figur. Es
 // steht dort, wo jemand kein Profilbild hat -- und ebenso, wenn Instagrams
@@ -168,8 +169,251 @@ function Kommentar({ c, klein = false }: { c: LiveComment; klein?: boolean }) {
   );
 }
 
+
+// Die Vorlage einer neuen Notiz. Wortlaut und Reihenfolge sind von Emre
+// festgelegt -- nichts hinzufuegen, nichts umbenennen. Als HTML, weil der
+// Editor formatierten Text traegt: die Ueberschrift in Gold, die
+// Beschriftungen als eigene Zeilen, dazwischen Platz zum Schreiben.
+const NOTIZ_VORLAGE = [
+  '<p class="rf-notiz-titel">REEL NOTE</p>',
+  '<p class="rf-notiz-feld">Research focus:</p><p data-hinweis="e.g. hook style, editing pattern, audience, topic…"></p>',
+  '<p class="rf-notiz-feld">Pattern:</p><p><br></p>',
+  '<p class="rf-notiz-feld">Why it works:</p><p><br></p>',
+  '<p class="rf-notiz-feld">Best part:</p><p><br></p>',
+  '<p class="rf-notiz-feld">What to test:</p><p><br></p>',
+  '<p class="rf-notiz-feld">Comments worth saving:</p><p>-</p><p>-</p><p><br></p>',
+  '<p class="rf-notiz-feld">Can this creator do it:</p><p><br></p>',
+  '<p class="rf-notiz-feld">What could stop us:</p><p><br></p>',
+].join("");
+
+const NOTIZ_EMOJIS = ["🔥", "👏", "😂", "😍", "💡", "👀", "✅", "❌", "⚡", "🎯", "📈", "💬"];
+
+// Ein Knopf der Werkzeugleiste. Verhindert, dass der Editor beim Druecken
+// den Schreibfokus verliert -- sonst wuesste der Befehl nicht, worauf er
+// wirken soll.
+function Werkzeug({
+  titel,
+  aktiv,
+  onAktion,
+  children,
+}: {
+  titel: string;
+  aktiv?: boolean;
+  onAktion: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={titel}
+      aria-label={titel}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onAktion}
+      className={[
+        "w-[26px] h-[26px] rounded-[6px] flex items-center justify-center transition-colors duration-150",
+        aktiv ? "text-[#D39448] bg-[#D39448]/12" : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.06]",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Trenner() {
+  return <span aria-hidden className="w-px h-[16px] bg-white/[0.09] mx-1 shrink-0" />;
+}
+
+// Die Notiz haengt am REEL, nicht an der Sitzung: beim Weiterwischen bleibt
+// sie bestehen, im Archiv ist sie wieder da, und wird das Reel in eine
+// Collection gespeichert, geht sie nicht verloren -- es gibt nur diese eine
+// Quelle, nachgeschlagen ueber die Reel-Kennung.
+//
+// Gespeichert wird waehrend des Schreibens, 700 ms nach dem letzten Zeichen.
+// Bei jedem Tastendruck zu schreiben waere je Buchstabe ein Schreibvorgang.
+function ReelNotiz({ reelId, workspaceId }: { reelId: string | null; workspaceId?: string }) {
+  const feldRef = useRef<HTMLDivElement>(null);
+  const [geladen, setGeladen] = useState(false);
+  const [start, setStart] = useState<string | null>(null);
+  const [stand, setStand] = useState<"ruht" | "speichert" | "gesichert" | "fehler">("ruht");
+  const [emojisOffen, setEmojisOffen] = useState(false);
+  const uhrRef = useRef<number | null>(null);
+  const reelRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    reelRef.current = reelId;
+    setGeladen(false);
+    setStart(null);
+    setStand("ruht");
+    setEmojisOffen(false);
+    if (!reelId) return;
+    let weg = false;
+    void (async () => {
+      const { data } = await supabase
+        .schema("client_os")
+        .from("research_reel_notes")
+        .select("note")
+        .eq("reel_id", reelId)
+        .maybeSingle();
+      if (weg || reelRef.current !== reelId) return;
+      // Erst merken, dann zeichnen: das Feld wird mit diesem Inhalt neu
+      // aufgebaut (siehe key weiter unten). Vorher wurde innerHTML von Hand
+      // gesetzt -- und war beim naechsten Zeichnen wieder weg, weshalb die
+      // Vorlage nie zu sehen war.
+      setStart(data?.note ? data.note : NOTIZ_VORLAGE);
+      setGeladen(true);
+    })();
+    return () => { weg = true; };
+  }, [reelId]);
+
+  function sichern() {
+    if (!reelId || !geladen) return;
+    if (uhrRef.current !== null) window.clearTimeout(uhrRef.current);
+    setStand("speichert");
+    uhrRef.current = window.setTimeout(() => {
+      uhrRef.current = null;
+      const inhalt = feldRef.current?.innerHTML ?? "";
+      void (async () => {
+        // Die Workspace-Kennung kommt von oben, nicht aus einem eigenen
+        // Datenbankaufruf. Der hing zuvor, und damit blieb "Saving…" ewig
+        // stehen, ohne dass je etwas geschrieben wurde.
+        if (!workspaceId) { setStand("fehler"); return; }
+        try {
+          const { error } = await supabase
+            .schema("client_os")
+            .from("research_reel_notes")
+            .upsert(
+              { workspace_id: workspaceId, reel_id: reelId, note: inhalt, updated_at: new Date().toISOString() },
+              { onConflict: "workspace_id,reel_id" }
+            );
+          setStand(error ? "fehler" : "gesichert");
+        } catch {
+          // Auch ein unerwarteter Fehler darf den Zustand nicht einfrieren.
+          setStand("fehler");
+        }
+      })();
+    }, 700);
+  }
+
+  function befehl(name: string, wert?: string) {
+    feldRef.current?.focus();
+    document.execCommand(name, false, wert);
+    sichern();
+  }
+
+  function emojiEinfuegen(e: string) {
+    feldRef.current?.focus();
+    document.execCommand("insertText", false, e);
+    setEmojisOffen(false);
+    sichern();
+  }
+
+  if (!reelId) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-8 text-center">
+        <p className="text-[11.5px] text-neutral-600">No reel is being viewed right now.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col px-3 pt-3 pb-3">
+      <div className="flex-1 min-h-0 flex flex-col rounded-[14px] border border-white/[0.07] bg-[#0d0d0f] overflow-hidden">
+        {/* Kopfzeile: links der Titel, rechts der Speicherzustand. */}
+        <div className="flex items-center justify-between gap-2 px-3.5 h-[46px] shrink-0">
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="w-[22px] h-[22px] rounded-[6px] border border-[#D39448]/35 flex items-center justify-center shrink-0">
+              <NotebookPen size={12} className="text-[#D39448]" />
+            </span>
+            <span className="text-[13.5px] font-semibold tracking-[-0.1px] text-[#f5f5f5]">Reel note</span>
+          </span>
+          <span className="flex items-center gap-1.5 shrink-0">
+            <span
+              className="w-[5px] h-[5px] rounded-full"
+              style={{
+                background:
+                  stand === "fehler" ? "#f43f5e" : stand === "speichert" ? "#D39448" : "#4ade80",
+              }}
+            />
+            <span className="text-[11px] text-neutral-400">
+              {stand === "speichert" ? "Saving…" : stand === "fehler" ? "Not saved" : "Autosaved"}
+            </span>
+          </span>
+        </div>
+
+        {/* Werkzeugleiste. */}
+        <div className="mx-3 mb-2.5 shrink-0 rounded-[9px] border border-white/[0.07] bg-[#121214] px-2 h-[36px] flex items-center gap-0.5 relative">
+          <Werkzeug titel="Bold" onAktion={() => befehl("bold")}>
+            <Bold size={13} />
+          </Werkzeug>
+          <Werkzeug titel="Italic" onAktion={() => befehl("italic")}>
+            <Italic size={13} />
+          </Werkzeug>
+          <Werkzeug titel="Underline" onAktion={() => befehl("underline")}>
+            <Underline size={13} />
+          </Werkzeug>
+          <Trenner />
+          <Werkzeug titel="Bullet list" onAktion={() => befehl("insertUnorderedList")}>
+            <List size={13} />
+          </Werkzeug>
+          <Werkzeug titel="Numbered list" onAktion={() => befehl("insertOrderedList")}>
+            <ListOrdered size={13} />
+          </Werkzeug>
+          <Werkzeug titel="Checklist" onAktion={() => befehl("insertText", "☐ ")}>
+            <CheckSquare size={13} />
+          </Werkzeug>
+          <Trenner />
+          <Werkzeug titel="Quote" onAktion={() => befehl("formatBlock", "blockquote")}>
+            <Quote size={13} />
+          </Werkzeug>
+          <Werkzeug titel="Emoji" aktiv={emojisOffen} onAktion={() => setEmojisOffen((v) => !v)}>
+            <Smile size={13} />
+          </Werkzeug>
+          <Trenner />
+          <Werkzeug titel="Divider" onAktion={() => befehl("insertHorizontalRule")}>
+            <Minus size={13} />
+          </Werkzeug>
+
+          {emojisOffen && (
+            <span className="absolute right-2 top-[40px] z-30 w-[188px] rounded-[10px] border border-white/[0.09] bg-[#141416] shadow-2xl p-1.5 grid grid-cols-6 gap-0.5">
+              {NOTIZ_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onMouseDown={(ev) => ev.preventDefault()}
+                  onClick={() => emojiEinfuegen(e)}
+                  className="h-7 rounded-[6px] text-[15px] leading-none hover:bg-white/[0.07] transition-colors duration-150"
+                >
+                  {e}
+                </button>
+              ))}
+            </span>
+          )}
+        </div>
+
+        {/* Die Schreibflaeche. */}
+        <div className="flex-1 min-h-0 mx-3 mb-3 rounded-[10px] border border-white/[0.06] bg-[#0a0a0c] overflow-y-auto">
+          {start !== null && (
+            <div
+              key={reelId}
+              ref={feldRef}
+              contentEditable
+              suppressContentEditableWarning
+              spellCheck={false}
+              onInput={sichern}
+              onBlur={sichern}
+              dangerouslySetInnerHTML={{ __html: start }}
+              className="rf-notiz min-h-full px-3.5 py-2.5 text-[12px] leading-[1.5] text-neutral-200 outline-none"
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CommentsPanel({
   video,
+  workspaceId,
   isOpen,
   fetchComments,
   kommentieren,
@@ -178,6 +422,8 @@ export function CommentsPanel({
   antwortenLaden,
 }: {
   video: ReelVideo | null;
+  // Nur fuer die Notiz: sie wird je Workspace und Reel gespeichert.
+  workspaceId?: string;
   isOpen: boolean;
   fetchComments: (reelId: string, sourceUrl: string, abMarke?: string | null, sortierung?: KommentarSortierung | null) => Promise<{ available: boolean; comments: LiveComment[]; reelId: string; error?: string; naechste?: string | null }>;
   // Einen eigenen Kommentar schreiben -- echte Handlung auf dem verbundenen
@@ -464,14 +710,7 @@ export function CommentsPanel({
       </div>
 
       {reiter === "notizen" ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
-          <p className="text-[12.5px] text-neutral-400">Notizen gibt es noch nicht.</p>
-          <p className="mt-2 text-[11.5px] leading-relaxed text-neutral-600">
-            Solange dieser Reiter offen ist, werden keine Kommentare geladen –
-            der Connector öffnet dann auch keine zweite Instagram-Seite im
-            Hintergrund. Genau dafür ist er gerade da.
-          </p>
-        </div>
+        <ReelNotiz reelId={video?.id ?? null} workspaceId={workspaceId} />
       ) : (
       <>
       <div className="px-4 pt-3 flex items-center justify-between">

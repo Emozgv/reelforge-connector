@@ -454,3 +454,52 @@ html[data-tab-hidden="true"] .hero-photo-layer {
   border-radius: 999px;
   background: #fff;
 }
+
+/* ---------------------------------------------------------------------------
+   Reel-Notiz (Research -> Notes)
+
+   Der Editor traegt formatierten Text, keine Eingabefelder. Die Gestaltung
+   steckt deshalb hier statt in Klassen am Markup: Was der Mitarbeiter
+   schreibt, erzeugt der Browser selbst (Listen, Zitate, Trenner), und das
+   muss genauso aussehen wie die Vorlage.
+--------------------------------------------------------------------------- */
+.rf-notiz .rf-notiz-titel {
+  color: #D39448;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  /* Dichter gesetzt, damit die ganze Vorlage ohne Scrollen ins Panel
+     passt -- gerechnet: acht Felder brauchten zuvor rund 540 Pixel bei
+     etwa 515 verfuegbaren, weshalb die letzten zwei herausfielen. */
+  margin: 0 0 8px;
+}
+.rf-notiz .rf-notiz-feld {
+  color: #f0f0f2;
+  font-weight: 500;
+  margin: 8px 0 0;
+}
+.rf-notiz .rf-notiz-feld:first-of-type { margin-top: 0; }
+/* Der Hinweis unter "Research focus". Er steht in einem leeren Absatz und
+   verschwindet in dem Moment, in dem jemand hineinschreibt -- gespeichert
+   wird er nie, weil er nur als Attribut existiert. */
+.rf-notiz p[data-hinweis]:empty::before {
+  content: attr(data-hinweis);
+  color: #6a6b70;
+  pointer-events: none;
+}
+.rf-notiz ul { list-style: disc; padding-left: 20px; margin: 4px 0; }
+.rf-notiz ol { list-style: decimal; padding-left: 20px; margin: 4px 0; }
+.rf-notiz li { margin: 2px 0; }
+.rf-notiz blockquote {
+  border-left: 2px solid rgba(211, 148, 72, 0.5);
+  padding-left: 10px;
+  margin: 6px 0;
+  color: #c9cace;
+}
+.rf-notiz hr {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  margin: 12px 0;
+}
+.rf-notiz b, .rf-notiz strong { color: #fafafa; font-weight: 650; }

@@ -1422,6 +1422,7 @@ export function ResearchAccountsPage({
                     Save to Collection floating at a fixed offset. */}
                 <div className="flex-1 flex flex-col min-h-0">
                   <CommentsPanel
+                    workspaceId={workspaceId}
                     video={currentSwipeVideo}
                     isOpen
                     fetchComments={liveSession.fetchComments}
