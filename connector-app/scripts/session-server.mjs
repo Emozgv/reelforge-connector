@@ -2709,18 +2709,6 @@ class Session {
     // Zahl leer.
     this.__aufrufe = this.__aufrufe ?? new Map();
     const nr = bekannt?.pk ?? null;
-    // ATEMPAUSE, WENN INSTAGRAM NICHT MEHR ANTWORTET (12.10.2026).
-    //
-    // Pro Reel geht genau eine Anfrage raus -- das ist nicht zu viel. An
-    // einem Tag mit ueber 460 durchgelaufenen Reels reicht es Instagram
-    // trotzdem: Es beantwortet die Abfrage dann nicht mehr, sondern
-    // schickt die normale Webseite zurueck (HTTP 200, 848 KB HTML).
-    //
-    // Weiterzufragen macht es nur schlimmer und fuellt das Protokoll.
-    // Nach drei Fehlschlaegen hintereinander also fuenfzehn Minuten Ruhe,
-    // danach ein Versuch. Die Zahl bleibt derweil leer -- erfunden wird
-    // nichts.
-    if ((this.__aufrufeStill ?? 0) > Date.now()) return sicht;
     if (nr && !this.__aufrufe.has(nr)) {
       this.__aufrufe.set(nr, null); // Platz belegen, damit es nur einmal laeuft
       const geholt = await this.page
@@ -2751,19 +2739,9 @@ class Session {
         .catch((e) => ({ fehler: String(e?.message ?? e) }));
       if (typeof geholt?.wert === "number") {
         this.__aufrufe.set(nr, geholt.wert);
-        // Der Zaehler gilt nur fuer Fehlschlaege HINTEREINANDER. Ohne das
-        // Zuruecksetzen summierten sich vereinzelte Ausfaelle ueber Stunden
-        // und loesten irgendwann grundlos eine Pause aus.
-        this.__aufrufeFehler = 0;
         console.log(`[aufrufe] ${sicht.code}: ${geholt.wert} (${geholt.feld})`);
       } else {
         console.log(`[aufrufe] ${sicht.code}: nicht bekommen -- ${geholt?.fehler ?? "?"}`);
-        this.__aufrufeFehler = (this.__aufrufeFehler ?? 0) + 1;
-        if (this.__aufrufeFehler >= 3) {
-          this.__aufrufeStill = Date.now() + 15 * 60 * 1000;
-          this.__aufrufeFehler = 0;
-          console.log(`[aufrufe] dreimal hintereinander nichts bekommen -- fuenfzehn Minuten Pause.`);
-        }
       }
     }
     const aufrufe = nr ? this.__aufrufe.get(nr) : null;
@@ -4233,6 +4211,23 @@ class Session {
         RF.groesse = vergroesserung || 1;
         const px = (n) => `${(n * RF.groesse).toFixed(1)}px`;
 
+        // KEIN WEICHZEICHNER. Zweimal versucht, zweimal gescheitert.
+        //
+        // 10.10.2026: auf allen Kacheln, auf jeder Pille. Instagrams
+        // Bilder kamen nicht mehr durch, nur noch graue Pillen im Leeren.
+        //
+        // 12.10.2026: zweiter Versuch, diesmal nur fuer die Kacheln im
+        // Bild und nur vier Pillen statt sieben -- rund fuenfzig Flaechen
+        // statt 350. Genau dasselbe Bild: graue Kaesten, flackernde
+        // Vorschauen, das Raster verliert sich beim Scrollen. Die Zahl der
+        // Flaechen war also nie der Punkt; der Weichzeichner selbst kostet
+        // zu viel, weil er bei jedem Einzelbild neu ueber bewegtes Video
+        // rechnen muss.
+        //
+        // Damit ist das entschieden und wird nicht ein drittes Mal
+        // probiert. Die Lesbarkeit traegt stattdessen ein dunklerer Grund
+        // plus Schatten auf der Schrift.
+
         // Wie gross das Schild auf der Kachel ist -- EINE Zahl fuer alles.
         //
         // Stand 10.10.2026: erst auf 0.45 ("5x kleiner"), dann auf
@@ -4253,6 +4248,12 @@ class Session {
           teilen: '<circle cx="12.4" cy="3.4" r="2"/><circle cx="3.6" cy="8" r="2"/><circle cx="12.4" cy="12.6" r="2"/><path d="M5.4 7 10.6 4.3M5.4 9l5.2 2.7" stroke="currentColor" stroke-width="1.5" fill="none"/>',
           auge: '<path d="M8 3.4c3.4 0 5.9 2.8 6.6 4.6-.7 1.8-3.2 4.6-6.6 4.6S2.1 9.8 1.4 8C2.1 6.2 4.6 3.4 8 3.4z"/><circle cx="8" cy="8" r="2.1" fill="#111114"/>',
           uhr: '<path d="M8 1.6a6.4 6.4 0 1 0 0 12.8A6.4 6.4 0 0 0 8 1.6zm.7 6.1 2.4 1.4-.7 1.2-3.1-1.8V4.2h1.4z"/>',
+          // Die LAENGE des Reels braucht ein eigenes Zeichen -- vorher
+          // stand zweimal dieselbe Uhr im Stapel, einmal fuer die Laenge
+          // und einmal fuer die Uhrzeit (Emre, 12.10.2026). Die Stoppuhr
+          // hat den Knopf oben und ist dadurch auf einen Blick zu
+          // unterscheiden.
+          stoppuhr: '<path d="M6.2 0.9h3.6v1.5H6.2z"/><path d="M8 3.1a5.6 5.6 0 1 0 0 11.2A5.6 5.6 0 0 0 8 3.1zm.7 5.5 2.2 1.3-.7 1.2-2.9-1.7V5.6h1.4z"/>',
           kalender: '<path d="M5 1.5v1.2h6V1.5h1.5v1.2H13A1.5 1.5 0 0 1 14.5 4.2v8.3A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.2A1.5 1.5 0 0 1 3 2.7h.5V1.5zM3 6.4v6.1h10V6.4z"/>',
         };
 
@@ -4260,13 +4261,13 @@ class Session {
           const stapel = document.createElement("div");
           stapel.style.cssText =
             `display:flex;flex-direction:column;align-items:stretch;gap:${pxS(4)};` +
-            `font:700 ${pxS(12)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
+            `font:500 ${pxS(10.5)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
 
           const pille = (kinder, farbig) => {
             const z = document.createElement("div");
             z.style.cssText =
-              `display:flex;align-items:center;gap:${pxS(7)};` +
-              `padding:0 ${pxS(11)};height:${pxS(farbig ? 21 : 26)};border-radius:${pxS(999)};` +
+              `display:flex;align-items:center;gap:${pxS(farbig ? 7 : 6)};` +
+              `padding:0 ${pxS(farbig ? 11 : 9)};height:${pxS(farbig ? 21 : 22)};border-radius:${pxS(999)};` +
               "white-space:nowrap;font-variant-numeric:tabular-nums;" +
               (farbig
                 ? // Die Rate sitzt oben als schmaleres, farbiges Band ueber
@@ -4286,9 +4287,27 @@ class Session {
                   // Stattdessen: etwas mehr Deckkraft und ein Schatten auf
                   // der Schrift. Kostet nichts und bleibt auf hellen Bildern
                   // lesbar.
-                  "background:rgba(17,17,20,.68);color:#fff;" +
-                  "border:1px solid rgba(255,255,255,.10);" +
-                  "text-shadow:0 1px 2px rgba(0,0,0,.6);");
+                  // NACHGEAHMTES GLAS statt echtem Weichzeichner.
+                  //
+                  // Der echte liest bei jedem Bild, was hinter der Pille
+                  // liegt -- genau das hat uns zweimal zerlegt. Hier
+                  // schaut nichts nach hinten: ein etwas aufgehellter,
+                  // milchiger Grund, eine zarte Lichtkante oben innen und
+                  // eine helle Aussenkante. Das Auge liest das als Glas,
+                  // der Browser rechnet nichts nach.
+                  // Dunkle, fast deckende Pille mit eigenem Koerper
+                  // (12.10.2026, nach Emres Vorlage): senkrechter Verlauf
+                  // von oben hell nach unten dunkel, duenne helle Kante,
+                  // Lichtkante innen oben, weicher Schatten nach aussen.
+                  //
+                  // Ein Verlauf wird EINMAL gezeichnet. Das ist der ganze
+                  // Unterschied zum Weichzeichner, der bei jedem
+                  // Videobild neu rechnen musste -- und uns deshalb
+                  // zweimal das Raster zerlegt hat.
+                  "background:linear-gradient(180deg,rgba(44,45,50,.94),rgba(24,25,29,.96));" +
+                  "color:#fff;" +
+                  `border:${px(1)} solid rgba(255,255,255,.14);font-weight:500;` +
+                  `box-shadow:inset 0 ${px(1)} 0 rgba(255,255,255,.11),0 ${px(1)} ${px(3)} rgba(0,0,0,.45);`);
             z.append(...kinder);
             return z;
           };
@@ -4296,8 +4315,8 @@ class Session {
           const bildEl = (name) => {
             const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             s.setAttribute("viewBox", "0 0 16 16");
-            s.setAttribute("width", pxS(12.5));
-            s.setAttribute("height", pxS(12.5));
+            s.setAttribute("width", pxS(11));
+            s.setAttribute("height", pxS(11));
             // Das Herz in Instagram-Rosa, alles andere weiss. Die Zahl
             // daneben bleibt weiss -- faerbt man beides, kippt die Zeile
             // optisch und das Schild wird unruhig.
@@ -4315,16 +4334,14 @@ class Session {
           const r = rate(b);
           if (r) stapel.appendChild(pille([textEl(r)], true));
 
-          // Reihenfolge nach Emres Ansage (10.10.2026): Likes, Aufrufe,
-          // Kommentare, Reposts -- danach erst Laenge, Datum, Uhrzeit.
+          // Die Grundlage, auf die wir uns am 12.10.2026 geeinigt haben:
+          // Rate, Likes, Aufrufe, Kommentare. Mehr steht auf der Kachel
+          // nicht -- Reposts, Laenge, Datum und Uhrzeit sind bewusst
+          // draussen und kommen erst zurueck, wenn Emre es sagt.
           const zeilen = [
             ["herz", kurz(b.likes)],
             ["auge", kurz(b.aufrufe)],
             ["sprechblase", kurz(b.kommentare)],
-            ["teilen", kurz(b.reposts)],
-            ["uhr", dauerText(b.dauer)],
-            ["kalender", datumText(b.zeitpunkt)],
-            ["uhr", uhrzeitText(b.zeitpunkt)],
           ];
           let hatZahlen = false;
           for (const [name, wert] of zeilen) {
@@ -4340,6 +4357,63 @@ class Session {
             h.style.fontWeight = "600";
             h.style.opacity = ".8";
             stapel.insertBefore(h, stapel.firstChild);
+          }
+          return stapel;
+        }
+
+        // Der kleine Stapel unten rechts (Variante A, von Emre am
+        // 12.10.2026 nach drei Entwuerfen gewaehlt): Reposts, Laenge,
+        // Datum, Uhrzeit. Deutlich kleiner und blasser als das
+        // Hauptschild, damit die vier Hauptzahlen links der Blickfang
+        // bleiben. Nur was es bei diesem Beitrag wirklich gibt -- gibt es
+        // nichts davon, entsteht auch kein Schild.
+        const NEBEN = 0.62;
+        const pxN = (n) => px(n * NEBEN);
+
+        // Klein geschrieben: Tag und Monat ohne Jahr, Uhrzeit ohne
+        // Sekunden. Bei dieser Groesse zaehlt jede Stelle, und das Jahr
+        // steht ohnehin bei allen Beitraegen desselben Profils gleich da.
+        const kurzDatum = (t) =>
+          t ? new Date(t * 1000).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) : null;
+        const kurzUhrzeit = (t) =>
+          t ? new Date(t * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : null;
+
+        function nebenSchild(b) {
+          const zeilen = [
+            ["teilen", kurz(b.reposts)],
+            ["stoppuhr", dauerText(b.dauer)],
+            ["kalender", kurzDatum(b.zeitpunkt)],
+            ["uhr", kurzUhrzeit(b.zeitpunkt)],
+          ].filter(([, wert]) => wert);
+          if (!zeilen.length) return null;
+
+          const stapel = document.createElement("div");
+          stapel.style.cssText =
+            `display:flex;flex-direction:column;align-items:flex-end;gap:${pxN(5)};` +
+            `font:500 ${pxN(11)}/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif`;
+
+          for (const [name, wert] of zeilen) {
+            const z = document.createElement("div");
+            z.style.cssText =
+              `display:flex;align-items:center;gap:${pxN(6)};` +
+              `padding:0 ${pxN(9)};height:${pxN(22)};border-radius:${pxN(999)};` +
+              "white-space:nowrap;font-variant-numeric:tabular-nums;" +
+              // Derselbe Koerper wie oben, nur kleiner.
+              "background:linear-gradient(180deg,rgba(44,45,50,.94),rgba(24,25,29,.96));" +
+              "color:#fff;" +
+              `border:${px(1)} solid rgba(255,255,255,.14);` +
+              `box-shadow:inset 0 ${px(1)} 0 rgba(255,255,255,.11),0 ${px(1)} ${px(3)} rgba(0,0,0,.45);`;
+            const bild = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            bild.setAttribute("viewBox", "0 0 16 16");
+            bild.setAttribute("width", pxN(11));
+            bild.setAttribute("height", pxN(11));
+            bild.setAttribute("fill", "currentColor");
+            bild.style.cssText = "flex:none";
+            bild.innerHTML = ZEICHEN[name];
+            const text = document.createElement("span");
+            text.textContent = wert;
+            z.append(bild, text);
+            stapel.appendChild(z);
           }
           return stapel;
         }
@@ -4434,14 +4508,28 @@ class Session {
             if (!vorhanden) {
               vorhanden = document.createElement("div");
               vorhanden.className = "rf-schild";
-              vorhanden.style.cssText = `position:absolute;left:${pxS(10)};bottom:${pxS(10)};z-index:20;pointer-events:none`;
+              // Die Huelle liegt ueber der ganzen Kachel, damit das
+              // Hauptschild links unten und der kleine Stapel rechts
+              // unten sitzen koennen.
+              vorhanden.style.cssText = "position:absolute;inset:0;z-index:20;pointer-events:none";
               if (getComputedStyle(link).position === "static") link.style.position = "relative";
               link.appendChild(vorhanden);
             }
             vorhanden.dataset.code = code;
             vorhanden.dataset.stand = stand;
             vorhanden.textContent = "";
-            vorhanden.appendChild(schild(b));
+            const haupt = schild(b);
+            haupt.style.position = "absolute";
+            haupt.style.left = pxS(10);
+            haupt.style.bottom = pxS(10);
+            vorhanden.appendChild(haupt);
+            const neben = nebenSchild(b);
+            if (neben) {
+              neben.style.position = "absolute";
+              neben.style.right = pxN(10);
+              neben.style.bottom = pxN(10);
+              vorhanden.appendChild(neben);
+            }
             beschriftet++;
           }
           RF.stand = { kacheln, beschriftet, bekannt: RF.daten.size };
