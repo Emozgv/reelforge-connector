@@ -6,6 +6,11 @@ export interface ResearchFeedItemRow {
   // key. synced_at is shared across every reel in the same sync batch, so it
   // can't give per-item resolution (see the migration that added this).
   seq: number;
+  // Wann dieses Reel ZULETZT gesehen wurde. Danach sortiert das Archiv,
+  // damit das gerade angesehene Reel vorne steht. seq/synced_at bleiben
+  // der erste Fund (12.10.2026).
+  last_seen_seq: number;
+  last_seen_at: string;
   platform: string;
   source_username: string;
   source_url: string;

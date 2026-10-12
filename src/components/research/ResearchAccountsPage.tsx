@@ -753,15 +753,19 @@ export function ResearchAccountsPage({
   async function loadFeed(accountId: string) {
     setLoadingFeed(true);
     setFeedError(false);
-    // seq (a true per-row identity) is the deterministic order — synced_at
-    // alone is shared by every reel in the same sync batch and can't fully
-    // order or tie-break within it.
+    // Sortiert wird nach "zuletzt gesehen", nicht nach dem ersten Fund.
+    //
+    // Vorher stand hier seq -- und seq beschreibt, wann ein Reel zum
+    // ERSTEN Mal auftauchte. Ein Reel, das man erneut anschaut, blieb
+    // dadurch weit hinten stehen, obwohl man es gerade eben gesehen hat
+    // (12.10.2026 von Emre gemeldet). last_seen_seq rueckt bei jedem
+    // Ansehen nach vorne; synced_at bleibt unberuehrt der erste Fund.
     const { data, error } = await supabase
       .schema("client_os")
       .from("research_feed_items")
       .select("*")
       .eq("research_account_id", accountId)
-      .order("seq", { ascending: false });
+      .order("last_seen_seq", { ascending: false });
     if (error) {
       setFeedError(true);
       setRawItems([]);
