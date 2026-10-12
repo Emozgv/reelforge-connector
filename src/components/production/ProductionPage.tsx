@@ -105,6 +105,9 @@ interface ProductionRow {
   creator?: Creator;
   thumbnailUrl?: string;
   thumbGradient?: string;
+  // Ging diese Uebergabe an Sydney statt an ReelForge? Dann traegt die
+  // Zeile ein SYD-Schild -- sonst waere nicht zu erkennen, wohin sie ging.
+  syd?: boolean;
 }
 
 export function ProductionPage({
@@ -142,6 +145,31 @@ export function ProductionPage({
               thumbGradient: cover?.thumbGradient,
             };
           })
+        )
+        .concat(
+          // Dieselbe Zeilenform fuer die Uebergaben an Sydney. Sie haben
+          // keine fortlaufende Nummer wie die an ReelForge -- deshalb steht
+          // dort die Reihenfolge innerhalb der Collection.
+          collections.flatMap((c) =>
+            (c.sydSubmissions ?? []).map((s, i) => {
+              const cover = c.concepts[0]?.video;
+              return {
+                submissionId: s.id,
+                index: i + 1,
+                status: (s.status === "Finished" ? "Finished" : s.status === "Cancelled" ? "Cancelled" : "In Production") as SubmissionStatus,
+                sentAt: s.sentAt,
+                conceptCount: c.concepts.filter((k) => k.status !== "Rejected").length,
+                deliveryUrl: s.deliveryUrl,
+                collectionId: c.id,
+                collectionName: c.name,
+                creator: creators.find((cr) => cr.id === c.creatorId),
+                thumbnailUrl: cover?.thumbnailUrl,
+                thumbGradient: cover?.thumbGradient,
+                eta: undefined,
+                syd: true,
+              };
+            })
+          )
         )
         .sort((a, b) => b.sentAt.localeCompare(a.sentAt)),
     [collections, creators]
@@ -563,6 +591,14 @@ function AufmerksamKarte({ row, onOpen }: { row: ProductionRow; onOpen: () => vo
         <Bild row={row} klasse="w-[54px] h-[58px] rounded-[6px]" />
         <span className="flex-1 min-w-0 flex flex-col gap-1 pt-0.5">
           <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          {row.syd && (
+            // Ging an Sydney, nicht an ReelForge. Ein Wort genuegt -- die
+            // Zeile sieht sonst genauso aus, und ohne Kennzeichnung waere
+            // nicht zu sehen, wohin sie ging.
+            <span className="shrink-0 h-[17px] px-1.5 rounded-[5px] bg-[#D39448]/14 text-[#D39448] text-[9.5px] font-semibold tracking-wide flex items-center">
+              SYD
+            </span>
+          )}
           <span className="text-[11px] text-[#8c8d91]">
             {row.conceptCount} concept{row.conceptCount === 1 ? "" : "s"}
           </span>
@@ -595,6 +631,14 @@ function PipelineZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void
         <Bild row={row} klasse="w-[62px] h-[40px] rounded-[5px]" />
         <span className="min-w-0 flex flex-col gap-0.5">
           <span className="text-[14px] font-semibold text-[#efeff2] truncate">{row.collectionName}</span>
+          {row.syd && (
+            // Ging an Sydney, nicht an ReelForge. Ein Wort genuegt -- die
+            // Zeile sieht sonst genauso aus, und ohne Kennzeichnung waere
+            // nicht zu sehen, wohin sie ging.
+            <span className="shrink-0 h-[17px] px-1.5 rounded-[5px] bg-[#D39448]/14 text-[#D39448] text-[9.5px] font-semibold tracking-wide flex items-center">
+              SYD
+            </span>
+          )}
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="text-[11px] text-[#8c8d91] shrink-0">{row.conceptCount} concepts</span>
             <span className="text-[#4f5054]">•</span>
@@ -629,7 +673,17 @@ function SeitenZeile({ row, onOpen }: { row: ProductionRow; onOpen: () => void }
     >
       <Bild row={row} klasse="w-[40px] h-[44px] rounded-[5px]" />
       <span className="flex-1 min-w-0 pl-[2px]">
-        <span className="block text-[12px] font-medium text-[#efeff2] truncate">{row.collectionName}</span>
+<span className="flex items-center gap-1.5 min-w-0">
+          <span className="block text-[12px] font-medium text-[#efeff2] truncate">{row.collectionName}</span>
+          {row.syd && (
+            // Ging an Sydney, nicht an ReelForge. Ein Wort genuegt -- die
+            // Zeile sieht sonst genauso aus, und ohne Kennzeichnung waere
+            // nicht zu sehen, wohin sie ging.
+            <span className="shrink-0 h-[17px] px-1.5 rounded-[5px] bg-[#D39448]/14 text-[#D39448] text-[9.5px] font-semibold tracking-wide flex items-center">
+              SYD
+            </span>
+          )}
+        </span>
         <span className="block pt-0.5">
           <CreatorZeile row={row} grosse={19} />
         </span>

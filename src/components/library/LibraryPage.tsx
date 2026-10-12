@@ -98,6 +98,8 @@ interface Lieferung {
   // mitgeschrieben wurde (sourceLabel). Steht dort nichts, bleibt es bei
   // "ReelForge" -- das stimmt fuer jede ausgelieferte Charge.
   quelle: string;
+  // Ging an Sydney statt an ReelForge -- siehe das SYD-Schild in der Zeile.
+  syd?: boolean;
 }
 
 function quelleVonStapel(label?: string): string {
@@ -262,6 +264,38 @@ export function LibraryPage({
               quelle: quelleVonStapel(konzepte.find((k) => k.sourceLabel)?.sourceLabel),
             };
           })
+          .concat(
+            // Fertige Uebergaben an Sydney. Dieselbe Zeilenform, damit sie
+            // in derselben Liste stehen koennen -- nur mit SYD-Schild.
+            (c.sydSubmissions ?? [])
+              .filter((s) => s.status === "Finished")
+              .map((s, i) => {
+                const konzepte = c.concepts.filter((k) => k.status !== "Rejected");
+                const [datum, uhrzeit] = s.sentAt.split(" · ");
+                return {
+                  submissionId: s.id,
+                  index: i + 1,
+                  sentAt: s.sentAt,
+                  datum: datum ?? s.sentAt,
+                  uhrzeit: uhrzeit ?? "",
+                  deliveryUrl: s.deliveryUrl,
+                  collectionId: c.id,
+                  collectionName: c.name,
+                  conceptCount: konzepte.length,
+                  previews: konzepte.map((k) => ({
+                    id: k.video.id,
+                    thumbnailUrl: k.video.thumbnailUrl,
+                    thumbGradient: k.video.thumbGradient ?? DEFAULT_THUMB_GRADIENT,
+                    duration: k.video.duration,
+                  })),
+                  creator: creators.find((cr) => cr.id === c.creatorId),
+                  favorited: false,
+                  approvedAt: undefined,
+                  quelle: quelleVonStapel(konzepte.find((k) => k.sourceLabel)?.sourceLabel),
+                  syd: true,
+                };
+              })
+          )
       ),
     [collections, creators]
   );
@@ -504,6 +538,12 @@ export function LibraryPage({
                         </span>
                         <span className="text-[12.5px] text-[#6d6e73] shrink-0">·</span>
                         <span className="text-[12.5px] text-[#a9aaae] shrink-0">Batch #{b.index}</span>
+                        {b.syd && (
+                          // Ging an Sydney, nicht an ReelForge.
+                          <span className="shrink-0 h-[17px] px-1.5 rounded-[5px] bg-[#D39448]/14 text-[#D39448] text-[9.5px] font-semibold tracking-wide flex items-center self-center">
+                            SYD
+                          </span>
+                        )}
                       </span>
 
                       <span className="flex items-center gap-1.5 min-w-0">

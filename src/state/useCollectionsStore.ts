@@ -80,6 +80,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         submissionConceptsResult,
         activityResult,
         regenerationResult,
+        sydResult,
       ] = await Promise.all([
         supabase
           .schema("client_os")
@@ -107,6 +108,17 @@ export function useCollectionsStore(workspaceId: string | undefined) {
           .select("*")
           .eq("workspace_id", workspaceId)
           .order("created_at", { ascending: false }),
+        // Uebergaben an Sydney. Sie leben in einer eigenen Tabelle und waren
+        // fuer den Workspace bisher unsichtbar -- dadurch sah man in
+        // Production und Library nicht, was man selbst an Sydney geschickt
+        // hat. Bewusst NICHT unter die normalen Uebergaben gemischt: deren
+        // Nummerierung, Zaehlung und "nochmal senden" haengen daran.
+        supabase
+          .schema("client_os")
+          .from("syd_submissions")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: true }),
       ]);
 
       if (!active) return;
@@ -146,6 +158,26 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         submissionsByCollectionId.set(row.collection_id, list);
       }
 
+      // Uebergaben an Sydney je Collection. Das Datum wird wie bei den
+      // normalen Uebergaben aufbereitet, damit beide in denselben Listen
+      // nebeneinander stehen koennen.
+      const sydByCollectionId = new Map<string, NonNullable<Collection["sydSubmissions"]>>();
+      for (const row of (sydResult.data ?? []) as {
+        id: string; collection_id: string; created_at: string; status: string | null;
+        note: string | null; delivery_url: string | null;
+      }[]) {
+        const list = sydByCollectionId.get(row.collection_id) ?? [];
+        list.push({
+          id: row.id,
+          collectionId: row.collection_id,
+          sentAt: row.created_at,
+          status: row.status ?? "Sent",
+          note: row.note ?? undefined,
+          deliveryUrl: row.delivery_url ?? undefined,
+        });
+        sydByCollectionId.set(row.collection_id, list);
+      }
+
       const historyByCollectionId = new Map<string, Collection["history"]>();
       for (const row of activityResult.data as ActivityEventRow[]) {
         if (!row.collection_id) continue;
@@ -170,6 +202,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
             history: historyByCollectionId.get(row.id) ?? [],
             concepts: conceptsByCollectionId.get(row.id) ?? [],
             submissions: submissionsByCollectionId.get(row.id) ?? [],
+            sydSubmissions: sydByCollectionId.get(row.id) ?? [],
             regenerationRequests: regenerationsByCollectionId.get(row.id) ?? [],
           };
         })

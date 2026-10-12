@@ -209,6 +209,19 @@ export type SubmissionStatus = "Sent" | "In Progress" | "Check Inbox" | "Cancell
 // write them — the client can create a Submission and read its status, never
 // update it. conceptIds is a read projection of client_os.submission_concepts,
 // not a duplicated/writable array.
+// Eine Uebergabe an Sydney. Eigene Tabelle, eigener Lebenslauf -- bewusst
+// nicht unter die Uebergaben an ReelForge gemischt, deren Nummerierung und
+// "nochmal senden" daran haengen. In Production und Library erscheint sie
+// mit einem SYD-Schild, damit auf einen Blick klar ist, wohin sie ging.
+export interface SydSubmission {
+  id: string;
+  collectionId: string;
+  sentAt: string;
+  status: string;
+  note?: string;
+  deliveryUrl?: string;
+}
+
 export interface Submission {
   id: string;
   index: number;
@@ -358,6 +371,8 @@ export interface Collection {
   notes: string;
   concepts: CollectionConcept[];
   submissions: Submission[];
+  // Uebergaben an Sydney -- siehe SydSubmission.
+  sydSubmissions?: SydSubmission[];
   regenerationRequests: RegenerationRequest[];
   status: CollectionStatus;
   // Real Supabase timestamp — format for display with formatRelativeTime()
