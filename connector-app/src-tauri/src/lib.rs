@@ -254,15 +254,39 @@ async fn post_update_state(updating: bool, ziel: Option<String>, fehler: Option<
     else {
         return;
     };
-    let _ = client
-        .post("http://127.0.0.1:48211/update-status")
-        .json(&serde_json::json!({
-            "updating": updating,
-            "updateTarget": ziel,
-            "updateError": fehler,
-        }))
-        .send()
-        .await;
+    // WIEDERHOLEN, BIS ES ANKOMMT (12.10.2026).
+    //
+    // Diese Meldung ist der einzige Weg, auf dem die Web-App erfaehrt,
+    // dass gerade ein Update laeuft -- und nur daran erkennt sie, dass
+    // sie jetzt KEINE Sitzung starten darf.
+    //
+    // Beim Kaltstart pruefte der Connector sofort auf Updates, waehrend
+    // der Session-Server noch hochfuhr. Die Meldung ging damit ins Leere:
+    // Die Web-App sah "kein Update", startete eine Sitzung auf der alten
+    // Fassung, und der Neustart riss sie mit. Genau das ist am 12.10.2026
+    // zweimal passiert.
+    //
+    // Der Server ist in der Regel nach ein bis zwei Sekunden da. Zehn
+    // Versuche in Abstaenden von 400 ms decken das ab, ohne irgendetwas
+    // aufzuhalten -- das hier laeuft neben dem Herunterladen her, und ein
+    // Fehlschlag bleibt folgenlos wie bisher.
+    for versuch in 0..10 {
+        let antwort = client
+            .post("http://127.0.0.1:48211/update-status")
+            .json(&serde_json::json!({
+                "updating": updating,
+                "updateTarget": ziel,
+                "updateError": fehler,
+            }))
+            .send()
+            .await;
+        if antwort.is_ok() {
+            return;
+        }
+        if versuch < 9 {
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        }
+    }
 }
 
 // Checked on real startup and on every relaunch/deep-link wake while

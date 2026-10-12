@@ -250,13 +250,32 @@ function wakeConnector() {
 // safe to install now (see fetchHealth's own comment) so the caller can
 // switch into a clear "updating" state instead of only ever seeing
 // reachable/unreachable.
+// Nach einem Kaltstart hat der Connector seinen Session-Server oft schon
+// an, bevor seine Update-Pruefung durch ist. "Erreichbar" heisst also noch
+// nicht "es kommt kein Update" -- und wer in diesem Augenblick eine
+// Sitzung startet, startet auf der alten Fassung, die gleich neu startet.
+// Am 12.10.2026 zweimal passiert.
+//
+// Deshalb nach dem ersten Lebenszeichen noch kurz hinhoeren, ob sich ein
+// Update meldet. Keine blinde Wartezeit: Meldet sich keines, geht es
+// sofort weiter, und meldet sich eines, uebernimmt das Warten darauf.
+const UPDATE_HORCHFENSTER_MS = 2500;
+
 async function waitForConnectorOrUpdate(maxMs: number): Promise<"ready" | "updating" | "timeout"> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 800));
     const health = await fetchHealth();
     if (health.reachable && health.updating) return "updating";
-    if (health.reachable) return "ready";
+    if (health.reachable) {
+      const horchBis = Math.min(deadline, Date.now() + UPDATE_HORCHFENSTER_MS);
+      while (Date.now() < horchBis) {
+        await new Promise((r) => setTimeout(r, 400));
+        const nochmal = await fetchHealth();
+        if (nochmal.reachable && nochmal.updating) return "updating";
+      }
+      return "ready";
+    }
   }
   return "timeout";
 }
