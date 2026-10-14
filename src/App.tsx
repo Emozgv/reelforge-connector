@@ -7,6 +7,7 @@ const PAGE_LABELS: Record<Page, string> = {
   research: "Research Accounts",
   collections: "All collections",
   creators: "Creators",
+  team: "Team",
   production: "Production",
   library: "Library",
   billing: "Billing",
@@ -23,6 +24,7 @@ import { LibraryPage } from "./components/library/LibraryPage";
 import { BillingPage } from "./components/billing/BillingPage";
 import { ResearchAccountsPage } from "./components/research/ResearchAccountsPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { TeamPage } from "./components/team/TeamPage";
 import { AdminDashboardPage } from "./components/admin/AdminDashboardPage";
 import { SydOwnerPage } from "./components/syd/SydOwnerPage";
 import { LoginPage } from "./components/auth/LoginPage";
@@ -149,8 +151,6 @@ function App() {
             userEmail={user.email}
             isPlatformAdmin
             onSignOut={signOut}
-            activity={{ items: [], loading: false }}
-            onOpenCollection={() => {}}
             creators={[]}
             creatorPackages={new Map()}
           />
@@ -210,8 +210,6 @@ function App() {
         isPlatformAdmin={isPlatformAdmin}
         hasSydAccess={hasSydAccess}
         onSignOut={signOut}
-        activity={activity}
-        onOpenCollection={navigateToCollection}
         creators={creatorsStore.creators}
         creatorPackages={creatorPackages}
       />
@@ -271,6 +269,7 @@ function App() {
                 onOpenCollections={() => setPage("collections")}
                 onOpenCreators={() => setPage("creators")}
                 onOpenProduction={() => setPage("production")}
+                onOpenSettings={() => setPage("settings")}
               />
             )}
             {page === "collections" && (
@@ -322,6 +321,9 @@ function App() {
                 workspaceId={workspace.id}
                 canChangePlan={canChangePlan(workspace.role, workspace.canChangePlan)}
               />
+            )}
+            {page === "team" && (
+              <TeamPage workspaceId={workspace.id} userId={user.id} role={workspace.role} creators={creatorsStore.creators} />
             )}
             {page === "settings" && (
               <SettingsPage

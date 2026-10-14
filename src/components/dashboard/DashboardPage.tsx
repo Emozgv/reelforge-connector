@@ -1,88 +1,69 @@
+import { useMemo, useState } from "react";
 import {
-  Activity,
   AlertTriangle,
-  Bookmark,
+  ArrowRight,
   CheckCircle2,
+  ChevronRight,
   Clapperboard,
+  Bell,
+  ChevronDown,
   Clock,
-  ExternalLink,
   FolderOpen,
+  HelpCircle,
+  Search,
+  Sun,
+  MoreVertical,
   Radar,
+  Sparkles,
+  TrendingUp,
   Users,
 } from "lucide-react";
-import type { Collection, Creator } from "../../types";
 import type { ActivityFeedItem } from "../../state/useActivityFeed";
-import { formatRelativeTime } from "../../lib/relativeTime";
-import { PlatformIcon } from "../hub/PlatformIcon";
+import type { Collection, Creator } from "../../types";
+import { Auftritt, Zahl } from "../shared/v3";
 import { StarfieldBackground } from "../shared/StarfieldBackground";
-import { panelStil, KARTE_FUELLUNG } from "../../lib/panelLook";
-import { Auftritt } from "../shared/v3";
+import { Benachrichtigungen } from "../shared/Benachrichtigungen";
+import { D, PanelKopf, Pille, Trend, Verlaufslinie, Zeichenkachel } from "./dashboardTeile";
 
-// Panel surface — deep, warm-black (not neutral/cool-black). Deliberately
-// close to the page background so the panel nearly disappears into the
-// void; the warmth (R slightly > G > B, instead of equal or blue-leaning
-// channels) is what reads as "premium bronze-black" rather than flat
-// gray-black.
-const PANEL = "rounded-[12px] border border-[#1a130b]";
-const PANEL_STYLE: React.CSSProperties = panelStil();
+// =====================================================================
+// DAS DASHBOARD (14.10.2026, nach Emres Screenshot neu gebaut)
+//
+// Aufbau: Kopfbereich, fuenf Kennzahlen, drei Arbeitsflaechen
+// (Production Overview / Creator Momentum / Next Actions), unten
+// Recent Concepts und Recent Activity.
+//
+// DIE ERDKUGEL AUS DER VORLAGE KOMMT NICHT MIT. Emre hat sie
+// ausdruecklich ausgenommen -- der Kopfbereich behaelt unseren
+// Sternenhimmel.
+//
+// WAS ECHT IST UND WAS FEHLT -- bitte vor dem naechsten Umbau lesen:
+//
+//   ECHT    Alle Zahlen, alle Namen, alle Zeiten. Die Trendzahlen und
+//           Verlaufslinien bei "In Production", "Needs Attention" und
+//           "Delivered" sind aus den echten Einreichungsdaten gerechnet
+//           (sentAt): letzte 30 Tage gegen die 30 Tage davor.
+//
+//   FEHLT   "Active Creators" und "Saved Concepts" haben KEINE Trendzahl
+//           und keine Verlaufslinie -- Creator und Konzepte tragen kein
+//           Datum, aus dem sich ein Verlauf rechnen liesse. Der Platz
+//           bleibt leer statt mit einer erfundenen Prozentzahl gefuellt.
+//
+//           Bei "Creator Momentum" steht im Entwurf ein Wachstum je
+//           Creator (+142%). Dafuer gibt es keine Historie. Statt dessen
+//           steht dort der echte Anteil am Gesamtbestand.
+// =====================================================================
 
-// Nested "card within a panel" surface — Needs Attention rows, Content
-// Momentum stat rows, Production Pulse's legend box. A real, deliberate
-// step up in value from the panel behind it (not a gradient, not a white
-// highlight) — genuinely lighter, and warm-toned like the panel, so these
-// read as distinct raised surfaces instead of blending into the panel.
-// Der Rand folgt seit dem 11.10.2026 V3: dunkelgolden statt neutral, wie
-// die Innenkacheln auf Billing, Library und Collections. Die Flaeche kam
-// schon vorher von dort.
-const CARD = "rounded-[10px] border border-[#1a130b]";
-const CARD_STYLE: React.CSSProperties = {
-  background: KARTE_FUELLUNG,
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 14px -10px rgba(0,0,0,0.6)",
-};
-const CARD_HOVER = "hover:border-[#2c2c32]";
-
-// Fixed, hand-placed positions for the hero's very sparse warm-star
-// accents — deliberately not randomized like the white starfield, and
-// deliberately few, so they read as a couple of deliberate points of
-// warmth rather than a colored effect.
-const WARM_STARS = [
-  { left: 20, top: 18, size: 1.6, duration: 7, delay: 0.5 },
-  { left: 68, top: 26, size: 1.4, duration: 8, delay: 2.4 },
-  { left: 85, top: 12, size: 1.8, duration: 6.5, delay: 1.1 },
-  { left: 40, top: 44, size: 1.3, duration: 7.5, delay: 3.6 },
-];
-
-// Local time of the person actually looking at the screen — already
-// naturally "session aware" without any extra plumbing.
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return "Good night";
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-// The five real stages a Collection can read as, in pipeline order —
-// deliberately NOT "Waiting for Creator"/"Needs Review"/"Ready" (those
-// aren't real states in the data model; SubmissionStatus is only Sent/
-// In Progress/Check Inbox/Cancelled/Finished). "Check Inbox" folds into
-// "In Production" here on purpose — it's surfaced as its own, more
-// prominent thing in Needs Your Attention instead.
 const STAGE_ORDER = ["Saved", "In Review", "In Production", "Delivered", "Cancelled"] as const;
 type Stage = (typeof STAGE_ORDER)[number];
 
-// Dot/segment colors — exact Figma reference pipeline-state palette
-// (blue/amber/red/green/gray), adapted onto our five real stages.
 const STAGE_COLOR: Record<Stage, string> = {
-  Saved: "#7c7f85",
-  "In Review": "#4a90d9",
-  "In Production": "#d8a03c",
-  Delivered: "#4fb37a",
-  Cancelled: "#c0503f",
+  Saved: "#8b93a0",
+  "In Review": "#5eb1ff",
+  "In Production": "#f1a846",
+  Delivered: "#63c07f",
+  Cancelled: "#e0664f",
 };
 
-// Real production stage for a Collection — derived from actual Collection/
-// Submission state, never a separate stored field.
 function collectionStage(c: Collection): Stage {
   if (c.status === "Completed") return "Delivered";
   if (c.status === "Draft") return "Saved";
@@ -92,161 +73,137 @@ function collectionStage(c: Collection): Stage {
   return "In Review";
 }
 
-// Figma's Manrope ExtraLight display numerals/headline treatment.
-function Num({
-  children,
-  className = "",
-  style,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <span className={["font-mn font-extralight", className].join(" ")} style={style}>
-      {children}
-    </span>
-  );
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
 }
 
-function PanelHeading({
-  title,
-  subtitle,
-  badge,
-  onViewAll,
-}: {
-  title: string;
-  subtitle: string;
-  badge?: number;
-  onViewAll?: () => void;
-}) {
-  return (
-    <div className="flex items-start justify-between px-[18px] pt-[16px]">
-      <div className="flex flex-col gap-[8px]">
-        <div className="flex items-center gap-[9px]">
-          <h2 className="font-mn text-[10.5px] font-bold tracking-[1.1px] text-[#eee7da]">{title}</h2>
-          {typeof badge === "number" && badge > 0 && (
-            <span className="rounded-[16px] bg-[#3a2a17] px-[6px] py-[1.5px] text-[8.5px] tracking-[1.1px] text-[#e8b273]">
-              {badge}
-            </span>
-          )}
-        </div>
-        <p className="text-[9px] text-[#79746b]">{subtitle}</p>
-      </div>
-      {onViewAll && (
-        <button onClick={onViewAll} className="flex shrink-0 items-center gap-[4px] text-[10px] text-[#aaa094] hover:text-[#e8b273] transition-colors duration-150">
-          View all <span aria-hidden className="text-[9px]">›</span>
-        </button>
-      )}
-    </div>
-  );
+function vorZeit(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const std = Math.floor(ms / 3600000);
+  if (std < 1) return "just now";
+  if (std < 24) return `${std} hour${std === 1 ? "" : "s"} ago`;
+  const tage = Math.floor(std / 24);
+  return `${tage} day${tage === 1 ? "" : "s"} ago`;
 }
 
-function FooterLink({ label, onClick }: { label: string; onClick?: () => void }) {
-  if (!onClick) return null;
-  return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center justify-between border-t border-[#1a1a1f] px-[18px] py-[13px] text-[10.5px] text-[#cfc8bc] hover:text-[#e8e1d5] transition-colors duration-150"
-    >
-      {label} <span aria-hidden className="text-[10.5px] text-[#e8b273]">›</span>
-    </button>
-  );
+// Der Zeitraum oben rechts. Er ist kein Schmuck: er bestimmt, worueber
+// die Trendzahlen und die Verlaufslinien gerechnet werden.
+const ZEITRAEUME = [
+  { tage: 7, label: "Last 7 days" },
+  { tage: 30, label: "Last 30 days" },
+  { tage: 90, label: "Last 90 days" },
+] as const;
+
+/** Acht gleich grosse Abschnitte ueber den gewaehlten Zeitraum.
+ *  Grundlage fuer die Verlaufslinien -- gerechnet, nicht erfunden. */
+function verlauf(zeitpunkte: string[], tage: number): number[] {
+  const jetzt = Date.now();
+  const spanne = (tage * 24 * 3600 * 1000) / 8;
+  const eimer = new Array(8).fill(0);
+  for (const z of zeitpunkte) {
+    const alter = jetzt - new Date(z).getTime();
+    const i = 7 - Math.floor(alter / spanne);
+    if (i >= 0 && i < 8) eimer[i] += 1;
+  }
+  return eimer;
 }
 
-// One segment of the Operational Pulse strip — a real KPI and a real nav
-// shortcut. Gold stays reserved for the three plain counters (matching the
-// reference's restrained, muted-khaki icon tint); the two status-carrying
-// tiles get real semantic color (danger/success) instead, each with a very
-// faint matching glow — subtle, not neon.
-const PULSE_TONE: Record<"gold" | "danger" | "success", { color: string; glow: string }> = {
-  gold: { color: "#d9a863", glow: "rgba(217,168,99,0.3)" },
-  danger: { color: "#e0664f", glow: "rgba(224,102,79,0.3)" },
-  success: { color: "#4fb37a", glow: "rgba(79,179,122,0.3)" },
-};
-
-function PulseTile({
-  icon,
-  label,
-  value,
-  tone = "gold",
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  tone?: "gold" | "danger" | "success";
-  onClick?: () => void;
-}) {
-  const active = tone !== "gold" && value > 0;
-  const { color, glow } = PULSE_TONE[tone];
-  const iconColor = active ? color : "#d9a863";
-  return (
-    <button
-      onClick={onClick}
-      disabled={!onClick}
-      className="relative flex flex-1 min-w-[140px] flex-col gap-[6px] px-[22px] py-[17px] text-left disabled:cursor-default"
-    >
-      <span className="absolute left-0 top-[18px] bottom-[18px] w-px bg-[#1a1a1f]" />
-      <div className="flex items-center gap-[10px]">
-        <span
-          className={active ? "pulse-live rounded-full" : ""}
-          style={{
-            color: iconColor,
-            filter: `drop-shadow(0 0 4px ${active ? glow : PULSE_TONE.gold.glow})`,
-            ["--pulse-live-color" as string]: active ? glow.replace("0.3", "0.5") : undefined,
-          }}
-        >
-          {icon}
-        </span>
-        <span
-          className={["text-[23.5px] leading-none font-medium tabular-nums", active ? "" : "text-[#f0eadf]"].join(" ")}
-          style={active ? { color } : undefined}
-        >
-          {value}
-        </span>
-      </div>
-      <p className="text-[10.5px] text-[#aaa49a]">{label}</p>
-      <p className="text-[9px] text-[#646058]">—</p>
-    </button>
-  );
+/** Der gewaehlte Zeitraum gegen den gleich langen davor, in Prozent.
+ *  Null, wenn die Vorperiode leer war -- aus nichts laesst sich kein
+ *  Wachstum rechnen. */
+function trend(zeitpunkte: string[], tage: number): number | null {
+  const jetzt = Date.now();
+  const t = tage * 24 * 3600 * 1000;
+  let jung = 0;
+  let alt = 0;
+  for (const z of zeitpunkte) {
+    const alterMs = jetzt - new Date(z).getTime();
+    if (alterMs <= t) jung += 1;
+    else if (alterMs <= 2 * t) alt += 1;
+  }
+  if (alt === 0) return null;
+  return ((jung - alt) / alt) * 100;
 }
 
-// A restrained ring donut, real segments only — built from the exact same
-// per-collection stage breakdown the legend already uses.
 function StageDonut({ counts, total }: { counts: Record<Stage, number>; total: number }) {
-  const size = 132;
-  const stroke = 14;
+  const size = 124;
+  const stroke = 13;
   const r = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * r;
+  const umfang = 2 * Math.PI * r;
   let offset = 0;
-  const segments = STAGE_ORDER.filter((s) => counts[s] > 0).map((stage) => {
-    const fraction = total > 0 ? counts[stage] / total : 0;
-    const dash = fraction * circumference;
-    const seg = { stage, dash, offset };
-    offset += dash;
+  const segmente = STAGE_ORDER.filter((s) => counts[s] > 0).map((stage) => {
+    const anteil = total > 0 ? counts[stage] / total : 0;
+    const strich = anteil * umfang;
+    const seg = { stage, strich, offset };
+    offset += strich;
     return seg;
   });
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
-      {segments.map(({ stage, dash, offset: segOffset }) => (
-        <circle
-          key={stage}
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={STAGE_COLOR[stage]}
-          strokeWidth={stroke}
-          strokeDasharray={`${dash} ${circumference - dash}`}
-          strokeDashoffset={-segOffset}
-          strokeLinecap="butt"
-          style={{ filter: `drop-shadow(0 0 3px ${STAGE_COLOR[stage]}90)` }}
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={stroke} />
+        {segmente.map(({ stage, strich, offset: so }) => (
+          <circle
+            key={stage}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={STAGE_COLOR[stage]}
+            strokeWidth={stroke}
+            strokeDasharray={`${strich} ${umfang - strich}`}
+            strokeDashoffset={-so}
+            strokeLinecap="butt"
+            style={{ filter: `drop-shadow(0 0 4px ${STAGE_COLOR[stage]}80)` }}
+          />
+        ))}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[24px] font-bold leading-[28px] tabular-nums tracking-[-0.6px]" style={{ color: D.weiss }}>
+          <Zahl wert={total} />
+        </span>
+        <span className="mt-[1px] text-[10px]" style={{ color: D.leise }}>
+          Total Concepts
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Die kleinen Knoepfe rechts in der oberen Leiste. */
+function LeistenKnopf({
+  icon: Zeichen,
+  title,
+  punkt,
+  onClick,
+}: {
+  icon: typeof Bell;
+  title: string;
+  punkt?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      // In der Vorlage stehen diese drei Zeichen FREI -- kein Kasten,
+      // kein Rand. Nur das Namenszeichen ganz rechts ist eine Flaeche
+      // (Emre, 14.10.2026).
+      className="relative flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full transition-colors duration-150 hover:bg-white/[0.06]"
+      style={{ color: "#d7dae0" }}
+    >
+      <Zeichen size={16.5} strokeWidth={1.7} />
+      {punkt && (
+        <span
+          className="absolute right-[5px] top-[5px] h-[6px] w-[6px] rounded-full"
+          style={{ background: "#ff5a5a", boxShadow: "0 0 7px #ff5a5a" }}
         />
-      ))}
-    </svg>
+      )}
+    </button>
   );
 }
 
@@ -261,6 +218,7 @@ export function DashboardPage({
   onOpenCollections,
   onOpenCreators,
   onOpenProduction,
+  onOpenSettings,
 }: {
   userName?: string;
   creators: Creator[];
@@ -272,388 +230,665 @@ export function DashboardPage({
   onOpenCollections: () => void;
   onOpenCreators: () => void;
   onOpenProduction: () => void;
+  onOpenSettings?: () => void;
 }) {
-  const allSubmissions = collections.flatMap((c) => c.submissions.map((s) => ({ ...s, collection: c })));
-  const activeSubmissions = allSubmissions.filter((s) => s.status !== "Finished" && s.status !== "Cancelled");
-  const needsAttention = allSubmissions.filter((s) => s.status === "Check Inbox");
-  const finishedCount = allSubmissions.filter((s) => s.status === "Finished").length;
-  const savedTotal = collections.reduce((sum, c) => sum + c.concepts.length, 0);
-  const activeCollectionsCount = collections.filter((c) => c.status !== "Completed").length;
-
-  const recentCollections = [...collections]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 4);
-
-  // Most recently saved individual concepts across all collections, newest
-  // first — the "Recently Saved" reel-level column.
-  const recentConcepts = [...collections]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .flatMap((c) => c.concepts.map((k) => ({ concept: k, collection: c })))
-    .slice(0, 3);
-
-  const creatorById = new Map(creators.map((c) => [c.id, c]));
-  const collectionById = new Map(collections.map((c) => [c.id, c]));
-
-  const stageCounts = STAGE_ORDER.reduce((acc, stage) => ({ ...acc, [stage]: 0 }), {} as Record<Stage, number>);
-  for (const c of collections) stageCounts[collectionStage(c)] += 1;
-
   const firstName = userName ? (userName.includes("@") ? userName.split("@")[0] : userName) : "";
+  const [suche, setSuche] = useState("");
+  const [tage, setTage] = useState<number>(30);
+  const [zeitraumOffen, setZeitraumOffen] = useState(false);
 
-  const statusLine =
-    needsAttention.length > 0
-      ? `${needsAttention.length} item${needsAttention.length === 1 ? "" : "s"} need${needsAttention.length === 1 ? "s" : ""} your input right now.`
-      : "Your content engine is running strong.";
+  const z = useMemo(() => {
+    const alle = collections.flatMap((c) => c.submissions.map((s) => ({ ...s, collection: c })));
+    const laufend = alle.filter((s) => s.status !== "Finished" && s.status !== "Cancelled");
+    const achtung = alle.filter((s) => s.status === "Check Inbox");
+    const geliefert = alle.filter((s) => s.status === "Finished");
+    const gespeichert = collections.reduce((n, c) => n + c.concepts.length, 0);
+
+    const stufen = STAGE_ORDER.reduce((acc, s) => ({ ...acc, [s]: 0 }), {} as Record<Stage, number>);
+    for (const c of collections) stufen[collectionStage(c)] += 1;
+
+    return {
+      alle,
+      laufend,
+      achtung,
+      geliefert,
+      gespeichert,
+      stufen,
+      stufenGesamt: collections.length,
+    };
+  }, [collections]);
+
+  // Die fuenf Kennzahlen. Trend und Verlaufslinie stehen NUR dort, wo es
+  // echte Zeitpunkte gibt -- siehe Kopf der Datei.
+  const kennzahlen = [
+    {
+      icon: Users,
+      wert: creators.length,
+      label: "Active Creators",
+      unter: `${creators.length === 1 ? "creator" : "creators"} in your workspace`,
+      trend: null as number | null,
+      verlauf: [] as number[],
+      farbe: D.gold,
+      onClick: onOpenCreators,
+    },
+    {
+      icon: FolderOpen,
+      wert: z.gespeichert,
+      label: "Saved Concepts",
+      unter: `across ${collections.length} collection${collections.length === 1 ? "" : "s"}`,
+      trend: null,
+      verlauf: [],
+      farbe: D.gold,
+      onClick: onOpenCollections,
+    },
+    {
+      icon: Clapperboard,
+      wert: z.laufend.length,
+      label: "In Production",
+      unter: `${z.laufend.length} moving forward`,
+      trend: trend(z.laufend.map((s) => s.sentAt), tage),
+      verlauf: verlauf(z.laufend.map((s) => s.sentAt), tage),
+      farbe: "#f1a846",
+      onClick: onOpenProduction,
+    },
+    {
+      icon: AlertTriangle,
+      wert: z.achtung.length,
+      label: "Needs Attention",
+      unter: z.achtung.length ? "waiting on your input" : "nothing waiting",
+      trend: trend(z.achtung.map((s) => s.sentAt), tage),
+      verlauf: verlauf(z.achtung.map((s) => s.sentAt), tage),
+      farbe: D.rot,
+      onClick: onOpenProduction,
+    },
+    {
+      icon: CheckCircle2,
+      wert: z.geliefert.length,
+      label: "Delivered",
+      unter: "finished batches",
+      trend: trend(z.geliefert.map((s) => s.sentAt), tage),
+      verlauf: verlauf(z.geliefert.map((s) => s.sentAt), tage),
+      farbe: D.gruen,
+      onClick: onOpenProduction,
+    },
+  ];
+
+  // Creator Momentum: echte Anteile am Konzeptbestand. Ein Wachstum je
+  // Creator, wie es der Entwurf zeigt, gibt es in den Daten nicht.
+  const momentum = useMemo(() => {
+    const proCreator = new Map<string, number>();
+    for (const c of collections) {
+      for (const k of c.concepts) {
+        const id = k.creatorId ?? c.creatorId;
+        proCreator.set(id, (proCreator.get(id) ?? 0) + 1);
+      }
+    }
+    const gesamt = [...proCreator.values()].reduce((a, b) => a + b, 0);
+    return creators
+      .map((c) => ({ creator: c, anzahl: proCreator.get(c.id) ?? 0 }))
+      .filter((r) => r.anzahl > 0)
+      .sort((a, b) => b.anzahl - a.anzahl)
+      .slice(0, 4)
+      .map((r) => ({ ...r, anteil: gesamt > 0 ? Math.round((r.anzahl / gesamt) * 100) : 0 }));
+  }, [creators, collections]);
+
+  // Next Actions: echte offene Punkte, nach Dringlichkeit.
+  const naechste = useMemo(() => {
+    const liste: { id: string; titel: string; unter: string; farbe: string; icon: typeof Clock; bild?: string; collectionId: string }[] = [];
+    for (const s of z.achtung) {
+      liste.push({
+        id: `inbox-${s.id}`,
+        titel: "Production update needed",
+        unter: `${s.collection.name} is waiting on you`,
+        farbe: D.rot,
+        icon: AlertTriangle,
+        bild: s.collection.concepts[0]?.video.thumbnailUrl,
+        collectionId: s.collection.id,
+      });
+    }
+    for (const c of collections.filter((c) => c.status === "Draft" && c.concepts.length > 0).slice(0, 3)) {
+      liste.push({
+        id: `draft-${c.id}`,
+        titel: `Review ${c.concepts.length} concept${c.concepts.length === 1 ? "" : "s"}`,
+        unter: `${c.name} is still a draft`,
+        farbe: D.goldHell,
+        icon: Sparkles,
+        bild: c.concepts[0]?.video.thumbnailUrl,
+        collectionId: c.id,
+      });
+    }
+    for (const s of z.laufend.filter((s) => s.status === "In Progress").slice(0, 3)) {
+      liste.push({
+        id: `prog-${s.id}`,
+        titel: "Check delivery status",
+        unter: s.eta ? `${s.collection.name} — ETA ${s.eta}` : `${s.collection.name} is in production`,
+        farbe: D.blau,
+        icon: Clock,
+        bild: s.collection.concepts[0]?.video.thumbnailUrl,
+        collectionId: s.collection.id,
+      });
+    }
+    return liste.slice(0, 5);
+  }, [collections, z]);
+
+  const letzteKonzepte = useMemo(
+    () =>
+      [...collections]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .flatMap((c) => c.concepts.map((k) => ({ konzept: k, sammlung: c })))
+        .slice(0, 4),
+    [collections]
+  );
+
+  const creatorById = useMemo(() => new Map(creators.map((c) => [c.id, c])), [creators]);
+  const collectionById = useMemo(() => new Map(collections.map((c) => [c.id, c])), [collections]);
 
   return (
     <div className="h-full overflow-auto" style={{ background: "#020203" }}>
-      {/* Das Dashboard blendet beim Oeffnen weich auf, wie die uebrigen
-          Reiter (Emre, 11.10.2026). */}
-      <Auftritt className="mx-auto w-full max-w-[1560px]">
-        {/* Hero — same night-sky starfield used across Login/Hub. Background
-            is the Figma reference's exact cool dark radial (near-black
-            fading to near-black, not a warm/brown wash) — gold only shows
-            up as the eyebrow text, the CTA, and a handful of tiny star
-            accents, never as a background tint. */}
+      {/* Breite und Seitenraender kommen aus demselben Baustein wie auf
+          Production, Library und Creators (KOPF_RAHMEN). Vorher hatte das
+          Dashboard eigene Zahlen und wirkte dadurch groesser als die
+          uebrigen Reiter (Emre, 14.10.2026). Nur das obere Band laeuft
+          bewusst ueber die volle Breite -- der Sternenhimmel soll nicht
+          an einer Kante abreissen. */}
+      <Auftritt className="mx-auto w-full max-w-[1900px]">
+        {/* ============ KOPFBEREICH ============ */}
+        {/* Unser Sternenhimmel bleibt. Die Erdkugel aus der Vorlage kommt
+            ausdruecklich NICHT mit (Emre, 14.10.2026). */}
         <div
-          className="relative flex flex-col gap-[6px] overflow-hidden px-[48px] pt-[48px] pb-[46px]"
+          className="relative px-6 pt-[16px] pb-[36px] xl:px-8"
           style={{
             background:
-              "radial-gradient(560px 260px at 88% 4%, rgba(211,148,72,0.05), transparent 70%), #000000",
+              "radial-gradient(620px 300px at 86% 2%, rgba(211,148,72,0.07), transparent 68%), #000000",
           }}
         >
-          <div className="dashboard-starfield-boost absolute inset-0">
+          <div className="dashboard-starfield-boost absolute inset-0 overflow-hidden">
             <StarfieldBackground starCount={300} dustCount={5} />
           </div>
-          {/* A couple of tiny warm/gold points among the white starfield —
-              deliberately very sparse, so the sky reads as elegant depth
-              rather than a colored effect. */}
-          {WARM_STARS.map((s, i) => (
-            <span
-              key={i}
-              className="star-twinkle pointer-events-none absolute rounded-full"
-              style={{
-                left: `${s.left}%`,
-                top: `${s.top}%`,
-                width: s.size,
-                height: s.size,
-                background: "#dcb083",
-                boxShadow: "0 0 4px 1px rgba(220,176,131,0.4)",
-                animationDuration: `${s.duration}s`,
-                animationDelay: `${s.delay}s`,
-                ["--star-peak" as string]: 0.65,
-              } as React.CSSProperties}
-            />
-          ))}
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-24"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-14"
             style={{ background: "linear-gradient(to bottom, transparent, #000000)" }}
           />
-          {/* Kuerzel, Groesse und Farben bleiben die des Dashboards -- nur
-              die Begruessung traegt den fetten Schnitt der uebrigen Reiter
-              (Emre, 11.10.2026). */}
-          <p className="relative text-[10.5px] tracking-[1.8px] text-[#c08e4e]">REELFORGE COMMAND CENTER</p>
-          <h1 className="relative text-[38px] leading-[45px] font-bold tracking-[-0.8px] text-[#f2ece1]">
-            {greeting()}
-            {firstName && <>, {firstName}</>}.
-          </h1>
-          <p className="relative text-[14px] text-[#b1aba0]">{statusLine}</p>
-          <div className="relative flex items-center gap-[8px] pt-[6px]">
-            <span
-              className="pulse-live h-[6px] w-[6px] shrink-0 rounded-[3px]"
-              style={{
-                background: needsAttention.length > 0 ? "#e0664f" : "#4ec27a",
-                boxShadow: needsAttention.length > 0 ? "0 0 6px #e0664f" : "0 0 6px #4ec27a",
-                ["--pulse-live-color" as string]: needsAttention.length > 0 ? "rgba(224,102,79,0.5)" : "rgba(78,194,122,0.5)",
-              }}
-            />
-            <span className="text-[11px] text-[#c3bdb2]">
-              {needsAttention.length > 0 ? "Action needed" : "All systems operational"}
-            </span>
+
+          {/* ---- Die obere Leiste (14.10.2026, nach Emres Vorlage) ----
+              Sie liegt IM Kopfbereich, also ueber dem Sternenhimmel, und
+              laesst den Hintergrund unberuehrt. */}
+          <div className="relative mb-[32px] flex items-center justify-between gap-6">
+            <div className="relative w-full max-w-[440px]">
+              <Search
+                size={15}
+                strokeWidth={1.9}
+                className="pointer-events-none absolute left-[13px] top-1/2 -translate-y-1/2"
+                style={{ color: "#7e848e" }}
+              />
+              <input
+                value={suche}
+                onChange={(e) => setSuche(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onOpenHub();
+                }}
+                placeholder="Search concepts, creators, collections..."
+                className="h-[37px] w-full rounded-[9px] border pl-[37px] pr-[14px] text-[12.5px] outline-none transition-colors duration-150 placeholder:text-[#7e848e] focus:border-[#D39448]/45"
+                style={{ background: "rgba(10,11,13,0.78)", borderColor: "#24262b", color: D.weiss }}
+              />
+            </div>
+
+            <div className="flex shrink-0 items-center gap-[8px]">
+              {/* Der Zustand ist ECHT: er haengt an den Einreichungen, die
+                  auf dich warten. */}
+              <span
+                className="inline-flex h-[37px] items-center gap-[8px] rounded-[9px] border px-[13px] text-[12.5px]"
+                style={{ background: "rgba(10,11,13,0.78)", borderColor: "#24262b", color: "#d7dae0" }}
+              >
+                <span
+                  className="h-[7px] w-[7px] shrink-0 rounded-full"
+                  style={{
+                    background: z.achtung.length ? D.rot : "#4ade80",
+                    boxShadow: `0 0 8px ${z.achtung.length ? D.rot : "#4ade80"}`,
+                  }}
+                />
+                {z.achtung.length
+                  ? `${z.achtung.length} item${z.achtung.length === 1 ? "" : "s"} need you`
+                  : "All systems operational"}
+                <ChevronDown size={13} strokeWidth={1.9} style={{ color: "#7e848e" }} />
+              </span>
+
+              <LeistenKnopf icon={Sun} title="Light mode — not available yet" />
+              <LeistenKnopf icon={HelpCircle} title="Help — not wired up yet" />
+              {/* Die echte Glocke mit Klappfenster -- sie war hier bis
+                  zum 14.10.2026 nur Zierde, die funktionierende sass in
+                  der Seitenleiste. Jetzt ist es dieselbe. */}
+              <Benachrichtigungen activity={activity} onOpenCollection={onOpenCollection} />
+
+              <button
+                onClick={onOpenSettings}
+                title="Your account"
+                className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition-[filter] duration-150 hover:brightness-110"
+                style={{
+                  color: "#020508",
+                  background: "linear-gradient(113.9deg,#EAC088 0%,#D39448 100%)",
+                  border: `1px solid ${D.gold}`,
+                  boxShadow: "inset 0 1px 3px rgba(255,236,206,0.3), 0 0 16px rgba(211,148,72,0.25)",
+                }}
+              >
+                {(firstName || "EM").slice(0, 2).toUpperCase()}
+              </button>
+            </div>
           </div>
 
-          <div className="absolute right-[48px] top-[90px] z-10 flex w-[196px] flex-col gap-[13px]">
+          <div className="relative flex items-start justify-between gap-8">
+            <div className="min-w-0">
+              <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: "#e8a94f" }}>
+                ReelForge Command Center
+              </p>
+              <h1
+                className="mt-[9px] text-[41px] font-bold leading-[49px] tracking-[-1.05px]"
+                style={{ color: "#f4f5f7" }}
+              >
+                {greeting()}
+                {firstName && (
+                  <>
+                    , <span className="rf-name-gold">{firstName}</span>
+                  </>
+                )}
+                .
+              </h1>
+              <p className="mt-[8px] text-[15px] leading-[21px]" style={{ color: "#b8bcc4" }}>
+                Turn creator insights into high-performing content, faster.
+              </p>
+
+              <div className="mt-[19px] flex items-center gap-[12px]">
+                <button
+                  onClick={onOpenResearch}
+                  className="press-feedback inline-flex h-[42px] items-center gap-[9px] rounded-[9px] border px-[19px] text-[13.5px] font-semibold"
+                  style={{
+                    color: "#020508",
+                    background: "linear-gradient(113.9deg,#EAC088 0%,#D39448 100%)",
+                    borderColor: D.gold,
+                    boxShadow: "inset 0 1px 3px rgba(255,236,206,0.3), 0 0 22px rgba(211,148,72,0.3)",
+                  }}
+                >
+                  <Radar size={16} strokeWidth={2} />
+                  Start Research
+                  <ArrowRight size={16} strokeWidth={2.2} />
+                </button>
+                <button
+                  onClick={onOpenProduction}
+                  className="press-feedback inline-flex h-[42px] items-center gap-[9px] rounded-[9px] border px-[19px] text-[13.5px]"
+                  style={{ color: "#e7e9ed", background: "rgba(16,17,20,0.8)", borderColor: "#2a2c31" }}
+                >
+                  <FolderOpen size={16} strokeWidth={1.8} />
+                  Open Production
+                </button>
+              </div>
+            </div>
+
+            {/* Der Spruch rechts aus der Vorlage. Er sitzt dort NICHT auf
+                Hoehe des Kuerzels, sondern tiefer -- etwa auf Hoehe der
+                Unterzeile. Deshalb der Abstand nach oben (Emre,
+                14.10.2026). */}
+            <div className="mt-[66px] hidden shrink-0 text-right lg:block">
+              <p className="text-[13px] leading-[20px]" style={{ color: "#aeb3bb" }}>
+                “Ideas find their people.
+                <br />
+                We just make it happen faster.”
+              </p>
+              <span className="mt-[10px] ml-auto block h-[2px] w-[44px] rounded-full" style={{ background: "#e8a94f" }} />
+
+            </div>
+          </div>
+
+          {/* Der Zeitraum steht auf dem Sternenhimmel, als letzte Zeile des
+              Bandes -- und damit trotzdem direkt ueber den Kacheln, zu
+              denen er gehoert (Emre, 14.10.2026). */}
+          <div className="relative -mt-[6px] flex justify-end">
             <button
-              onClick={onOpenResearch}
-              className="flex h-[44px] w-full items-center justify-center gap-[9px] rounded-[10px] text-[12px] font-medium text-[#2a1c0e] press-feedback"
-              style={{
-                background: "linear-gradient(90deg, #D39448, #EAC088)",
-                boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)",
-              }}
+              onClick={() => setZeitraumOffen((v) => !v)}
+              className="inline-flex h-[30px] items-center gap-[7px] rounded-[8px] px-[11px] text-[12.5px] transition-colors duration-150 hover:bg-white/[0.06]"
+              style={{ color: "#9aa0aa" }}
             >
-              <Radar size={14} />
-              Start Research
+              {ZEITRAEUME.find((zz) => zz.tage === tage)?.label}
+              <ChevronDown size={14} strokeWidth={1.9} />
             </button>
-            <button
-              onClick={onOpenProduction}
-              className="flex h-[44px] w-full items-center justify-center gap-[9px] rounded-[10px] border border-[#1e1e22] bg-[#0f0f12] text-[12px] text-[#ece5d9] hover:bg-[#141417] hover:border-[#26262a] transition-colors duration-150 press-feedback"
-            >
-              <Clapperboard size={13} />
-              Open Production
-            </button>
+            {zeitraumOffen && (
+              <div
+                onMouseLeave={() => setZeitraumOffen(false)}
+                className="absolute right-0 top-[34px] z-30 w-[152px] rounded-[9px] border p-[5px] text-left shadow-[0_14px_36px_rgba(0,0,0,0.55)]"
+                style={{ background: "#17171a", borderColor: "#26262b" }}
+              >
+                {ZEITRAEUME.map((zz) => (
+                  <button
+                    key={zz.tage}
+                    onClick={() => {
+                      setTage(zz.tage);
+                      setZeitraumOffen(false);
+                    }}
+                    className="w-full rounded-[6px] px-[9px] py-[7px] text-left text-[11.5px] hover:bg-white/[0.05]"
+                    style={{ color: zz.tage === tage ? "#EAC088" : "#c9ced6" }}
+                  >
+                    {zz.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="px-[48px] pb-[48px]">
-          {/* Operational Pulse */}
-          <div className={["flex items-center px-[4px]", PANEL].join(" ")} style={PANEL_STYLE}>
-            <div className="flex w-[212px] shrink-0 flex-col gap-[8px] px-[22px] py-[17px]">
-              <div className="flex items-center gap-[7px]">
-                <Activity size={13} className="text-[#e8b273]" />
-                <p className="text-[9.5px] font-bold tracking-[1.4px] text-[#e8b273]">OPERATIONAL PULSE</p>
-              </div>
-              <p className="text-[9.5px] leading-snug text-[#79746b]">Live overview of your workspace</p>
-            </div>
-            <PulseTile icon={<Users size={18} />} label="Active Creators" value={creators.length} onClick={onOpenCreators} />
-            <PulseTile icon={<FolderOpen size={18} />} label="Saved Concepts" value={savedTotal} onClick={onOpenCollections} />
-            <PulseTile icon={<Clapperboard size={18} />} label="In Production" value={activeSubmissions.length} onClick={onOpenProduction} />
-            <PulseTile icon={<AlertTriangle size={18} />} label="Needs Attention" value={needsAttention.length} tone="danger" onClick={onOpenProduction} />
-            <PulseTile icon={<CheckCircle2 size={18} />} label="Delivered" value={finishedCount} tone="success" onClick={onOpenProduction} />
-          </div>
-
-          {/* Row 2 — Needs Your Attention / Content Momentum / Production Pulse */}
-          <div className="mt-[22px] flex items-stretch gap-[20px]">
-            <div className={["flex flex-1 min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
-              <PanelHeading title="NEEDS YOUR ATTENTION" subtitle="Items that need your action" badge={needsAttention.length} onViewAll={onOpenProduction} />
-              <div className="flex flex-col gap-[8px] px-[18px] pt-[14px]">
-                {needsAttention.length === 0 ? (
-                  <p className="py-[10px] text-[10.5px] text-[#878278]">Everything is moving smoothly. Nothing needs your input right now.</p>
-                ) : (
-                  needsAttention.slice(0, 3).map((s) => {
-                    const creator = creatorById.get(s.collection.creatorId);
-                    return (
-                      <button
-                        key={s.id}
-                        onClick={() => onOpenCollection(s.collection.id)}
-                        className={["hover-lift flex items-center gap-[11px] p-[8px] text-left", CARD, CARD_HOVER].join(" ")}
-                        style={CARD_STYLE}
-                      >
-                        <div
-                          className="h-[44px] w-[44px] shrink-0 overflow-hidden rounded-[7px] ring-1 ring-white/10"
-                          style={creator?.profileImage ? {} : { background: creator?.avatarColor ?? "#3d362f" }}
-                        >
-                          {creator?.profileImage && <img src={creator.profileImage} alt="" className="h-full w-full object-cover" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[11.5px] font-medium text-[#eae4d9]">{s.collection.name}</p>
-                          <div className="mt-[5px] flex items-center gap-[7px]">
-                            <p className="truncate text-[9.5px] text-[#878278]">Submission #{s.index}</p>
-                            <span
-                              className="shrink-0 rounded-[4px] border border-[#5a2c26] px-[6px] py-[2px] text-[8px] tracking-[0.5px] text-[#e88a70]"
-                              style={{ background: "linear-gradient(180deg, #3a211d, #2b1a1a)", boxShadow: "0 0 6px rgba(224,102,79,0.15)" }}
-                            >
-                              CHECK INBOX
-                            </span>
-                          </div>
-                        </div>
-                        <p className="shrink-0 text-[9.5px] text-[#79746b]">{formatRelativeTime(s.collection.updatedAt)}</p>
-                        <span className="shrink-0 rounded-[7px] border border-[#242429] bg-[#111114] px-[12px] py-[7px] text-[10.5px] text-[#f0eadf]">
-                          Review
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-              <p className="px-[18px] pb-[15px] pt-[10px] text-[10.5px] text-[#878278]">Everything is prioritized. Keep it moving. 🚀</p>
-            </div>
-
-            <div className={["flex flex-1 min-w-0 flex-col justify-between", PANEL].join(" ")} style={PANEL_STYLE}>
-              <div>
-                <PanelHeading title="CONTENT MOMENTUM" subtitle="Your ideas. Saved. Organized." />
-                <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
-                  <div className="flex flex-1 min-w-[130px] flex-col gap-[8px]">
-                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
-                      <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #d9a86322" }}>
-                        <FolderOpen size={13} className="text-[#d9a863]" style={{ filter: "drop-shadow(0 0 2px #d9a86380)" }} />
-                      </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Saved Concepts</span>
-                      <span className="text-[10.5px] text-[#aaa49a]">{savedTotal}</span>
-                    </button>
-                    <button onClick={onOpenCollections} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
-                      <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4a90d926, #4a90d908 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4a90d922" }}>
-                        <Clapperboard size={13} className="text-[#6ba3d9]" style={{ filter: "drop-shadow(0 0 2px #6ba3d980)" }} />
-                      </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Active Collections</span>
-                      <span className="text-[10.5px] text-[#aaa49a]">{activeCollectionsCount}</span>
-                    </button>
-                    <button onClick={onOpenProduction} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
+        <div className="relative z-10 -mt-[14px] px-6 pb-8 xl:px-8">
+          {/* ============ FUENF KENNZAHLEN ============ */}
+          <Auftritt verzoegerung={60} className="grid grid-cols-5 gap-[13px]">
+            {kennzahlen.map((k) => (
+              <button
+                key={k.label}
+                onClick={k.onClick}
+                className="rounded-[11px] border px-[15px] py-[14px] text-left transition-colors duration-150 hover:border-[#2f2113]"
+                style={{ background: D.flaeche, borderColor: D.rand }}
+              >
+                <div className="flex items-start gap-[11px]">
+                  <Zeichenkachel icon={k.icon} size={35} farbe={k.farbe} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-[9px]">
                       <span
-                        className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]"
-                        style={{
-                          background: needsAttention.length > 0 ? "radial-gradient(circle at 50% 40%, #e0664f26, #e0664f08 70%, transparent 100%)" : "radial-gradient(circle at 50% 40%, #d9a86326, #d9a86308 70%, transparent 100%)",
-                          boxShadow: needsAttention.length > 0 ? "inset 0 0 0 1px #e0664f22" : "inset 0 0 0 1px #d9a86322",
-                        }}
+                        className="text-[23px] font-bold leading-[27px] tabular-nums tracking-[-0.5px]"
+                        style={{ color: D.weiss }}
                       >
-                        <AlertTriangle
-                          size={13}
-                          className={needsAttention.length > 0 ? "text-[#e0664f]" : "text-[#d9a863]"}
-                          style={{ filter: needsAttention.length > 0 ? "drop-shadow(0 0 2px #e0664f80)" : "drop-shadow(0 0 2px #d9a86380)" }}
-                        />
+                        <Zahl wert={k.wert} />
                       </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Needs Attention</span>
-                      <span className="text-[10.5px] text-[#aaa49a]">{needsAttention.length}</span>
-                    </button>
-                    <button onClick={onOpenHub} className="hover-lift flex items-center gap-[10px] rounded-[8px] border border-[#1a130b] px-[10px] py-[8px] text-left hover:border-[#2c2c32]" style={CARD_STYLE}>
-                      <span className="relative flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[7px]" style={{ background: "radial-gradient(circle at 50% 40%, #4fb37a26, #4fb37a08 70%, transparent 100%)", boxShadow: "inset 0 0 0 1px #4fb37a22" }}>
-                        <Radar size={13} className="text-[#6bc797]" style={{ filter: "drop-shadow(0 0 2px #6bc79780)" }} />
-                      </span>
-                      <span className="flex-1 min-w-0 truncate whitespace-nowrap text-[11px] font-medium text-[#d9a863]">Creativity Hub</span>
-                      <span className="text-[10.5px] text-[#aaa49a] opacity-70">↗</span>
-                    </button>
-                  </div>
-                  <div className="w-[164px] max-w-[42%] shrink">
-                    <p className="text-[8.5px] tracking-[1.2px] text-[#878278]">RECENTLY SAVED</p>
-                    <div className="mt-[11px] flex flex-col">
-                      {recentConcepts.length === 0 ? (
-                        <p className="pt-[8px] text-[9.5px] text-[#79746b]">Nothing saved yet.</p>
-                      ) : (
-                        recentConcepts.map(({ concept, collection }) => (
-                          <button
-                            key={concept.video.id}
-                            onClick={() => onOpenCollection(collection.id)}
-                            className="flex items-center gap-[8px] border-t border-[#17171b] py-[8px] text-left"
-                          >
-                            <div
-                              className="h-[40px] w-[33px] shrink-0 overflow-hidden rounded-[5px] bg-cover bg-center"
-                              style={
-                                concept.video.thumbnailUrl
-                                  ? { backgroundImage: `url(${concept.video.thumbnailUrl})` }
-                                  : { background: concept.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }
-                              }
-                            />
-                            <div className="min-w-0">
-                              <p className="line-clamp-2 text-[9.5px] leading-snug text-[#f0eadf]">{collection.name}</p>
-                              <p className="mt-[6px] text-[9px] text-[#79746b]">{formatRelativeTime(collection.updatedAt)}</p>
-                            </div>
-                          </button>
-                        ))
-                      )}
+                      <Trend prozent={k.trend} />
                     </div>
-                  </div>
-                </div>
-              </div>
-              <FooterLink label="Go to Creativity Hub" onClick={onOpenHub} />
-            </div>
-
-            <div className={["flex flex-1 min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
-              <PanelHeading title="PRODUCTION PULSE" subtitle="Real-time status of your pipeline" />
-              <div className="flex flex-1 items-center gap-[14px] px-[18px]">
-                  <div className="relative flex h-[132px] w-[132px] shrink-0 items-center justify-center">
-                    <div
-                      className="pointer-events-none absolute inset-[-14px] rounded-full"
-                      style={{ background: "radial-gradient(circle, rgba(74,144,217,0.08), rgba(216,160,60,0.05) 55%, transparent 75%)" }}
-                    />
-                    <StageDonut counts={stageCounts} total={collections.length} />
-                    <div className="absolute flex flex-col items-center gap-[2px]">
-                      <Num className="text-[21.5px] leading-none text-[#f0eadf]">{stageCounts["In Production"]}</Num>
-                      <p className="text-[9.5px] text-[#948d82]">In Production</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-1 min-w-[104px] flex-col gap-[10px]">
-                    {STAGE_ORDER.map((stage) => (
-                      <div key={stage} className="flex items-center gap-[10px]">
-                        <span
-                          className="h-[7px] w-[7px] shrink-0 rounded-full"
-                          style={{ background: STAGE_COLOR[stage], boxShadow: `0 0 4px ${STAGE_COLOR[stage]}80` }}
-                        />
-                        <span className="flex-1 truncate text-[11.5px] font-medium text-[#f0eadf]">{stage}</span>
-                        <span className="text-[11.5px] text-[#aaa49a]">{stageCounts[stage]}</span>
-                      </div>
-                    ))}
-                  </div>
-              </div>
-              <FooterLink label="Open Production" onClick={onOpenProduction} />
-            </div>
-          </div>
-
-          {/* Row 3 — Recent Concepts / Recent Activity */}
-          <div className="mt-[20px] flex items-stretch gap-[20px]">
-            <div className={["flex flex-[1.5] min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
-              <PanelHeading title="RECENT CONCEPTS" subtitle="Latest concepts from your workspace" onViewAll={onOpenCollections} />
-              {recentCollections.length === 0 ? (
-                <p className="px-[18px] pb-[16px] pt-[13px] text-[10.5px] text-[#878278]">Save your first concept from the Creativity Hub.</p>
-              ) : (
-                <div className="flex gap-[16px] px-[18px] pb-[16px] pt-[13px]">
-                  {recentCollections.map((c) => {
-                    const preview = c.concepts[0];
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => onOpenCollection(c.id)}
-                        className="hover-lift group relative h-[172px] flex-1 overflow-hidden rounded-[10px] text-left ring-1 ring-white/[0.07] hover:ring-white/[0.14]"
-                      >
-                        {preview?.video.thumbnailUrl ? (
-                          <img src={preview.video.thumbnailUrl} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-                        ) : (
-                          <div className="absolute inset-0" style={{ background: preview?.video.thumbGradient ?? "linear-gradient(135deg,#1a1a1d,#0f0f11)" }} />
-                        )}
-                        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 35%, rgba(0,0,0,0.75))" }} />
-                        <div className="absolute left-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/70 border border-white/10">
-                          <PlatformIcon platform={preview?.video.platform ?? "instagram"} size={11} />
-                        </div>
-                        <div className="absolute right-[9px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-black/70 border border-white/10 text-white/90 group-hover:text-[#e8b273] transition-colors duration-150">
-                          <Bookmark size={11} />
-                        </div>
-                        <div className="absolute bottom-[11px] left-[11px] flex flex-col gap-[5px]">
-                          <p className="text-[11px] font-medium text-white">{c.name}</p>
-                          <p className="text-[9.5px] text-[#c6c0b6]">{formatRelativeTime(c.updatedAt)}</p>
-                        </div>
-                        <div className="absolute bottom-[12px] right-[11px] text-white/85">
-                          <ExternalLink size={13} />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className={["flex flex-1 min-w-0 flex-col", PANEL].join(" ")} style={PANEL_STYLE}>
-              <PanelHeading title="RECENT ACTIVITY" subtitle="What's happening in your workspace" onViewAll={onOpenCollections} />
-              <div className="mt-[10px] flex flex-col">
-                {activity.loading && <p className="px-[18px] py-[10px] text-[10.5px] text-[#79746b]">Loading…</p>}
-                {!activity.loading && activity.items.length === 0 && (
-                  <p className="px-[18px] py-[10px] text-[10.5px] text-[#79746b]">Nothing yet — activity shows up here as you go.</p>
-                )}
-                {activity.items.slice(0, 5).map((item) => {
-                  const relatedCollection = item.collectionId ? collectionById.get(item.collectionId) : undefined;
-                  const relatedCreator = relatedCollection ? creatorById.get(relatedCollection.creatorId) : undefined;
-                  return (
-                  <button
-                    key={item.id}
-                    onClick={() => item.collectionId && onOpenCollection(item.collectionId)}
-                    disabled={!item.collectionId}
-                    className="group flex items-center gap-[11px] border-t border-[#17171b] px-[18px] py-[9.5px] text-left first:border-t-0 disabled:cursor-default"
-                  >
-                    {relatedCreator?.profileImage ? (
-                      <span className="h-[26px] w-[26px] shrink-0 overflow-hidden rounded-full border border-[#202024]">
-                        <img src={relatedCreator.profileImage} alt="" className="h-full w-full object-cover" />
-                      </span>
-                    ) : relatedCreator ? (
-                      <span
-                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#202024] text-[9.5px] font-medium text-[#e8e1d5]"
-                        style={{ background: relatedCreator.avatarColor ?? "#3d362f" }}
-                      >
-                        {relatedCreator.name?.slice(0, 2).toUpperCase()}
-                      </span>
-                    ) : (
-                      <span
-                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#202024] text-[#948d82]"
-                        style={{ background: "radial-gradient(circle at 50% 40%, #d9a86314, #11111400 70%), #111114" }}
-                      >
-                        <Clock size={11} />
-                      </span>
-                    )}
-                    <p className={["flex-1 truncate text-[11px] font-medium text-[#eae4d9]", item.collectionId && "group-hover:text-[#e8b273] transition-colors duration-150"].join(" ")}>
-                      {item.message}
+                    <p className="mt-[2px] truncate text-[12px] leading-[16px]" style={{ color: "#d7dae0" }}>
+                      {k.label}
                     </p>
-                    <span className="shrink-0 text-[9.5px] text-[#79746b]">{item.relativeTime}</span>
+                  </div>
+                </div>
+                <div className="mt-[9px] flex items-end justify-between gap-2">
+                  <span className="truncate text-[10.5px] leading-[14px]" style={{ color: "#7e848e" }}>
+                    {k.unter}
+                  </span>
+                  <Verlaufslinie werte={k.verlauf} farbe={k.farbe} />
+                </div>
+              </button>
+            ))}
+          </Auftritt>
+
+          {/* ============ DREI ARBEITSFLAECHEN ============ */}
+          <Auftritt verzoegerung={130} className="mt-[13px] grid grid-cols-[1.05fr_1fr_1fr] gap-[13px]">
+            {/* ---- Production Overview ---- */}
+            <div className="rounded-[11px] border p-[17px]" style={{ background: D.flaeche, borderColor: D.rand }}>
+              <PanelKopf titel="Production Overview" unter="Real-time status of your content pipeline." />
+              <div className="mt-[14px] flex items-center gap-[16px]">
+                <StageDonut counts={z.stufen} total={z.stufenGesamt} />
+                <div className="min-w-0 flex-1 flex flex-col gap-[9px]">
+                  {STAGE_ORDER.map((stage) => (
+                    <div key={stage} className="flex items-center gap-[9px]">
+                      <span
+                        className="h-[7px] w-[7px] shrink-0 rounded-full"
+                        style={{ background: STAGE_COLOR[stage], boxShadow: `0 0 6px ${STAGE_COLOR[stage]}80` }}
+                      />
+                      <span className="text-[11.5px]" style={{ color: D.zeile }}>
+                        {stage}
+                      </span>
+                      <span className="ml-auto text-[11.5px] font-semibold tabular-nums" style={{ color: D.weiss }}>
+                        {z.stufen[stage]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ---- Creator Momentum ---- */}
+            <div className="rounded-[11px] border p-[17px]" style={{ background: D.flaeche, borderColor: D.rand }}>
+              <PanelKopf
+                titel="Creator Momentum"
+                unter="Where your saved concepts are going."
+                rechts={
+                  <button
+                    onClick={onOpenCreators}
+                    className="inline-flex items-center gap-[4px] text-[11.5px] transition-colors duration-150 hover:text-[#EAC088]"
+                    style={{ color: `${D.gold}b3` }}
+                  >
+                    View all <ArrowRight size={13} />
                   </button>
+                }
+              />
+              <div className="mt-[14px] flex flex-col">
+                {momentum.length === 0 && (
+                  <p className="py-[18px] text-[12px]" style={{ color: D.leise }}>
+                    No concepts saved yet.
+                  </p>
+                )}
+                {momentum.map((r) => (
+                  <button
+                    key={r.creator.id}
+                    onClick={onOpenCreators}
+                    className="flex h-[48px] items-center gap-[10px] border-b text-left transition-colors duration-150 last:border-b-0 hover:bg-white/[0.02]"
+                    style={{ borderColor: "#15100a" }}
+                  >
+                    <span
+                      className="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold"
+                      style={{ background: r.creator.avatarColor, color: "#0c0c0e" }}
+                    >
+                      {r.creator.profileImage ? (
+                        <img src={r.creator.profileImage} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        r.creator.name.slice(0, 2).toUpperCase()
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] font-medium leading-[16px]" style={{ color: D.weiss }}>
+                        {r.creator.name}
+                      </span>
+                      <span className="block truncate text-[10.5px] leading-[14px]" style={{ color: D.leise }}>
+                        {r.creator.handle}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[11px] whitespace-nowrap" style={{ color: D.leise }}>
+                      {r.anzahl} concept{r.anzahl === 1 ? "" : "s"}
+                    </span>
+                    {/* Statt eines erfundenen Wachstums: der echte Anteil
+                        am Gesamtbestand, als Balken und als Zahl. */}
+                    <span className="flex shrink-0 items-center gap-[8px]">
+                      <span className="h-[5px] w-[46px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
+                        <span
+                          className="block h-full rounded-full"
+                          style={{ width: `${r.anteil}%`, background: D.gruen, boxShadow: `0 0 6px ${D.gruen}80` }}
+                        />
+                      </span>
+                      <span className="w-[32px] text-right text-[11.5px] font-semibold tabular-nums" style={{ color: D.gruen }}>
+                        {r.anteil}%
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ---- Next Actions ---- */}
+            <div className="rounded-[11px] border p-[17px]" style={{ background: D.flaeche, borderColor: D.rand }}>
+              <PanelKopf
+                titel="Next Actions"
+                unter="Keep the momentum going."
+                rechts={
+                  naechste.length > 0 ? (
+                    <Pille farbe={D.goldHell}>{naechste.length}</Pille>
+                  ) : (
+                    <Pille farbe={D.gruen} icon={CheckCircle2}>
+                      Clear
+                    </Pille>
+                  )
+                }
+              />
+              <div className="mt-[13px] flex flex-col gap-[7px]">
+                {naechste.length === 0 && (
+                  <p className="py-[18px] text-[12px]" style={{ color: D.leise }}>
+                    Everything is moving smoothly. Nothing needs your input right now.
+                  </p>
+                )}
+                {naechste.map((a) => {
+                  const Zeichen = a.icon;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => onOpenCollection(a.collectionId)}
+                      className="flex items-center gap-[10px] rounded-[9px] border px-[10px] py-[7px] text-left transition-colors duration-150 hover:border-[#2f2113]"
+                      style={{ background: D.karte, borderColor: D.rand }}
+                    >
+                      <span
+                        className="h-[34px] w-[40px] shrink-0 overflow-hidden rounded-[6px]"
+                        style={{ background: "rgba(255,255,255,0.05)" }}
+                      >
+                        {a.bild && <img src={a.bild} alt="" className="h-full w-full object-cover" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-[6px]">
+                          <Zeichen size={12} strokeWidth={2.2} style={{ color: a.farbe }} className="shrink-0" />
+                          <span className="truncate text-[12px] leading-[16px]" style={{ color: D.weiss }}>
+                            {a.titel}
+                          </span>
+                        </span>
+                        <span className="mt-[1px] block truncate text-[10.5px] leading-[14px]" style={{ color: D.leise }}>
+                          {a.unter}
+                        </span>
+                      </span>
+                      <ChevronRight size={14} className="shrink-0" style={{ color: D.leise }} />
+                    </button>
                   );
                 })}
               </div>
             </div>
-          </div>
+          </Auftritt>
+
+          {/* ============ UNTEN: KONZEPTE UND VERLAUF ============ */}
+          <Auftritt verzoegerung={200} className="mt-[13px] grid grid-cols-[1.7fr_1fr] gap-[13px]">
+            {/* ---- Recent Concepts ---- */}
+            <div className="rounded-[11px] border p-[17px]" style={{ background: D.flaeche, borderColor: D.rand }}>
+              <PanelKopf
+                titel="Recent Concepts"
+                unter="Latest concepts from your workspace."
+                rechts={
+                  <button
+                    onClick={onOpenHub}
+                    className="inline-flex items-center gap-[4px] text-[11.5px] transition-colors duration-150 hover:text-[#EAC088]"
+                    style={{ color: `${D.gold}b3` }}
+                  >
+                    View all <ArrowRight size={13} />
+                  </button>
+                }
+              />
+              <div className="mt-[14px] grid grid-cols-4 gap-[11px]">
+                {letzteKonzepte.length === 0 && (
+                  <p className="col-span-4 py-[18px] text-[12px]" style={{ color: D.leise }}>
+                    Nothing saved yet. Start a research session to fill this.
+                  </p>
+                )}
+                {letzteKonzepte.map(({ konzept, sammlung }) => {
+                  const stufe = collectionStage(sammlung);
+                  const creator = creatorById.get(konzept.creatorId ?? sammlung.creatorId);
+                  return (
+                    <button
+                      key={`${sammlung.id}-${konzept.video.id}`}
+                      onClick={() => onOpenCollection(sammlung.id)}
+                      className="group overflow-hidden rounded-[10px] border text-left transition-colors duration-150 hover:border-[#2f2113]"
+                      style={{ background: D.karte, borderColor: D.rand }}
+                    >
+                      <span
+                        className="relative block aspect-[4/5] w-full overflow-hidden"
+                        style={{ background: konzept.video.thumbGradient ?? "rgba(255,255,255,0.05)" }}
+                      >
+                        {konzept.video.thumbnailUrl && (
+                          <img src={konzept.video.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                        )}
+                        <span
+                          className="absolute right-[8px] top-[8px] rounded-[5px] px-[6px] py-[2px] text-[10.5px] tabular-nums"
+                          style={{ background: "rgba(0,0,0,0.62)", color: "#f0f0f2" }}
+                        >
+                          {konzept.video.duration}
+                        </span>
+                      </span>
+                      <span className="block px-[11px] pb-[11px] pt-[10px]">
+                        <Pille farbe={STAGE_COLOR[stufe]}>{stufe}</Pille>
+                        <span className="mt-[7px] block truncate text-[12px] leading-[16px]" style={{ color: D.weiss }}>
+                          {sammlung.name}
+                        </span>
+                        <span className="mt-[5px] flex items-center justify-between gap-2">
+                          <span className="truncate text-[11px]" style={{ color: D.leise }}>
+                            {creator?.name ?? "—"}
+                          </span>
+                          <MoreVertical size={13} style={{ color: D.leise }} className="shrink-0" />
+                        </span>
+                        <span className="mt-[2px] block truncate text-[10.5px]" style={{ color: D.leise }}>
+                          {vorZeit(sammlung.updatedAt)}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ---- Recent Activity ---- */}
+            <div className="rounded-[11px] border p-[17px]" style={{ background: D.flaeche, borderColor: D.rand }}>
+              <PanelKopf
+                titel="Recent Activity"
+                unter="What's happening in your workspace."
+                rechts={
+                  <button
+                    onClick={onOpenCollections}
+                    className="inline-flex items-center gap-[4px] text-[11.5px] transition-colors duration-150 hover:text-[#EAC088]"
+                    style={{ color: `${D.gold}b3` }}
+                  >
+                    View all <ArrowRight size={13} />
+                  </button>
+                }
+              />
+              <div className="mt-[12px] flex flex-col">
+                {activity.loading && (
+                  <p className="py-[18px] text-[12px]" style={{ color: D.leise }}>
+                    Loading…
+                  </p>
+                )}
+                {!activity.loading && activity.items.length === 0 && (
+                  <p className="py-[18px] text-[12px]" style={{ color: D.leise }}>
+                    Nothing has happened yet.
+                  </p>
+                )}
+                {activity.items.slice(0, 5).map((item) => {
+                  const sammlung = item.collectionId ? collectionById.get(item.collectionId) : undefined;
+                  const bild = sammlung?.concepts[0]?.video.thumbnailUrl;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => item.collectionId && onOpenCollection(item.collectionId)}
+                      disabled={!item.collectionId}
+                      className="flex h-[50px] items-center gap-[10px] border-b text-left transition-colors duration-150 last:border-b-0 hover:bg-white/[0.02] disabled:hover:bg-transparent"
+                      style={{ borderColor: "#15100a" }}
+                    >
+                      <span
+                        className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[7px]"
+                        style={{ background: "rgba(211,148,72,0.10)", border: "1px solid rgba(211,148,72,0.22)" }}
+                      >
+                        <TrendingUp size={13} strokeWidth={1.9} style={{ color: D.gold }} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] leading-[16px]" style={{ color: D.weiss }}>
+                          {item.message}
+                        </span>
+                        <span className="block text-[10.5px] leading-[14px]" style={{ color: D.leise }}>
+                          {item.relativeTime}
+                        </span>
+                      </span>
+                      {bild && (
+                        <span className="h-[30px] w-[30px] shrink-0 overflow-hidden rounded-[6px]">
+                          <img src={bild} alt="" className="h-full w-full object-cover" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </Auftritt>
         </div>
       </Auftritt>
     </div>

@@ -564,3 +564,44 @@ html[data-tab-hidden="true"] .hero-photo-layer {
 @media (prefers-reduced-motion: reduce) {
   .rf-kante { animation: none; opacity: 0.85; }
 }
+
+/* Der Name in der Begruessung schimmert langsam in Gold (Emre,
+   14.10.2026). Kein Blinken, kein Farbwechsel -- ein heller Streifen
+   wandert sehr langsam durch die vorhandenen Goldtoene.
+
+   Umgesetzt ueber einen Verlauf, der auf die Schrift beschnitten wird;
+   bewegt wird nur dessen Position. Das kostet nichts und faellt nicht
+   unter das, was uns bei den Kachel-Schildern das Raster zerlegt hat. */
+.rf-name-gold {
+  background: linear-gradient(
+    100deg,
+    #c98b3f 0%,
+    #D39448 28%,
+    #EAC088 46%,
+    #f7e0bb 52%,
+    #EAC088 58%,
+    #D39448 76%,
+    #c98b3f 100%
+  );
+  background-size: 260% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rf-name-schimmer 9s ease-in-out infinite;
+}
+
+@keyframes rf-name-schimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Wer weniger Bewegung eingestellt hat, bekommt das Gold ruhig
+   stehend -- in der Mitte des Verlaufs, also am hellsten. */
+@media (prefers-reduced-motion: reduce) {
+  .rf-name-gold {
+    animation: none;
+    background-position: 50% 50%;
+  }
+}

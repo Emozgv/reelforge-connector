@@ -136,8 +136,20 @@ export function CollectionCard({
         // vier Bilder sind exakt gleich gross.
         className="w-[54px] shrink-0 mr-3 rounded-[6px] overflow-hidden bg-black/30 grid gap-[2px]"
         style={{
-          gridTemplateColumns: anzahl >= 3 ? "1fr 1fr" : "1fr",
-          gridTemplateRows: anzahl >= 2 ? "1fr 1fr" : "1fr",
+          // minmax(0,...) statt blossem 1fr -- und das ist der Punkt.
+          //
+          // "1fr" heisst in Wahrheit "mindestens so gross wie der Inhalt".
+          // Ein 26 Punkte breites Hochformat will von sich aus 46 hoch
+          // sein, also nahmen sich zwei Reihen zusammen 94 Punkte in einer
+          // 82 Punkte hohen Kachel. Der untere Rand wurde abgeschnitten,
+          // und der waagerechte Strich sass dadurch sechs Punkte zu tief
+          // (12.10.2026 von Emre bemerkt, hier nachgemessen).
+          //
+          // Mit minmax(0,1fr) duerfen die Reihen schrumpfen; das Bild wird
+          // beschnitten statt die Kachel zu sprengen, und das Kreuz sitzt
+          // exakt in der Mitte.
+          gridTemplateColumns: anzahl >= 3 ? "minmax(0,1fr) minmax(0,1fr)" : "minmax(0,1fr)",
+          gridTemplateRows: anzahl >= 2 ? "minmax(0,1fr) minmax(0,1fr)" : "minmax(0,1fr)",
         }}
       >
         {Array.from({ length: Math.max(1, anzahl) }).map((_, i) => {

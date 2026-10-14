@@ -32,7 +32,7 @@ function Kennzahl({ Zeichen, wert, label }: { Zeichen: typeof Layers; wert: numb
     <span className="flex items-start gap-1.5 min-w-0">
       <Zeichen size={12} className="shrink-0 mt-[3px] text-[#9a9ba0]" />
       <span className="min-w-0">
-        <span className="block text-[12.5px] leading-[15px] text-[#fbfbfc]">{wert}</span>
+        <span className="block text-[12px] leading-[15px] text-[#fbfbfc]">{wert}</span>
         <span className="block text-[10px] leading-[13px] text-[#c2c3c6] truncate">{label}</span>
       </span>
     </span>
@@ -65,9 +65,9 @@ export function CreatorCard({
       // press-feedback: dessen Schrumpfen beim Druecken hat in Collections
       // dazu gefuehrt, dass Klicks auf der grossen Flaeche danebengingen.
       style={{ background: KARTE_FUELLUNG, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.035), inset 0 0 0 1px rgba(0,0,0,0.4), 0 16px 32px -18px rgba(0,0,0,0.8), ${GOLD_RING}` }}
-      className="group relative flex h-[200px] p-[7px] rounded-xl border border-[#1a130b] hover:border-[#2f2113] transition-colors duration-150 cursor-pointer"
+      className="group relative flex h-[182px] p-[7px] rounded-xl border border-[#1a130b] hover:border-[#2f2113] transition-colors duration-150 cursor-pointer"
     >
-      <span className="w-[132px] h-full shrink-0 rounded-[9px] overflow-hidden bg-black/40 block">
+      <span className="w-[120px] h-full shrink-0 rounded-[9px] overflow-hidden bg-black/40 block">
         {bild ? (
           <img src={bild} alt="" loading="lazy" className="w-full h-full object-cover" />
         ) : (
@@ -78,10 +78,10 @@ export function CreatorCard({
       <span className="flex-1 min-w-0 flex flex-col pl-[22px] pr-7 pt-[17px]">
         <span className="flex items-center gap-2.5 min-w-0">
           <span className="min-w-0">
-            <span className="block font-semibold text-[18px] leading-[23px] tracking-[-0.2px] text-[#f5f5f5] truncate">
+            <span className="block font-semibold text-[17px] leading-[22px] tracking-[-0.2px] text-[#f5f5f5] truncate">
               {creator.name}
             </span>
-            <span className="block text-[12px] text-[#cfd0d3] truncate">{creator.handle}</span>
+            <span className="block text-[11.5px] text-[#cfd0d3] truncate">{creator.handle}</span>
           </span>
 
           <span

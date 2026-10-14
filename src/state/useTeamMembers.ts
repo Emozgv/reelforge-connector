@@ -13,6 +13,8 @@ export interface TeamMember {
   email: string | null;
   displayName: string | null;
   canChangePlan: boolean;
+  /** Wann dieses Mitglied dem Arbeitsbereich beigetreten ist. */
+  joinedAt: string | null;
 }
 
 export interface PendingInvite {
@@ -30,6 +32,7 @@ interface MemberRow {
   email: string | null;
   display_name: string | null;
   can_change_plan: boolean;
+  created_at: string | null;
 }
 
 interface InviteRow {
@@ -79,7 +82,7 @@ export function useTeamMembers(workspaceId: string | undefined) {
       supabase
         .schema("client_os")
         .from("workspace_members")
-        .select("id, user_id, role, email, display_name, can_change_plan")
+        .select("id, user_id, role, email, display_name, can_change_plan, created_at")
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: true }),
       supabase
@@ -105,6 +108,7 @@ export function useTeamMembers(workspaceId: string | undefined) {
         email: r.email,
         displayName: r.display_name,
         canChangePlan: !!r.can_change_plan,
+        joinedAt: r.created_at,
       }))
     );
     // A VA's RLS grant returns zero invite rows rather than an error — the

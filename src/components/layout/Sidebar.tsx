@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   LayoutDashboard,
   Sparkles,
@@ -9,31 +8,15 @@ import {
   Settings,
   CreditCard,
   LogOut,
-  Bell,
   Radar,
   ShieldCheck,
   Building2,
+  UserCog,
   ChevronRight,
 } from "lucide-react";
-import type { ActivityFeedItem } from "../../state/useActivityFeed";
-import type { ActivityEventType } from "../../lib/activityMapping";
 import type { Creator, CreatorPackage } from "../../types";
 import { canViewBilling } from "../../lib/permissions";
 import { TestAccountButton } from "./TestAccountButton";
-
-// The bell is for things worth interrupting the client for — not a mirror of
-// every log line (that full trail lives in Dashboard/Collection history).
-const NOTABLE_EVENT_TYPES: ActivityEventType[] = [
-  "submission_created",
-  "regeneration_requested",
-  "delivery_eta_set",
-  "submission_finished",
-  "submission_check_inbox",
-];
-
-// Read state is a per-browser affordance (localStorage), not a synced backend
-// concept — matches the single-workspace-per-browser assumption elsewhere.
-const LAST_READ_KEY = "reelforge_notifications_last_read_at";
 
 export type Page =
   | "dashboard"
@@ -41,6 +24,7 @@ export type Page =
   | "research"
   | "collections"
   | "creators"
+  | "team"
   | "production"
   | "library"
   | "billing"
@@ -88,6 +72,7 @@ const NAV_GRUPPEN: { label: string; items: NavEintrag[] }[] = [
     label: "Organization",
     items: [
       { id: "creators", label: "Creators", icon: <Users {...ICON} /> },
+      { id: "team", label: "Team", icon: <UserCog {...ICON} /> },
       { id: "billing", label: "Billing", icon: <CreditCard {...ICON} />, sichtbar: (b) => canViewBilling(b.role) },
     ],
   },
@@ -108,8 +93,6 @@ export function Sidebar({
   isPlatformAdmin,
   hasSydAccess,
   onSignOut,
-  activity,
-  onOpenCollection,
 }: {
   page: Page;
   onNavigate: (p: Page) => void;
@@ -128,8 +111,6 @@ export function Sidebar({
   // time; only gates whether the nav entry shows, not what's inside it.
   hasSydAccess?: boolean;
   onSignOut?: () => void;
-  activity: { items: ActivityFeedItem[]; loading: boolean };
-  onOpenCollection: (collectionId: string) => void;
   // Real workspace plan data for the bottom-of-sidebar plan card — no single
   // per-workspace "plan" concept exists (ReelForge sells per-creator plans),
   // so the card shows the real "X of Y creators on an active plan" figure
@@ -137,89 +118,29 @@ export function Sidebar({
   creators: Creator[];
   creatorPackages: Map<string, CreatorPackage>;
 }) {
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [lastReadAt, setLastReadAt] = useState(() => Number(localStorage.getItem(LAST_READ_KEY) ?? 0));
   const shownName = displayName || userEmail;
   const initials = shownName ? shownName.slice(0, 2).toUpperCase() : "EM";
-  const notifications = activity.items.filter((item) => NOTABLE_EVENT_TYPES.includes(item.eventType));
-  const unread = notifications.length > 0 && new Date(notifications[0].createdAtRaw).getTime() > lastReadAt;
   // Real field already passed in (workspace.role) — shown under the name the
   // same way the reference shows "Owner" under "Noah", instead of always
   // falling back to email.
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : userEmail;
 
-  function markAllRead() {
-    const now = Date.now();
-    localStorage.setItem(LAST_READ_KEY, String(now));
-    setLastReadAt(now);
-  }
-
   return (
     <aside
-      className="relative z-20 w-[230px] shrink-0 h-full border-r border-[#111113] bg-[#030304] flex flex-col"
+      className="relative z-20 w-[223px] shrink-0 h-full border-r border-[#111113] bg-[#030304] flex flex-col"
       style={{ boxShadow: "inset -14px 0 22px -20px rgba(0,0,0,0.85), inset 0 1px 0 rgba(0,0,0,0.6)" }}
     >
       <span className="rf-kante" aria-hidden="true" />
 
-      <div className="flex items-center justify-between gap-1.5 pt-[24px] pb-[16px] pl-[18px] pr-[14px]">
-        <div className="flex items-center gap-[10px] min-w-0">
-          <img src="/rf-logo-lockup.svg" alt="" className="w-[30px] h-[23px] shrink-0" />
-          <span className="font-mn font-extralight text-[17px] tracking-[2.1px] text-[#ede5d6] uppercase truncate">ReelForge</span>
-        </div>
-
-        <div className="flex items-center gap-0.5 shrink-0">
-          <div className="relative">
-            <button
-              onClick={() => setNotifOpen((v) => !v)}
-              className="press-feedback relative w-[28px] h-[28px] rounded-[9px] border border-[#1d1d21] bg-[#0d0d10] flex items-center justify-center text-neutral-400 hover:text-neutral-50 transition-colors duration-150"
-            >
-              <Bell size={12} strokeWidth={1.6} />
-              {unread && (
-                <span
-                  className="pulse-live absolute top-[5px] right-[5px] w-[6px] h-[6px] rounded-full bg-[#D39448]"
-                  style={{ ["--pulse-live-color" as string]: "rgba(211,148,72,0.55)" }}
-                />
-              )}
-            </button>
-            {notifOpen && (
-              <div
-                onMouseLeave={() => setNotifOpen(false)}
-                className="absolute left-0 top-9 z-30 w-72 rounded-xl surface-panel-strong p-1 animate-fade-in"
-              >
-                <div className="flex items-center justify-between px-2.5 pt-2 pb-1.5">
-                  <p className="text-[10.5px] tracking-wide uppercase text-neutral-500">Notifications</p>
-                  {unread && (
-                    <button
-                      onClick={markAllRead}
-                      className="text-[10.5px] text-neutral-500 hover:text-[#D39448] transition-colors duration-150"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-                <div className="max-h-[300px] overflow-y-auto">
-                  {notifications.length === 0 && (
-                    <p className="px-2.5 py-3 text-[11.5px] text-neutral-600">Nothing yet.</p>
-                  )}
-                  {notifications.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        if (item.collectionId) onOpenCollection(item.collectionId);
-                        setNotifOpen(false);
-                      }}
-                      disabled={!item.collectionId}
-                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.06] transition-colors duration-150 disabled:hover:bg-transparent"
-                    >
-                      <p className="text-[12px] text-neutral-50 leading-snug">{item.message}</p>
-                      <p className="text-[10.5px] text-neutral-600 mt-0.5">{item.relativeTime}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Die Glocke stand hier bis zum 14.10.2026. Sie sitzt jetzt oben
+          rechts im Dashboard, wo ohnehin schon eine war -- siehe
+          shared/Benachrichtigungen. Das Zeichen und der Schriftzug nehmen
+          den frei gewordenen Platz auf. */}
+      <div className="flex items-center justify-center gap-[10px] px-[16px] pt-[25px] pb-[17px]">
+        <img src="/rf-logo-lockup.svg" alt="" className="h-[23px] w-[30px] shrink-0" />
+        <span className="font-mn truncate text-[17.5px] font-extralight uppercase tracking-[2.1px] text-[#ede5d6]">
+          ReelForge
+        </span>
       </div>
 
       {/* Die Gruppen stehen oben in ihrem natuerlichen Abstand. Unser
@@ -244,10 +165,7 @@ export function Sidebar({
                   return (
                     <button
                       key={item.id}
-                      onClick={() => {
-                        setNotifOpen(false);
-                        onNavigate(item.id);
-                      }}
+                      onClick={() => onNavigate(item.id)}
                       className={[
                         "press-feedback relative w-full flex items-center gap-[12px] h-[37px] pl-[13px] pr-[10px] rounded-[9px] text-[12px] border transition-colors duration-150",
                         active
@@ -354,16 +272,20 @@ export function Sidebar({
           <div className="w-[32px] h-[32px] rounded-full bg-gradient-to-br from-[#EAC088] to-[#C08A45] flex items-center justify-center text-[10px] font-medium text-[#1a1208] shrink-0">
             {initials}
           </div>
-          <div className="flex-1 flex flex-col gap-[2px] leading-tight min-w-0">
+          <div className="flex flex-col gap-[2px] leading-tight min-w-0">
             <span className="text-[11.5px] text-[#e7e2d8] truncate">{displayName || workspaceName || "Client workspace"}</span>
             <span className="text-[10px] text-[#8b857b] truncate">{roleLabel ?? "Emre"}</span>
           </div>
-          {/* Blendet ueber die Deckkraft ein und aus, nie ueber display --
-              sonst springt die Zeile beim Darueberfahren. */}
-          <div className="flex items-center gap-[2px] shrink-0">
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-              <TestAccountButton workspaceId={workspaceId} canManage={Boolean(isPlatformAdmin)} />
-            </div>
+          {/* Die Testflasche sitzt seit dem 12.10.2026 direkt neben dem
+              Namen und ist dauerhaft sichtbar, statt am rechten Rand zu
+              haengen und erst beim Darueberfahren zu erscheinen (Emre).
+              Sie erscheint ohnehin nur fuer Plattform-Admins. */}
+          <div className="shrink-0">
+            <TestAccountButton workspaceId={workspaceId} canManage={Boolean(isPlatformAdmin)} />
+          </div>
+          {/* Das Abmelden blendet ueber die Deckkraft ein und aus, nie
+              ueber display -- sonst springt die Zeile. */}
+          <div className="ml-auto flex items-center gap-[2px] shrink-0">
             {onSignOut && (
               <button
                 onClick={onSignOut}

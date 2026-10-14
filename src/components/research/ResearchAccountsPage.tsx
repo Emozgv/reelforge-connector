@@ -975,7 +975,7 @@ export function ResearchAccountsPage({
       `}</style>
       {/* Die Seite blendet beim Oeffnen weich auf, statt auf einen Schlag
           dazustehen -- derselbe Auftritt wie auf Billing (11.10.2026). */}
-      <Auftritt className="relative max-w-[1400px] xl:max-w-[1650px] 2xl:max-w-[1900px] mx-auto px-10 xl:px-16 2xl:px-24 pt-8 pb-8">
+      <Auftritt className="relative max-w-[1560px] xl:max-w-[1820px] 2xl:max-w-[2100px] mx-auto px-8 xl:px-10 2xl:px-14 pt-8 pb-8">
         {/* Confined to the header/hero band only — not the whole scrollable
             page — same as how Dashboard/Creativity Hub scope their
             starfield to just the hero, not every panel below it. */}

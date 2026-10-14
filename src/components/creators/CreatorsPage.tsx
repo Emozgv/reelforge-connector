@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Auftritt } from "../shared/v3";
+import {
+  Auftritt,
+  ZeichenFeld,
+  V3_KACHEL as KACHEL,
+  V3_KACHEL_STIL as KACHEL_STIL,
+} from "../shared/v3";
 import { KOPF_ABSTAND, KOPF_KUERZEL, KOPF_TITEL, KOPF_UNTERZEILE } from "../../lib/pageHeader";
 import {
   BadgeCheck,
@@ -70,6 +75,17 @@ const SORTIERUNGEN: { wert: Sortierung; label: string }[] = [
   { wert: "name", label: "Name" },
 ];
 
+// Die Kennzahlen oben -- in derselben Machart wie Billings Uebersicht
+// (Emre, 12.10.2026: "der Vibe bei Billing ist ganz anders").
+//
+// Vorher baute diese Seite ihre Kaesten von Hand: flach, graues Zeichen,
+// kleine Zahl. Billing benutzt dafuer den gemeinsamen Baukasten -- das
+// runde goldene Zeichenfeld mit Schein, die Kachel mit warmem Rand, eine
+// grosse Zahl und darunter die Beschriftung. Genau das steht jetzt hier.
+//
+// Der farbige Punkt bleibt fuer die Zustaende erhalten: er sagt auf einen
+// Blick, welcher Kasten "fertig", "offen", "mit Plan" oder "ohne Plan"
+// meint. Er sitzt jetzt nur AUF dem Zeichenfeld statt an dessen Stelle.
 function Kennzahlkasten({
   Zeichen,
   punkt,
@@ -82,15 +98,24 @@ function Kennzahlkasten({
   label: string;
 }) {
   return (
-    <div className="h-[53px] min-w-[116px] px-4 rounded-lg border border-[#1a130b] flex items-center gap-2.5 shrink-0" style={{ ...TIEFE, background: KARTE_FUELLUNG }}>
-      {Zeichen ? (
-        <Zeichen size={15} className="shrink-0 text-[#8c8d91]" />
-      ) : (
-        <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: punkt }} />
-      )}
+    <div
+      className={[KACHEL, "min-w-[148px] shrink-0 px-[14px] py-[12px] flex items-center gap-[12px]"].join(" ")}
+      style={KACHEL_STIL}
+    >
+      <span className="relative shrink-0">
+        <ZeichenFeld icon={Zeichen ?? Users} size={36} rund glanz />
+        {punkt && (
+          <span
+            className="absolute -bottom-[1px] -right-[1px] h-[10px] w-[10px] rounded-full border-2 border-[#0e0e11]"
+            style={{ background: punkt }}
+          />
+        )}
+      </span>
       <span className="min-w-0">
-        <span className="block text-[13px] leading-[16px] text-[#efeff2]">{wert}</span>
-        <span className="block text-[10.5px] leading-[13px] text-[#a8a9ad] whitespace-nowrap">{label}</span>
+        <span className="block text-[20px] leading-[24px] font-bold tabular-nums tracking-[-0.4px] text-[#f5f5f5]">
+          {wert}
+        </span>
+        <span className="block text-[11px] leading-[15px] text-[#afb7c3] whitespace-nowrap">{label}</span>
       </span>
     </div>
   );
@@ -300,10 +325,10 @@ export function CreatorsPage({
         {/* Kennzahlen und Suche -- im Entwurf eine Reihe, Kaesten 60 hoch. */}
         <div className={`relative ${KOPF_ABSTAND} flex items-center gap-[14px]`}>
           <Kennzahlkasten Zeichen={Users} wert={zahlen.gesamt} label="Total creators" />
-          <Kennzahlkasten punkt="#3fd096" wert={zahlen.fertig} label="Setup complete" />
+          <Kennzahlkasten Zeichen={BadgeCheck} punkt="#63c07f" wert={zahlen.fertig} label="Setup complete" />
           <Kennzahlkasten punkt="#f2b552" wert={zahlen.offen} label="Setup incomplete" />
-          <Kennzahlkasten punkt="#5eb1ff" wert={zahlen.mitPlan} label="With active plan" />
-          <Kennzahlkasten punkt="#6f7075" wert={zahlen.ohnePlan} label="No plan" />
+          <Kennzahlkasten Zeichen={CalendarClock} punkt="#5eb1ff" wert={zahlen.mitPlan} label="With active plan" />
+          <Kennzahlkasten Zeichen={CircleSlash} punkt="#6f7075" wert={zahlen.ohnePlan} label="No plan" />
 
           <div className="relative flex-1 min-w-[140px] max-w-[470px]">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#a8a9ad]" />

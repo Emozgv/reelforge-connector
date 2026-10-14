@@ -32,3 +32,10 @@ dist-ssr
 *.sw?
 .vercel
 connector-app/reel-verlauf.jsonl
+
+# Werkzeug-Einstellungen und Zwischendateien -- gehoeren nicht ins Projekt.
+.agents/
+.claude/skills/
+skills-lock.json
+supabase/.temp/
+connector-app/scripts/reel-verlauf.jsonl

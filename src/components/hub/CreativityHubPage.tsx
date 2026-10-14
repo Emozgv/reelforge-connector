@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Auftritt } from "../shared/v3";
 import { Search, Shuffle, RefreshCw, Bookmark, SlidersHorizontal, Info, CloudOff, ChevronDown, Loader2 } from "lucide-react";
 import { searchReels, fetchProfileReels, fetchMoreProfileReels } from "../../lib/searchReels";
 import { classifyContentStyle } from "../../lib/contentStyleClassifier";
@@ -597,6 +598,11 @@ export function CreativityHubPage({
 
   return (
     <div className="h-full overflow-y-auto" style={{ background: "#020203" }}>
+      {/* Der Hub blendet jetzt beim Oeffnen weich auf, wie Collections,
+          Production, Research und das Dashboard. Er war die einzige
+          Hauptseite ohne diese Animation -- von Emre bemerkt
+          (14.10.2026). */}
+      <Auftritt>
       {/* hero */}
       <div className="relative overflow-hidden px-10 xl:px-16 2xl:px-24 pt-14 pb-10">
         {/* Scoped, stronger than the shared .dashboard-starfield-boost (which
@@ -636,11 +642,15 @@ export function CreativityHubPage({
 
         <div className="relative z-10 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto text-center">
           <div className="flex items-center justify-center gap-2.5 mb-3">
-            <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#c08e4e]/60" />
-            <span className="text-[10.5px] tracking-[1.8px] uppercase text-[#c08e4e]">
+            {/* Dieselbe Schrift und dasselbe Gold wie das Kuerzel auf
+                allen anderen Reitern (KOPF_KUERZEL, 12.10.2026). Nur die
+                Anordnung bleibt eigen: hier steht es mittig zwischen zwei
+                feinen Strichen, statt links oben. */}
+            <span className="h-px w-5 bg-gradient-to-r from-transparent to-[#D39448]/60" />
+            <span className="text-[11px] font-semibold tracking-[0.06em] uppercase text-[#D39448]">
               Creativity Hub
             </span>
-            <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#c08e4e]/60" />
+            <span className="h-px w-5 bg-gradient-to-l from-transparent to-[#D39448]/60" />
           </div>
           <h1 className="text-[42px] leading-[1.08] font-hub-hero font-medium text-neutral-50">
             Discover your next{" "}
@@ -987,6 +997,7 @@ export function CreativityHubPage({
         hasNext={detailIndex >= 0 && detailIndex < filtered.length - 1}
         active={active}
       />
+    </Auftritt>
     </div>
   );
 }
