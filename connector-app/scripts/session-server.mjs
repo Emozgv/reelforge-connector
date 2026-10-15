@@ -2766,16 +2766,58 @@ class Session {
     // ohne Gedaechtnis wuerde dasselbe Reel staendig erneut geschrieben.
     // Wie ueberall beim Archiv ohne Warten und ohne Folgen fuer die Bild-
     // uebertragung -- es ist Verlauf, nichts, woran der Feed haengt.
-    this.__archiviert = this.__archiviert ?? new Set();
-    if (bekannt && !this.__archiviert.has(bekannt.id)) {
-      this.__archiviert.add(bekannt.id);
+    // Reichhaltigkeit eines Datensatzes -- wie viel wir ueber dieses Reel
+    // wirklich wissen. Danach entscheidet sich, ob geschrieben wird.
+    const wieViel = (r) => (r ? [
+      r.username, r.thumbnailUrl, r.videoUrl, r.caption,
+      typeof r.likes === "number" ? 1 : null,
+      typeof r.comments === "number" ? 1 : null,
+      typeof r.viewsRaw === "number" && r.viewsRaw > 0 ? 1 : null,
+      typeof r.durationSec === "number" && r.durationSec > 0 ? 1 : null,
+    ].filter(Boolean).length : 0);
+
+    const angereichert = bekannt
+      ? { ...bekannt, ...(laenge ? { durationSec: laenge } : {}), ...(typeof aufrufe === "number" ? { viewsRaw: aufrufe } : {}) }
+      : bekannt;
+
+    // INS ARCHIV SCHREIBEN -- jetzt, nicht vorher.
+    //
+    // Zwei Fehler steckten hier, beide am 15.10.2026 von Emre gefunden und
+    // in den Daten bestaetigt:
+    //
+    // 1. Geschrieben wurde der ROHE Datensatz, eine Zeile BEVOR Aufrufe und
+    //    Laenge dazukamen. Die Live-Ansicht bekam die angereicherte Fassung,
+    //    das Archiv die nackte -- deshalb standen dort bei ausnahmslos jedem
+    //    Reel 0 Aufrufe und 0 Sekunden, obwohl oben 5,1K zu sehen war.
+    //
+    // 2. Geschrieben wurde EINMAL und danach nie wieder, auch wenn der
+    //    Datensatz noch leer war. Bei Following schickt Instagram seine
+    //    Antwort erst zehn bis zwanzig Sekunden nach dem Video; bis dahin
+    //    kennt der Notweg hoechstens den Namen, oft nicht einmal den. Die
+    //    Anzeige korrigierte sich spaeter von selbst, das Archiv nicht --
+    //    dort blieben leere Huellen stehen, die mangels Namen auch noch
+    //    unter Emres eigenem Konto landeten.
+    //
+    // Jetzt gilt: erst schreiben, wenn ueberhaupt etwas dasteht, und erneut
+    // schreiben, sobald mehr bekannt ist. Der Server fuehrt die Eintraege
+    // ueber die Reel-Kennung zusammen, ein zweiter Schreibvorgang ersetzt
+    // also den ersten, statt ihn zu verdoppeln.
+    this.__archivGuete = this.__archivGuete ?? new Map();
+    const guete = wieViel(angereichert);
+    const vorher = this.__archivGuete.get(angereichert?.id) ?? 0;
+    // Ohne Namen UND ohne Bild ist es keine Archivzeile, sondern ein zu
+    // frueher Griff. Lieber einen Takt warten -- in zwei Sekunden fragt
+    // diese Schleife ohnehin erneut.
+    const brauchbar = Boolean(angereichert?.username || angereichert?.thumbnailUrl);
+    if (angereichert && brauchbar && guete > vorher) {
+      this.__archivGuete.set(angereichert.id, guete);
       // Einmal pro Sitzung: wie lange haelt die Bildadresse? Instagram
       // unterschreibt sie mit einem Ablaufzeitpunkt (Emres Frage vom
       // 09.10.2026). Nur Lesen, nur einmal.
-      if (!this.__ablaufGemeldet && bekannt.thumbnailUrl) {
+      if (!this.__ablaufGemeldet && angereichert.thumbnailUrl) {
         this.__ablaufGemeldet = true;
         try {
-          const u = new URL(bekannt.thumbnailUrl);
+          const u = new URL(angereichert.thumbnailUrl);
           const hex = u.searchParams.get("oe");
           const exp = u.searchParams.get("_nc_exp");
           const bis = hex ? parseInt(hex, 16) * 1000 : exp ? Number(exp) : null;
@@ -2786,12 +2828,10 @@ class Session {
           );
         } catch (e) { console.log(`[thumbnail] Adresse nicht lesbar: ${e?.message ?? e}`); }
       }
-      void archiveLiveReel(this, bekannt);
+      console.log(`[archive] ${angereichert.id}: schreibe mit Guete ${guete}${vorher ? ` (vorher ${vorher})` : ""}.`);
+      void archiveLiveReel(this, angereichert);
     }
 
-    const angereichert = bekannt
-      ? { ...bekannt, ...(laenge ? { durationSec: laenge } : {}), ...(typeof aufrufe === "number" ? { viewsRaw: aufrufe } : {}) }
-      : bekannt;
     return { reel: angereichert, code: sicht.code, wege: sicht.wege, amAnfang: sicht.code === this.erstesReel };
   }
 

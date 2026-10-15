@@ -1342,7 +1342,16 @@ export function ResearchAccountsPage({
                     {currentSwipeVideo && (
                       <>
                         <PlatformIcon platform={currentSwipeVideo.platform} size={12} />
-                        <span className="text-neutral-50 font-medium">@{currentSwipeVideo.username}</span>
+                        {/* Solange Instagram seine Antwort noch nicht
+                            geschickt hat, wissen wir den Namen NOCH nicht --
+                            das ist etwas anderes als "niemand". "@unknown"
+                            behauptete etwas, "Lädt…" sagt die Wahrheit
+                            (Emre, 15.10.2026). Bei Following dauert das
+                            gemessen zehn bis zwanzig Sekunden; die Anzeige
+                            traegt den Namen danach von selbst nach. */}
+                        <span className="text-neutral-50 font-medium">
+                          {currentSwipeVideo.username === "unknown" ? "Lädt…" : `@${currentSwipeVideo.username}`}
+                        </span>
                       </>
                     )}
                   </span>

@@ -200,7 +200,7 @@ function SwipeSlide({
             title={onProfil ? `Open @${video.username} on the research account` : undefined}
             className="flex items-center gap-1 text-[14px] text-white font-semibold hover:underline underline-offset-2 disabled:cursor-default disabled:no-underline"
           >
-            {video.username}
+            {video.username === "unknown" ? "Lädt…" : video.username}
             {video.verified && (
               // Instagrams Haekchen, nachgezeichnet: blaues Siegel mit
               // weissem Haken. Nur gesetzt, wenn Instagram den Account
