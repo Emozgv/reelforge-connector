@@ -153,7 +153,7 @@ function SwipeSlide({
       ) : (
         <>
           {video.thumbnailUrl ? (
-            <img src={video.thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <img src={video.thumbnailUrl} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" />
           ) : (
             <div className="absolute inset-0" style={{ background: video.thumbGradient ?? DEFAULT_THUMB_GRADIENT }} />
           )}
@@ -190,6 +190,13 @@ function SwipeSlide({
               src={video.avatarUrl}
               alt=""
               loading="lazy"
+              // Ohne das laedt das Bild nicht. Instagrams Bildserver weist
+              // Anfragen ab, die verraten, von welcher fremden Seite sie
+              // kommen -- im Browser erscheint dann das Symbol fuer ein
+              // kaputtes Bild. Bei den Kommentar-Bildern stand das von
+              // Anfang an drin, hier fehlte es; deshalb luden die einen und
+              // die anderen nicht (Emre, 15.10.2026).
+              referrerPolicy="no-referrer"
               className="w-7 h-7 rounded-full shrink-0 object-cover ring-1 ring-white/15"
             />
           )}
