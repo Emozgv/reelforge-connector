@@ -315,6 +315,15 @@ export function LiveBuehne({
         // Oberflaeche an, bis der Mitarbeiter das Reel verliess und
         // zurueckkam (09.10.2026 von Emre gemeldet).
         const fingerabdruck = JSON.stringify([
+          // Das Profilbild gehoert hier hinein, aus demselben Grund wie die
+          // Aufrufzahl darunter: Instagram schickt im Following-Feed keins
+          // mit, der Connector holt es nach, und es trifft ein, wenn Name
+          // und Zahlen laengst stehen. Fehlte es in dieser Liste, aenderte
+          // sich nichts Meldepflichtiges -- und das Bild erschien erst,
+          // wenn der Mitarbeiter das Reel verliess und zurueckkam (Emre,
+          // 15.10.2026: "quasi muss ich auf ein Video zweimal gehen, damit
+          // es beim zweiten Mal erscheint").
+          (reel as { avatar?: string | null })?.avatar ?? null,
           (reel as { viewsRaw?: number | null })?.viewsRaw ?? null,
           (reel as { likes?: number | null })?.likes ?? null,
           (reel as { comments?: number | null })?.comments ?? null,
