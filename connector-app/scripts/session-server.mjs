@@ -2776,6 +2776,55 @@ class Session {
       typeof r.durationSec === "number" && r.durationSec > 0 ? 1 : null,
     ].filter(Boolean).length : 0);
 
+    // NUR DAS PROFILBILD, SONST NICHTS.
+    //
+    // GEMESSEN am 15.10.2026: Instagram schickt im Following-Feed zwar eine
+    // Bildadresse mit, aber sie antwortet von aussen mit "verboten" (403) --
+    // mit Referrer, ohne Referrer und auch ueber den oeffentlichen
+    // Auslieferungsserver. Sie gilt nur fuer den angemeldeten Browser.
+    // Deshalb stand in der Buehne das Zeichen fuer ein kaputtes Bild.
+    //
+    // Also wird nicht die Adresse weitergereicht, sondern das BILD: geholt
+    // ueber den Browser, der die Anmeldung schon hat, und als fertiges Bild
+    // mitgegeben. Ein Abruf innerhalb der Seite scheitert ("Failed to
+    // fetch") -- der Bildserver ist auch von instagram.com aus eine fremde
+    // Adresse.
+    //
+    // Drei Regeln, an die sich das haelt:
+    //  1. Es wird NUR das Feld avatar gesetzt. Ein frueherer Versuch tauschte
+    //     den ganzen Datensatz und machte damit For You kaputt. Nie wieder.
+    //  2. Es wird NICHT gewartet. Ein Versuch mit anderthalb Sekunden Warten
+    //     hat jedes Reel eines neuen Creators ausgebremst -- in Following ist
+    //     das fast jedes. Das Bild kommt, wenn es kommt.
+    //  3. Einmal pro CREATOR, Fehlschlag inbegriffen.
+    this.__avatare = this.__avatare ?? new Map();
+    if (bekannt?.username) {
+      const wer = bekannt.username;
+      const gemerkt = this.__avatare.get(wer);
+      if (gemerkt) {
+        bekannt = { ...bekannt, avatar: gemerkt };
+      } else if (gemerkt === undefined && bekannt.avatar) {
+        this.__avatare.set(wer, null);
+        const adresse = bekannt.avatar;
+        void this.context.request
+          .get(adresse, { headers: { referer: "https://www.instagram.com/" }, timeout: 15000 })
+          .then(async (antwort) => {
+            if (!antwort.ok()) return { fehler: `HTTP ${antwort.status()}` };
+            const puffer = await antwort.body();
+            if (!puffer?.length || puffer.length > 400000) return { fehler: `Groesse ${puffer?.length ?? 0}` };
+            const typ = antwort.headers()["content-type"] || "image/jpeg";
+            return { bild: `data:${typ};base64,${puffer.toString("base64")}` };
+          })
+          .then(
+            (erg) => {
+              if (erg?.bild) this.__avatare.set(wer, erg.bild);
+              console.log(`[profilbild] ${wer}: ${erg?.bild ? "geholt" : `nicht bekommen -- ${erg?.fehler ?? "?"}`}`);
+            },
+            (e) => { console.log(`[profilbild] ${wer}: nicht bekommen -- ${e?.message ?? e}`); },
+          );
+      }
+    }
+
     const angereichert = bekannt
       ? { ...bekannt, ...(laenge ? { durationSec: laenge } : {}), ...(typeof aufrufe === "number" ? { viewsRaw: aufrufe } : {}) }
       : bekannt;
