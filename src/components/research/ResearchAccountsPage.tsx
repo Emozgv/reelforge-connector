@@ -624,23 +624,10 @@ export function ResearchAccountsPage({
   // statt geraten. Beim Versuch davor hatte ich auch der linken Spalte eine
   // Hoehe aufgezwungen -- die passte nicht zu ihrem Inhalt, und die Hoehen
   // standen von Anfang an schief (10.10.2026 von Emre sofort bemerkt).
-  const linksRef = useRef<HTMLDivElement>(null);
-  const mitteRef = useRef<HTMLDivElement>(null);
-  const [reihenHoehe, setReihenHoehe] = useState<number | null>(null);
-  useEffect(() => {
-    if (typeof ResizeObserver === "undefined") return;
-    const messen = () => {
-      const l = linksRef.current?.getBoundingClientRect().height ?? 0;
-      const m = mitteRef.current?.getBoundingClientRect().height ?? 0;
-      const h = Math.round(Math.max(l, m));
-      if (h > 0) setReihenHoehe((vorher) => (vorher === h ? vorher : h));
-    };
-    const beobachter = new ResizeObserver(messen);
-    if (linksRef.current) beobachter.observe(linksRef.current);
-    if (mitteRef.current) beobachter.observe(mitteRef.current);
-    messen();
-    return () => beobachter.disconnect();
-  }, [mode]);
+  // Die Hoehe der rechten Spalte wurde frueher gemessen und aufgezwungen,
+  // weil die drei Spalten feste Pixelbreiten hatten und nicht am normalen
+  // Ausrichten teilnahmen. Mit dem Raster unten richten sie sich von selbst
+  // auf dieselbe Hoehe aus -- die Messung ist damit ueberfluessig.
   const [followStatus, setFollowStatus] = useState<Record<string, FollowStatus>>({});
   const [blockStatus, setBlockStatus] = useState<Record<string, "pending" | "done" | "failed">>({});
   // Hat der Mitarbeiter "Refresh Feed" gedrueckt? Nur dann dreht sich dessen
@@ -1188,7 +1175,7 @@ export function ResearchAccountsPage({
             <p className="text-[12px] text-neutral-600 mt-1.5">Connect one above to start researching from its trained feed.</p>
           </div>
         ) : mode === "swipe" ? (
-          <div className="relative mt-5 flex gap-7 items-stretch">
+          <div className="relative mt-5 grid gap-7 items-stretch grid-cols-1 min-[1000px]:grid-cols-[minmax(0,1fr)_464px] min-[1280px]:grid-cols-[minmax(0,1fr)_464px_minmax(0,1.05fr)]">
             {/* Die zweite Buehne legt sich ueber genau diese drei Panels --
                 Seitenleiste und Kopfzeile bleiben stehen (so von Emre am
                 10.10.2026 eingezeichnet). Darum sitzt sie hier als Ebene
@@ -1210,7 +1197,7 @@ export function ResearchAccountsPage({
                 buendig unter der Ueberschrift, und der Player bleibt gleich
                 daneben. Der uebrige Platz geht komplett an die Luecke vor
                 der Kommentarspalte (ml-auto dort). */}
-            <div ref={linksRef} className="w-[290px] shrink-0 self-stretch flex flex-col gap-4">
+            <div className="min-w-0 self-stretch flex flex-col gap-4">
               <div className={PANEL + " p-5"} style={PANEL_STYLE}>
                 <p className="text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium mb-3">
                   Session Context
@@ -1334,8 +1321,17 @@ export function ResearchAccountsPage({
             {/* ml-2: der Player einen Hauch nach rechts. Die Kommentarspalte
                 gibt dieselben 8 px ab (ml-14 -> ml-12), damit die Reihe
                 gleich breit bleibt und sich sonst nichts verschiebt. */}
-            <div ref={mitteRef} className="w-[382px] shrink-0 self-stretch flex ml-[18px]">
-              <div className={PANEL + " p-4 flex-1 flex flex-col items-center"} style={PANEL_STYLE}>
+            {/* Player UND Steuerleiste sind EINE Gruppe. Die Leiste sitzt
+                absolut rechts neben dem Player -- sie muss das, weil der
+                Player an seinen Raendern abschneidet und sie sonst
+                verschwaende. Dadurch belegte sie aber keinen Platz im
+                Raster und schob sich bei schmalen Fenstern ueber das
+                Intelligence-Panel (Emre, 15.10.2026, auf dem 27-Zoll-
+                Monitor). Deshalb ist diese Spalte 464 breit statt 382:
+                382 Player + 26 Abstand + 56 Leiste. Die Leiste steht damit
+                in reserviertem Platz, nicht im Platz der Nachbarspalte. */}
+            <div className="w-[464px] justify-self-center self-stretch flex">
+              <div className={PANEL + " p-4 w-[382px] shrink-0 flex flex-col items-center"} style={PANEL_STYLE}>
                 <div className="w-full max-w-[345px] flex items-center justify-between mb-3">
                   <span className="flex items-center gap-1.5 text-[12px] text-neutral-400">
                     <span className="text-neutral-500">Now Viewing</span>
@@ -1424,7 +1420,7 @@ export function ResearchAccountsPage({
                 muss die Kommentarspalte lassen, sonst klebt sie daran.
                 Gerechnet: 24 px Luft, 60 px Panel, 24 px Luft -- abzueglich
                 der 28 px, die die Reihe ohnehin zwischen den Spalten haelt. */}
-            <div className="w-[390px] shrink-0 flex min-h-0 ml-auto" style={reihenHoehe ? { height: reihenHoehe } : undefined}>
+            <div className="min-w-0 self-stretch flex min-h-0">
               <div className={PANEL + " flex-1 flex flex-col min-h-0"} style={PANEL_STYLE}>
                 <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
                   Intelligence
