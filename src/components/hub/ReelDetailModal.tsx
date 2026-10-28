@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import type { Creator, ReelVideo } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
-import { formatCompactNumber } from "../../lib/formatCount";
+import { formatCompactNumber, zahlOderStrich } from "../../lib/formatCount";
 import { PlatformIcon } from "./PlatformIcon";
 import { ReelNotiz } from "../research/CommentsPanel";
 import { reelSchluessel } from "../../lib/reelSchluessel";
@@ -30,7 +30,7 @@ function StatRow({ icon, label, value }: { icon: React.ReactNode; label: string;
       </span>
       <span className="text-[12.5px] text-neutral-300">{label}</span>
       <span className="ml-auto text-[12.5px] text-neutral-100 font-medium tabular-nums">
-        {formatCompactNumber(value)}
+        {zahlOderStrich(value, formatCompactNumber)}
       </span>
     </div>
   );

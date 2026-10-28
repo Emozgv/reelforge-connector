@@ -4,6 +4,7 @@ import type { ReelVideo } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { formatViews } from "../../lib/researchFeedMapping";
 import { PlatformIcon } from "./PlatformIcon";
+import { zahlOderStrich } from "../../lib/formatCount";
 
 export function VideoCard({
   video,
@@ -150,13 +151,13 @@ export function VideoCard({
             {video.likes !== undefined && (
               <span className="flex items-center gap-1 text-[11px] text-white/70 tabular-nums">
                 <Heart size={10.5} className="text-white/40" />
-                {formatViews(video.likes)}
+                {zahlOderStrich(video.likes, formatViews)}
               </span>
             )}
             {video.comments !== undefined && (
               <span className="flex items-center gap-1 text-[11px] text-white/70 tabular-nums">
                 <MessageCircle size={10.5} className="text-white/40" />
-                {formatViews(video.comments)}
+                {zahlOderStrich(video.comments, formatViews)}
               </span>
             )}
           </div>
