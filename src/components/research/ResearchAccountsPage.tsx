@@ -1420,8 +1420,23 @@ export function ResearchAccountsPage({
                 muss die Kommentarspalte lassen, sonst klebt sie daran.
                 Gerechnet: 24 px Luft, 60 px Panel, 24 px Luft -- abzueglich
                 der 28 px, die die Reihe ohnehin zwischen den Spalten haelt. */}
-            <div className="min-w-0 self-stretch flex min-h-0">
-              <div className={PANEL + " flex-1 flex flex-col min-h-0"} style={PANEL_STYLE}>
+            {/* Die Kommentarspalte NIMMT die Hoehe der Reihe an, sie BESTIMMT
+                sie nicht. Eine Rasterzeile ist so hoch wie der groesste
+                Inhalt darin -- und sobald eine Session laeuft, ist das die
+                Kommentarliste. Dass sie selbst scrollt, hilft nicht: fuer
+                die Zeilenhoehe zaehlt ihr voller Inhalt. Die Seite wuchs
+                dadurch weit ueber den Bildschirm hinaus, waehrend links und
+                in der Mitte nur Schwarz stand (Emre, 28.10.2026).
+                Darum steht das Panel ab drei Spalten absolut in seiner
+                Spalte: dann traegt es nichts zur Zeilenhoehe bei, die Reihe
+                ist so hoch wie Kontext und Player, und die Liste scrollt in
+                ihrem Kasten. Genau das tat vorher die laufende Hoehenmessung,
+                die mit dem Raster wegfiel.
+                Unter 1280 steht die Spalte in einer eigenen Zeile -- dort
+                MUSS sie ihre Hoehe selbst mitbringen, sonst waere die Zeile
+                null hoch. Deshalb nur ab 1280. */}
+            <div className="min-w-0 self-stretch flex min-h-0 min-[1280px]:relative">
+              <div className={PANEL + " flex-1 flex flex-col min-h-0 min-[1280px]:absolute min-[1280px]:inset-0"} style={PANEL_STYLE}>
                 <p className="px-4 pt-4 text-[10.5px] tracking-[0.14em] uppercase text-neutral-500 font-medium">
                   Intelligence
                 </p>

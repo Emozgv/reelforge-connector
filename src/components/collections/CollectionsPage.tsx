@@ -21,6 +21,7 @@ const PANEL = "rounded-xl border border-[#1a130b]";
 const PANEL_STYLE = panelStil(true);
 
 export function CollectionsPage({
+  workspaceId,
   creators,
   onReorderCreators,
   collectionsStore,
@@ -31,6 +32,9 @@ export function CollectionsPage({
   isSydOwner,
   onOpenCreator,
 }: {
+  // Nur fuer die Reel-Notiz im Player durchgereicht -- sie wird je
+  // Workspace und Reel gespeichert.
+  workspaceId?: string;
   creators: Creator[];
   collectionsStore: CollectionsStore;
   // Controlled from App so other pages (e.g. a creator's profile) can deep-link
@@ -135,6 +139,7 @@ export function CollectionsPage({
   if (activeCollection) {
     return (
       <CollectionWorkspace
+        workspaceId={workspaceId}
         collection={activeCollection}
         creators={creators}
         allCollections={collections}

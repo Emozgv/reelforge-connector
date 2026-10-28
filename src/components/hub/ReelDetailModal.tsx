@@ -18,6 +18,8 @@ import type { Creator, ReelVideo } from "../../types";
 import { DEFAULT_THUMB_GRADIENT } from "../../data/mockData";
 import { formatCompactNumber } from "../../lib/formatCount";
 import { PlatformIcon } from "./PlatformIcon";
+import { ReelNotiz } from "../research/CommentsPanel";
+import { reelSchluessel } from "../../lib/reelSchluessel";
 
 function StatRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: number | undefined }) {
   if (value === undefined) return null;
@@ -58,6 +60,8 @@ export function ReelDetailModal({
   hasPrev = false,
   hasNext = false,
   active = true,
+  notizen = false,
+  workspaceId,
 }: {
   video: ReelVideo | null;
   open: boolean;
@@ -79,6 +83,12 @@ export function ReelDetailModal({
   // — with audio — off-screen). Pauses playback rather than closing the
   // modal, so it's exactly as the user left it when they come back.
   active?: boolean;
+  // Die Notizspalte links neben dem Video. Sie erscheint nur, wo sie
+  // bestellt ist -- derselbe Player steht auch im Hub und in der Library,
+  // und dort war nie eine Notiz vorgesehen. Woran die Notiz haengt,
+  // entscheidet reelSchluessel: am Reel, nicht an der Stelle.
+  notizen?: boolean;
+  workspaceId?: string;
 }) {
   const [videoError, setVideoError] = useState(false);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
@@ -148,6 +158,16 @@ export function ReelDetailModal({
           >
             <X size={15} />
           </button>
+
+          {/* Notizspalte links. Das Video bleibt die Mitte, rechts stehen
+              die Zahlen -- so von Emre eingezeichnet (28.10.2026). Unter
+              1280 Pixel bliebe fuer drei Spalten kein Platz; dort faellt
+              die Notiz weg, statt das Video zu quetschen. */}
+          {notizen && (
+            <div className="hidden min-[1280px]:flex w-[340px] shrink-0 h-[min(85vh,720px)] flex-col border-r border-white/[0.07]">
+              <ReelNotiz reelId={reelSchluessel(video)} workspaceId={workspaceId} />
+            </div>
+          )}
 
           {/* video — sized off its own aspect ratio against a capped height */}
           <div className="relative h-[min(85vh,720px)] aspect-[9/16] bg-black shrink-0">

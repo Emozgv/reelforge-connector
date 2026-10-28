@@ -404,8 +404,15 @@ export function FinishedBatchView({
   }
 
   return (
-    <div className="h-full overflow-y-auto animate-fade-in">
-      <div className="max-w-[1200px] mx-auto px-8 pt-6 pb-8">
+    <div className="h-full overflow-y-auto">
+    {/* Das Aufblenden sitzt INNEN, nicht auf der scrollenden Flaeche.
+        Die Bewegung dieser Einblendung bleibt danach als Zustand am
+        Element haengen -- und ein Element mit Bewegung wird zum Bezugs-
+        punkt fuer alles, was sich "am Bildschirm festhalten" soll. Der
+        Reel-Player hat sich dadurch nicht mehr am Bildschirm, sondern an
+        der Seite festgehalten: wer weit unten ein Reel anklickte, musste
+        erst nach oben scrollen, um ihn zu sehen (Emre, 28.10.2026). */}
+      <div className="max-w-[1200px] mx-auto px-8 pt-6 pb-8 animate-fade-in">
         {selected ? (
           <ItemDetail
             collection={collection}

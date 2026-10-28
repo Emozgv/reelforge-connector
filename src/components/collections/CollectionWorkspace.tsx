@@ -37,6 +37,7 @@ type ConceptFilter = "all" | "Used" | "Unused";
 
 export function CollectionWorkspace({
   collection,
+  workspaceId,
   creators,
   allCollections,
   saveError,
@@ -57,6 +58,8 @@ export function CollectionWorkspace({
   isSydOwner,
   onSendToSyd,
 }: {
+  // Nur fuer die Reel-Notiz im Player.
+  workspaceId?: string;
   collection: Collection;
   creators: Creator[];
   // Every creator's collections, workspace-wide — needed to offer real
@@ -192,8 +195,15 @@ export function CollectionWorkspace({
   const detailIndex = visibleConcepts.findIndex((c) => c.video.id === detailConceptId);
 
   return (
-    <div className="h-full overflow-y-auto animate-fade-in">
-      <div className="max-w-[1360px] mx-auto px-8 pt-6 pb-8">
+    <div className="h-full overflow-y-auto">
+    {/* Das Aufblenden sitzt INNEN, nicht auf der scrollenden Flaeche.
+        Die Bewegung dieser Einblendung bleibt danach als Zustand am
+        Element haengen -- und ein Element mit Bewegung wird zum Bezugs-
+        punkt fuer alles, was sich "am Bildschirm festhalten" soll. Der
+        Reel-Player hat sich dadurch nicht mehr am Bildschirm, sondern an
+        der Seite festgehalten: wer weit unten ein Reel anklickte, musste
+        erst nach oben scrollen, um ihn zu sehen (Emre, 28.10.2026). */}
+      <div className="max-w-[1360px] mx-auto px-8 pt-6 pb-8 animate-fade-in">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-[12px] text-neutral-500 hover:text-neutral-200 transition-colors duration-150 mb-4"
@@ -536,6 +546,10 @@ export function CollectionWorkspace({
         open={!!detailVideo}
         creator={creator}
         onClose={closeConceptDetail}
+        // Dieselbe Notiz wie im Research: sie haengt am Reel, nicht am
+        // Konzept (siehe reelSchluessel).
+        notizen
+        workspaceId={workspaceId}
         onPrev={() => {
           if (detailIndex > 0) void openConceptDetail(visibleConcepts[detailIndex - 1]);
         }}

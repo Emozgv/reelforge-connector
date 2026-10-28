@@ -274,6 +274,7 @@ function App() {
             )}
             {page === "collections" && (
               <CollectionsPage
+                workspaceId={workspace?.id}
                 creators={creatorsStore.creators}
                 onReorderCreators={(ids: string[]) => creatorsStore.reihenfolgeSetzen(ids, "collections")}
                 collectionsStore={collectionsStore}

@@ -3,6 +3,7 @@ import { MessageCircle, Loader2, Heart, ChevronDown, Check, AlertTriangle, Smile
 import type { ReelVideo } from "../../types";
 import type { LiveComment, KommentarSortierung } from "../../state/useLiveResearchSession";
 import { supabase } from "../../lib/supabase";
+import { reelSchluessel } from "../../lib/reelSchluessel";
 
 // Instagrams eigenes Platzhalter-Bild: heller Kreis mit grauer Figur. Es
 // steht dort, wo jemand kein Profilbild hat -- und ebenso, wenn Instagrams
@@ -230,7 +231,23 @@ function Trenner() {
 //
 // Gespeichert wird waehrend des Schreibens, 700 ms nach dem letzten Zeichen.
 // Bei jedem Tastendruck zu schreiben waere je Buchstabe ein Schreibvorgang.
-function ReelNotiz({ reelId, workspaceId }: { reelId: string | null; workspaceId?: string }) {
+// Wird auch im Reel-Player der Collections gebraucht -- dieselbe Notiz,
+// derselbe Speicher, nur an einer anderen Stelle im Haus.
+export function ReelNotiz({
+  reelId,
+  frueherSchluessel,
+  workspaceId,
+}: {
+  /** Woran die Notiz haengt -- siehe reelSchluessel: das Reel, nicht die
+   *  Stelle, an der es gerade steht. */
+  reelId: string | null;
+  /** Die Kennung, unter der Notizen VOR dieser Umstellung lagen. Findet
+   *  sich unter der neuen nichts, wird einmal hier nachgesehen, damit eine
+   *  alte Notiz nicht verschwindet. Beim naechsten Speichern wandert sie
+   *  von selbst auf die neue Kennung. */
+  frueherSchluessel?: string | null;
+  workspaceId?: string;
+}) {
   const feldRef = useRef<HTMLDivElement>(null);
   const [geladen, setGeladen] = useState(false);
   const [start, setStart] = useState<string | null>(null);
@@ -248,22 +265,29 @@ function ReelNotiz({ reelId, workspaceId }: { reelId: string | null; workspaceId
     if (!reelId) return;
     let weg = false;
     void (async () => {
-      const { data } = await supabase
-        .schema("client_os")
-        .from("research_reel_notes")
-        .select("note")
-        .eq("reel_id", reelId)
-        .maybeSingle();
+      const lies = async (kennung: string) => {
+        const { data } = await supabase
+          .schema("client_os")
+          .from("research_reel_notes")
+          .select("note")
+          .eq("reel_id", kennung)
+          .maybeSingle();
+        return data?.note ?? null;
+      };
+      let notiz = await lies(reelId);
+      if (!notiz && frueherSchluessel && frueherSchluessel !== reelId) {
+        notiz = await lies(frueherSchluessel);
+      }
       if (weg || reelRef.current !== reelId) return;
       // Erst merken, dann zeichnen: das Feld wird mit diesem Inhalt neu
       // aufgebaut (siehe key weiter unten). Vorher wurde innerHTML von Hand
       // gesetzt -- und war beim naechsten Zeichnen wieder weg, weshalb die
       // Vorlage nie zu sehen war.
-      setStart(data?.note ? data.note : NOTIZ_VORLAGE);
+      setStart(notiz ? notiz : NOTIZ_VORLAGE);
       setGeladen(true);
     })();
     return () => { weg = true; };
-  }, [reelId]);
+  }, [reelId, frueherSchluessel]);
 
   function sichern() {
     if (!reelId || !geladen) return;
@@ -710,7 +734,11 @@ export function CommentsPanel({
       </div>
 
       {reiter === "notizen" ? (
-        <ReelNotiz reelId={video?.id ?? null} workspaceId={workspaceId} />
+        <ReelNotiz
+          reelId={video ? reelSchluessel(video) : null}
+          frueherSchluessel={video?.id ?? null}
+          workspaceId={workspaceId}
+        />
       ) : (
       <>
       <div className="px-4 pt-3 flex items-center justify-between">

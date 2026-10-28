@@ -504,8 +504,15 @@ export function CreatorProfilePage({
   const hiddenPhotos = creator.referencePhotos.length - headerPhotos.length;
 
   return (
-    <div className="h-full overflow-y-auto animate-fade-in">
-      <div className="max-w-[1320px] mx-auto px-[25px] pt-[11px] pb-[46px]">
+    <div className="h-full overflow-y-auto">
+    {/* Das Aufblenden sitzt INNEN, nicht auf der scrollenden Flaeche.
+        Die Bewegung dieser Einblendung bleibt danach als Zustand am
+        Element haengen -- und ein Element mit Bewegung wird zum Bezugs-
+        punkt fuer alles, was sich "am Bildschirm festhalten" soll. Der
+        Reel-Player hat sich dadurch nicht mehr am Bildschirm, sondern an
+        der Seite festgehalten: wer weit unten ein Reel anklickte, musste
+        erst nach oben scrollen, um ihn zu sehen (Emre, 28.10.2026). */}
+      <div className="max-w-[1320px] mx-auto px-[25px] pt-[11px] pb-[46px] animate-fade-in">
         {/* Top bar */}
         <div className="h-[26px] flex items-center">
           <button
