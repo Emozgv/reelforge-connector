@@ -1464,6 +1464,21 @@ function parseInstagramMedia(node) {
   try {
     const videoVersions = node.video_versions;
     const videoUrl = Array.isArray(videoVersions) && videoVersions.length ? videoVersions[0].url : null;
+    // KLEINE FASSUNG (12.11.2026). Instagram liefert jedes Reel in mehreren
+    // Aufloesungen, die erste ist die groesste. Fuer die dauerhafte Kopie
+    // eines gespeicherten Konzepts reicht die kleinste ab 480 Punkt Breite
+    // -- fertig komprimiert, ein Bruchteil der Groesse. Gibt es keine
+    // Breitenangabe, bleibt die letzte der Liste (bei Instagram die
+    // kleinste). Aendert nichts an videoUrl.
+    let videoUrlKlein = null;
+    if (Array.isArray(videoVersions) && videoVersions.length > 1) {
+      const mitBreite = videoVersions.filter((v) => v && typeof v.url === "string" && typeof v.width === "number");
+      const passend = mitBreite.filter((v) => v.width >= 480).sort((a, b) => a.width - b.width)[0];
+      const kleinste = mitBreite.sort((a, b) => b.width - a.width)[mitBreite.length - 1];
+      const letzte = videoVersions[videoVersions.length - 1];
+      videoUrlKlein = (passend ?? kleinste ?? (letzte && typeof letzte.url === "string" ? letzte : null))?.url ?? null;
+      if (videoUrlKlein === videoUrl) videoUrlKlein = null;
+    }
     const thumbCandidates = node.image_versions2?.candidates;
     const thumbnailUrl = Array.isArray(thumbCandidates) && thumbCandidates.length ? thumbCandidates[0].url : null;
     if (!videoUrl && !thumbnailUrl) return null;
@@ -1481,6 +1496,7 @@ function parseInstagramMedia(node) {
       sourceUrl: `https://www.instagram.com/reel/${node.code}/`,
       thumbnailUrl,
       videoUrl,
+      videoUrlKlein,
       caption: typeof node.caption?.text === "string" ? node.caption.text : null,
       username: node.user?.username ?? node.owner?.username ?? null,
       // Profilbild und Haekchen des Urhebers. Instagram schickt beides in
