@@ -102,6 +102,7 @@ interface RawLiveReel {
   sourceUrl: string;
   thumbnailUrl: string | null;
   videoUrl: string | null;
+  videoUrlKlein?: string | null;
   caption: string | null;
   username: string | null;
   // Profilbild und Haekchen des Urhebers -- vom Connector aus derselben
@@ -130,6 +131,7 @@ function liveReelToVideo(raw: RawLiveReel, platform: Platform): ReelVideo {
     sourceUrl: raw.sourceUrl,
     thumbnailUrl: raw.thumbnailUrl ?? undefined,
     videoUrl: raw.videoUrl ?? undefined,
+    videoUrlKlein: raw.videoUrlKlein ?? undefined,
     caption: raw.caption ?? undefined,
     // No real platform-provided view count for this reel — the live player
     // hides the metric instead of showing a misleading 0 (see
@@ -1390,6 +1392,31 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
 
   // Mit der Kennung des Oeffnens: so macht ein verspaetetes "zu" nicht die
   // Seite zu, die inzwischen jemand anderes aufgemacht hat.
+  // Welches Reel ist in der Profil-Buehne gerade geoeffnet? Ohne "holen"
+  // nur der Code (fragt Instagram nicht); mit "holen" das Reel in genau der
+  // Form, die auch der Feed liefert -- damit es durch dieselbe
+  // Speicherfunktion geht (13.11.2026).
+  const profilAktuell = useCallback(
+    async (holen: boolean): Promise<{ code: string | null; video?: ReelVideo; error?: string }> => {
+      const session = sessionRef.current;
+      if (!session) return { code: null };
+      try {
+        const res = await fetch(`${SESSION_SERVER_URL}/sessions/${session.sessionId}/profil-aktuell`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionSecret: session.sessionSecret, wert: holen ? "holen" : null }),
+        });
+        const body = await res.json();
+        const code = typeof body.code === "string" ? body.code : null;
+        if (!holen || !body.reel) return { code, error: body.error };
+        return { code, video: liveReelToVideo(body.reel as RawLiveReel, "instagram") };
+      } catch (err) {
+        return { code: null, error: err instanceof Error ? err.message : "Couldn't read the open reel." };
+      }
+    },
+    []
+  );
+
   const profilSchliessen = useCallback(async (lauf?: string | null): Promise<void> => {
     const session = sessionRef.current;
     if (!session || !lauf) return;
@@ -1594,6 +1621,7 @@ export function useLiveResearchSession(workspaceId: string | undefined) {
     profilTonAntwort,
     profilBedienen,
     profilSchliessen,
+    profilAktuell,
     follow,
     block,
     fetchComments,

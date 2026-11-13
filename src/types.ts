@@ -110,6 +110,13 @@ export interface ReelVideo {
   // short-lived signed CDN URLs and may fail to embed cross-origin — consumers
   // should fall back gracefully (e.g. to thumbnailUrl + an external "watch" link).
   videoUrl?: string;
+  // Instagrams kleinste Fassung ab 480 px Breite -- ebenfalls befristet.
+  // Vom Connector seit 12.11.2026 mitgeschrieben; Quelle fuer die
+  // dauerhafte Kopie, wenn ein Reel in eine Collection gespeichert wird.
+  videoUrlKlein?: string;
+  // Dauerhafte Kopie im eigenen Speicher (nur bei gespeicherten Konzepten,
+  // concepts.preview_video_url). Der Collections-Player spielt sie zuerst.
+  previewVideoUrl?: string;
   // Full raw caption/description text (tags above are just the hashtags parsed
   // out of it) — undefined for mock/legacy items.
   caption?: string;
@@ -164,6 +171,8 @@ export interface ReelVideo {
 // Production progress lives on each Submission instead — a Collection can
 // have several Submissions at once, so it has no single "In Production" state.
 export type CollectionStatus = "Draft" | "Sent" | "Completed";
+
+export type CollectionPriority = "Low" | "Medium" | "High";
 
 // A concept's own lifecycle inside a collection — independent from the collection's
 // overall status. Sending a batch to ReelForge does not, by itself, mark a concept Used.
@@ -387,4 +396,8 @@ export interface Collection {
   // und die Uebergaben an Sydney und Kunden auf ihre Konzepte zeigen --
   // von dort bleibt sie erreichbar, in der Liste taucht sie nie wieder auf.
   deletedAt?: string;
+  // Deadline ("YYYY-MM-DD") und Prioritaet, vom Kunden im Assignment-Kasten
+  // gesetzt (13.11.2026). Leer = nicht gesetzt.
+  deadline?: string;
+  priority?: CollectionPriority;
 }

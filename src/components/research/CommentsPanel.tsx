@@ -465,6 +465,10 @@ export function CommentsPanel({
   // Fortsetzungsmarke je Reel: ab hier liefert Instagram die naechsten
   // Kommentare. Fehlt sie, gibt es keine weiteren.
   const markenRef = useRef<Map<string, string | null>>(new Map());
+  // Selbstauffuellung: laeuft gerade eine Runde, und wie viele gab es je
+  // Reel und Sortierung schon (13.11.2026, gegen die Dauerschleife).
+  const selbstLaeuftRef = useRef(false);
+  const selbstRundenRef = useRef<Map<string, number>>(new Map());
   const [laedtMehr, setLaedtMehr] = useState(false);
   const listeRef = useRef<HTMLDivElement>(null);
   // Die nachgeladenen Kommentare liegen in einem ref, nicht im Zustand.
@@ -603,40 +607,46 @@ export function CommentsPanel({
   // ist oder Instagram nichts mehr hat.
   useEffect(() => {
     const el = listeRef.current;
-    if (!el || !video || !displayReelId || laedtMehr) return;
-    const marke = markenRef.current.get(schluessel(displayReelId));
+    if (!el || !video || !displayReelId || laedtMehr || selbstLaeuftRef.current) return;
+    const key = schluessel(displayReelId);
+    const marke = markenRef.current.get(key);
     if (!marke) return;
     if (el.scrollHeight > el.clientHeight + 40) return;
-    let weg = false;
+    // Hoechstens fuenf automatische Nachladerunden je Reel und Sortierung --
+    // danach nur noch beim Scrollen. Schutz gegen jede Art Dauerschleife.
+    const runden = selbstRundenRef.current.get(key) ?? 0;
+    if (runden >= 5) return;
+    selbstRundenRef.current.set(key, runden + 1);
+    selbstLaeuftRef.current = true;
+    const reelId = video.id;
+    const quelle = video.sourceUrl;
     void (async () => {
       setLaedtMehr(true);
-      const a = await fetchComments(video.id, video.sourceUrl, marke, sortierung).catch(() => null);
-      // ZUERST zurueckstellen, DANN erst aussteigen. Vorher stand das
-      // Zuruecksetzen hinter dem Ausstieg -- und weil dieser Effekt nach
-      // JEDER Neuzeichnung erneut laeuft und die vorherige Runde dabei
-      // abbricht (die Reel-Angaben werden alle zwei Sekunden aufgefrischt,
-      // es wird also staendig neu gezeichnet), wurde die laufende Abfrage
-      // fast immer unterbrochen. Damit blieb "laedt gerade" fuer den Rest
-      // der Sitzung stehen, und beide Wege zum Nachladen -- diese
-      // Selbstauffuellung UND das Scrollen -- stiegen sofort wieder aus.
-      // Ergebnis: Kommentare luden ueberhaupt nicht mehr nach.
+      const a = await fetchComments(reelId, quelle, marke, sortierung).catch(() => null);
+      selbstLaeuftRef.current = false;
       setLaedtMehr(false);
-      if (weg) return;
-      if (!a || video.id !== displayReelId) return;
-      markenRef.current.set(schluessel(displayReelId), a.naechste ?? null);
-      const bisher = resultsRef.current.get(schluessel(displayReelId));
+      // DAUERSCHLEIFE BEHOBEN (13.11.2026). Hier stand ein "weg"-Schalter,
+      // der beim naechsten Neuzeichnen umgelegt wurde -- und schon das
+      // setLaedtMehr(true) oben zeichnet neu. Jede Antwort wurde damit
+      // verworfen, die Marke blieb stehen, und dieselbe Seite wurde wieder
+      // und wieder geholt: bis zu 156 Kommentar-Abfragen pro Minute,
+      // immer dieselben vier Kommentare. Jetzt zaehlt die Antwort, solange
+      // die Marke fuer genau dieses Reel noch dieselbe ist; das Ergebnis
+      // landet im Zwischenspeicher genau dieses Reels.
+      if (!a || markenRef.current.get(key) !== marke) return;
+      markenRef.current.set(key, a.naechste ?? null);
+      const bisher = resultsRef.current.get(key);
       const alte = bisher?.status === "loaded" ? bisher.comments : [];
       const bekannt = new Set(alte.map((k) => k.id));
       const neue = (a.comments ?? []).filter((k) => !bekannt.has(k.id));
       if (neue.length) {
-        resultsRef.current.set(schluessel(displayReelId), { status: "loaded", comments: [...alte, ...neue] });
+        resultsRef.current.set(key, { status: "loaded", comments: [...alte, ...neue] });
         neuZeichnen((n) => n + 1);
       } else {
         // Nichts Neues gekommen -- sonst liefe das endlos weiter.
-        markenRef.current.set(schluessel(displayReelId), null);
+        markenRef.current.set(key, null);
       }
     })();
-    return () => { weg = true; };
   });
 
   const result = displayReelId ? resultsRef.current.get(schluessel(displayReelId)) : undefined;

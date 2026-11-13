@@ -8,6 +8,8 @@ export function ConceptGrid({
   creators,
   collections,
   currentCreatorId,
+  ansicht = "raster",
+  leerText,
   onStatusChange,
   onRemove,
   onNotesChange,
@@ -20,6 +22,9 @@ export function ConceptGrid({
   creators: Creator[];
   collections: Collection[];
   currentCreatorId: string | undefined;
+  ansicht?: "raster" | "liste";
+  /** Eigener Leertext, z. B. wenn ein Filter nichts uebrig laesst. */
+  leerText?: string;
   onStatusChange: (videoId: string, status: ConceptStatus) => void;
   onRemove: (videoId: string) => void;
   onNotesChange: (videoId: string, notes: string) => void;
@@ -29,18 +34,20 @@ export function ConceptGrid({
 }) {
   if (concepts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center text-center rounded-xl surface-panel py-20">
-        <FolderHeart size={20} className="text-neutral-700 mb-2.5" />
-        <p className="text-[13.5px] text-neutral-300">No concepts saved yet.</p>
-        <p className="text-[12px] text-neutral-600 mt-1.5">
-          Save Reels for this creator from the Creativity Hub to add them here.
-        </p>
+      <div className="flex flex-col items-center justify-center text-center rounded-[11px] border border-[#1a130b] py-20">
+        <FolderHeart size={20} className="text-[#6f7075] mb-2.5" />
+        <p className="text-[13.5px] text-[#dcdcde]">{leerText ?? "No concepts saved yet."}</p>
+        {!leerText && (
+          <p className="text-[12px] text-[#8c877e] mt-1.5">
+            Save Reels for this creator from the Creativity Hub to add them here.
+          </p>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-4 gap-3.5">
+    <div className={ansicht === "liste" ? "flex flex-col gap-2" : "grid grid-cols-4 gap-3.5"}>
       {concepts.map((concept, i) => (
         <div
           key={concept.video.id}
@@ -53,6 +60,7 @@ export function ConceptGrid({
             creators={creators}
             collections={collections}
             currentCreatorId={currentCreatorId}
+            ansicht={ansicht}
             onStatusChange={(status) => onStatusChange(concept.video.id, status)}
             onRemove={() => onRemove(concept.video.id)}
             onNotesChange={(notes) => onNotesChange(concept.video.id, notes)}

@@ -56,6 +56,16 @@ export interface ThumbnailBackfillResult {
   more: boolean;
 }
 
+export interface VideoBackfillResult {
+  scanned: number;
+  succeeded: number;
+  shared: number;
+  expired: number;
+  noSource: number;
+  failed: number;
+  more: boolean;
+}
+
 export function useAdminDashboard() {
   const [workspaces, setWorkspaces] = useState<AdminWorkspaceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +74,9 @@ export function useAdminDashboard() {
   const [backfillRunning, setBackfillRunning] = useState(false);
   const [backfillResult, setBackfillResult] = useState<ThumbnailBackfillResult | null>(null);
   const [backfillError, setBackfillError] = useState<string | null>(null);
+  const [videoBackfillRunning, setVideoBackfillRunning] = useState(false);
+  const [videoBackfillResult, setVideoBackfillResult] = useState<VideoBackfillResult | null>(null);
+  const [videoBackfillError, setVideoBackfillError] = useState<string | null>(null);
 
   const load = useCallback(async (searchTerm: string) => {
     setLoading(true);
@@ -114,12 +127,42 @@ export function useAdminDashboard() {
     }
   }
 
+  // Videokopien fuer bestehende Konzepte nachholen (12.11.2026). Klappt nur,
+  // wo die Archiv-Adresse noch nicht abgelaufen ist -- der Rest wird als
+  // "expired" gezaehlt, nicht als Fehler.
+  async function runVideoBackfill() {
+    setVideoBackfillRunning(true);
+    setVideoBackfillError(null);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("cache-concept-video", { body: { mode: "backfill" } });
+      if (invokeError) throw new Error(invokeError.message);
+      if (data?.error) throw new Error(data.error);
+      setVideoBackfillResult({
+        scanned: data.scanned ?? 0,
+        succeeded: data.succeeded ?? 0,
+        shared: data.shared ?? 0,
+        expired: data.expired ?? 0,
+        noSource: data.noSource ?? 0,
+        failed: data.failed ?? 0,
+        more: Boolean(data.more),
+      });
+    } catch (e) {
+      setVideoBackfillError((e as { message?: string })?.message ?? "Backfill failed.");
+    } finally {
+      setVideoBackfillRunning(false);
+    }
+  }
+
   return {
     workspaces,
     loading,
     error,
     search,
     setSearch,
+    videoBackfillRunning,
+    videoBackfillResult,
+    videoBackfillError,
+    runVideoBackfill,
     refresh: () => load(search),
     backfillRunning,
     backfillResult,

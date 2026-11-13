@@ -17,6 +17,10 @@ export function AdminDashboardPage() {
     backfillResult,
     backfillError,
     runThumbnailBackfill,
+    videoBackfillRunning,
+    videoBackfillResult,
+    videoBackfillError,
+    runVideoBackfill,
   } = useAdminDashboard();
   const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>(null);
 
@@ -36,6 +40,10 @@ export function AdminDashboardPage() {
       backfillResult={backfillResult}
       backfillError={backfillError}
       onRunThumbnailBackfill={runThumbnailBackfill}
+      videoBackfillRunning={videoBackfillRunning}
+      videoBackfillResult={videoBackfillResult}
+      videoBackfillError={videoBackfillError}
+      onRunVideoBackfill={runVideoBackfill}
     />
   );
 }

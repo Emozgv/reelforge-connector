@@ -1190,6 +1190,11 @@ export function ResearchAccountsPage({
                 tonAntwort={liveSession.profilTonAntwort}
                 bedienen={liveSession.profilBedienen}
                 schliessen={liveSession.profilSchliessen}
+                aktuell={liveSession.profilAktuell}
+                // Dieselbe Speicherfunktion wie fuer jedes andere Reel: das
+                // bestehende Fenster mit der Collection-Auswahl.
+                onSpeichern={(video) => setSavePanelVideo({ ...video, saved: savedIds.has(video.id) })}
+                istGespeichert={(id) => savedIds.has(id)}
               />
             )}
             {/* LEFT: Session Context + Quick Actions */}

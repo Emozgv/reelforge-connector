@@ -150,6 +150,7 @@ export function CollectionsPage({
         }}
         backLabel={backLabel}
         onUpdateNotes={(notes) => collectionsStore.updateNotes(activeCollection.id, notes)}
+        onSetPlanning={(patch) => collectionsStore.setPlanning(activeCollection.id, patch)}
         onReopen={() => collectionsStore.updateStatus(activeCollection.id, "Draft")}
         onRemoveVideo={(videoId) => collectionsStore.removeVideoFromCollection(activeCollection.id, videoId)}
         onSetConceptStatus={(videoId, status) =>
@@ -159,6 +160,7 @@ export function CollectionsPage({
           collectionsStore.updateConceptNotes(activeCollection.id, videoId, notes)
         }
         onSendSubmission={(note) => collectionsStore.sendSubmission(activeCollection.id, note)}
+        onOpenCreator={onOpenCreator}
         isSydOwner={isSydOwner}
         onSendToSyd={async (note) => {
           const { error } = await supabase

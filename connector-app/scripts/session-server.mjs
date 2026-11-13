@@ -1516,7 +1516,9 @@ function parseInstagramMedia(node) {
       // mit 668.000 Aufrufen stand auf "3 Likes"), und rechneten daraus
       // auch noch eine Engagement-Rate. Am 10.10.2026 von Emre gemeldet.
       likesVerborgen: node.like_and_view_counts_disabled === true,
-      likes: typeof node.like_count === "number" ? node.like_count : null,
+      // Ausgeblendet = keine Zahl. Instagram schickt dann trotzdem eine (fast
+      // immer 3), die im Archiv als echte Like-Zahl landete (13.11.2026).
+      likes: node.like_and_view_counts_disabled === true ? null : (typeof node.like_count === "number" ? node.like_count : null),
       comments: typeof node.comment_count === "number" ? node.comment_count : null,
       durationSec: typeof node.video_duration === "number" ? Math.round(node.video_duration) : 0,
       // Instagram nennt sie media_repost_count -- in der Oberflaeche sind
@@ -2112,6 +2114,109 @@ async function archiveLiveReel(session, reel) {
     // cache/history only, never load-bearing for the live feed.
     console.error(`[archive] session ${session.id} reel ${reel.id} failed: ${err?.message ?? err}`);
   }
+}
+
+// Antworten von Instagram lesen (13.11.2026): Praefix entfernen und auch
+// mehrere JSON-Stuecke hintereinander verkraften.
+function antwortTeile(body, base64Encoded) {
+  const text = (base64Encoded ? Buffer.from(body, "base64").toString("utf8") : String(body ?? "")).replace(/^for \(;;\);/, "").trim();
+  if (!text) return [];
+  try {
+    return [JSON.parse(text)];
+  } catch {
+    return text.split("\n").map((z) => { try { return JSON.parse(z); } catch { return null; } }).filter(Boolean);
+  }
+}
+
+// Wie viel ueber die Beitraege eines Profils bekannt ist -- Beitraege,
+// dazu jede Kachel mit Aufrufen und jede mit Datum. Steigt diese Zahl,
+// hat sich das Weiterscrollen gelohnt, auch wenn kein neuer Beitrag kam.
+function profilFuellstand(karte) {
+  let n = 0;
+  for (const b of karte?.values?.() ?? []) n += 1 + (b.aufrufe ? 1 : 0) + (b.zeitpunkt ? 1 : 0);
+  return n;
+}
+
+// VERGLEICHSBASIS DES MULTIPLIKATORS (13.11.2026) -- dieselbe Regel wie
+// Sort Feed (in dessen Code nachgelesen, Version 2.8.0.0): Median der
+// Aufrufe der 25 NEUESTEN Reels des Kontos, die mindestens 3 Tage alt sind
+// (juengere haben ihre Aufrufe noch nicht gesammelt). Unter 10 solchen
+// Reels gibt es keinen Multiplikator.
+//
+// Der Unterschied zu vorher: die Basis wird aus der Reels-Liste des
+// KONTOS bestimmt (Hintergrund-Tab, Reihenfolge des Reels-Reiters), nicht
+// aus dem, was gerade geladen oder angesehen wurde -- und sie wird EINMAL
+// festgelegt und danach nicht mehr veraendert.
+const BASIS_ANZAHL = 25;
+const BASIS_MINDEST = 10;
+const BASIS_REIFE_TAGE = 3;
+// Angeheftete Reels stehen im Reels-Reiter oben, obwohl sie alt sind.
+// Instagram erlaubt drei -- so viele Reels werden ueber die 25 hinaus
+// betrachtet, damit nach dem Sortieren nach Datum nichts fehlt.
+const BASIS_ANGEHEFTET = 3;
+
+function profilBasisRechnen(beitraege, folge, folgeEnde, aufgegeben = new Set(), jetzt = Math.floor(Date.now() / 1000)) {
+  const grenze = jetzt - BASIS_REIFE_TAGE * 86400;
+  const reif = [];
+  const fehlend = [];
+  let juenger = 0;
+  let verborgen = 0;
+  for (const code of folge) {
+    // Fehlende zaehlen schon mit: so wird nur nachgefragt, was fuer die
+    // Basis ueberhaupt in Frage kommt.
+    if (reif.length + fehlend.length >= BASIS_ANZAHL + BASIS_ANGEHEFTET) break;
+    const b = beitraege?.get(code);
+    if (b?.verborgen) {
+      verborgen++;
+      continue;
+    }
+    if (!b || !b.zeitpunkt || b.aufrufe == null) {
+      // Schon einzeln nachgefragt und trotzdem leer (geloescht, gesperrt):
+      // nicht ewig darauf warten, sondern auslassen.
+      if (!aufgegeben.has(code)) fehlend.push(code);
+      continue;
+    }
+    // Wie Sort Feed: nur Reels mit Aufrufen ueber null zaehlen.
+    if (!(b.aufrufe > 0)) continue;
+    if (b.zeitpunkt > grenze) {
+      juenger++;
+      continue;
+    }
+    reif.push(b);
+  }
+  if (fehlend.length) return { basis: null, fehlend, grund: "es fehlen noch Werte" };
+  if (reif.length < BASIS_ANZAHL + BASIS_ANGEHEFTET && !folgeEnde)
+    return { basis: null, fehlend, grund: "Reels-Liste noch nicht weit genug geladen" };
+  const fenster = reif.sort((a, c) => c.zeitpunkt - a.zeitpunkt).slice(0, BASIS_ANZAHL);
+  if (fenster.length < BASIS_MINDEST)
+    return { basis: null, fehlend, grund: `nur ${fenster.length} Reels aelter als ${BASIS_REIFE_TAGE} Tage`, fest: true };
+  const werte = fenster.map((b) => b.aufrufe).sort((a, c) => a - c);
+  const m = werte.length >> 1;
+  return {
+    basis: {
+      median: werte.length % 2 ? werte[m] : (werte[m - 1] + werte[m]) / 2,
+      anzahl: fenster.length,
+      von: fenster[fenster.length - 1].zeitpunkt,
+      bis: fenster[0].zeitpunkt,
+      juenger,
+      verborgen,
+      festgelegt: Date.now(),
+    },
+    fehlend,
+  };
+}
+
+// Instagrams Kurzcode ist die Beitragsnummer in einer eigenen 64er-Schrift.
+// So laesst sich auch ein Reel nachfragen, zu dem noch gar nichts geladen ist.
+function codeZuPk(code) {
+  const zeichen = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  let n = 0n;
+  for (const z of String(code).slice(0, 11)) {
+    const i = zeichen.indexOf(z);
+    if (i < 0) return null;
+    n = n * 64n + BigInt(i);
+  }
+  return n.toString();
 }
 
 class Session {
@@ -3463,6 +3568,15 @@ class Session {
       // zum Beispiel einmalig nach dem Laden statt in einer Dauerschleife.
       this.profilSeite = seite;
       this.profilKennung = meinLauf;
+      // Der Hintergrund-Tab des vorigen Profils wird SOFORT geschlossen
+      // (13.11.2026). Vorher lud er weiter, bis sein Lauf den Wechsel
+      // bemerkte -- und was er bis dahin empfing, landete in den Daten des
+      // neuen Profils.
+      if (this.profilHilfsSeite) {
+        const alt = this.profilHilfsSeite;
+        this.profilHilfsSeite = null;
+        void alt.close().catch(() => {});
+      }
       // ALLE anderen Profil-Tabs zumachen, nicht nur den zuletzt bekannten.
       //
       // Vorher stand hier "schliesse this.profilSeite von vorhin". Beim
@@ -3626,7 +3740,12 @@ class Session {
         // Danach noch die Reels-Liste direkt erfragen, falls Instagram
         // gerade mit uns redet. Tut es das nicht, ist nichts verloren --
         // die Zahlen stehen oben schon.
-        await this.profilReelsHolen(seite, name);
+        // ABGESCHALTET (13.11.2026): beide Adressen dieser direkten Abfrage
+        // sind tot -- der Beitragsstrom antwortet mit 404, die Reels-Liste
+        // mit einer HTML-Seite (gemessen an fuenf Profilen). Sie kostete
+        // beim Oeffnen nur rund eine Sekunde. Ersetzt durch das Mitlesen von
+        // /api/graphql und das gezielte Nachfragen je Beitrag.
+        // await this.profilReelsHolen(seite, name);
 
         await seite
           .goto(`https://www.instagram.com/${name}/reels/`, { waitUntil: "commit", timeout: 20000 })
@@ -3641,6 +3760,10 @@ class Session {
         await this.profilVorladen(seite, name, 1);
         await this.profilSchichtFuettern();
         console.log(`[forschung] ${name}: Schilder ${JSON.stringify(this.profilSchichtStand ?? null)}`);
+        // NUR IM TESTBETRIEB (REELFORGE_PRUEFEN=1): einige Reels einzeln bei
+        // Instagram nachfragen und mit dem Schild vergleichen. Im normalen
+        // Betrieb laeuft hier nichts.
+        if (process.env.REELFORGE_PRUEFEN === "1") void this.profilWertePruefen(seite, name);
         // Ab hier im Hintergrund weitersammeln -- ohne darauf zu warten.
         void this.profilNachladen(name, meinLauf);
         const warum = await seite.evaluate(() => window.__rfForschung?.warum()).catch(() => null);
@@ -3741,8 +3864,49 @@ class Session {
       return;
     }
     this.profilNetzCdp = cdp;
-    this.profilBeitraege = new Map();
+    // GEDAECHTNIS JE PROFIL (13.11.2026): Was zu einem Profil schon geladen
+    // und nachgefragt wurde, bleibt 30 Minuten erhalten. Wer zwischen
+    // Profilen hin und her wechselt, loest damit nicht jedes Mal alle
+    // Abfragen von vorn aus. Die Buehne laedt ihre oberen Kacheln trotzdem
+    // frisch -- deren Zahlen ueberschreiben die gemerkten.
+    Session.profilGedaechtnisse ??= new Map();
+    {
+      let g = Session.profilGedaechtnisse.get(name);
+      if (!g || Date.now() - g.zeit > 30 * 60 * 1000) {
+        g = { beitraege: new Map(), medien: new Map(), folge: [], folgeEnde: false, nachgefragt: new Set(), rasterDurch: false, reelsDurch: false, zeit: Date.now() };
+        Session.profilGedaechtnisse.set(name, g);
+        // Nicht unbegrenzt wachsen: hoechstens 20 Profile behalten.
+        while (Session.profilGedaechtnisse.size > 20) Session.profilGedaechtnisse.delete(Session.profilGedaechtnisse.keys().next().value);
+      } else {
+        console.log(`[forschung] ${name}: Gedaechtnis von vor ${Math.round((Date.now() - g.zeit) / 60000)} Min -- ${g.beitraege.size} Beitraege, ${g.nachgefragt.size} schon einzeln nachgefragt.`);
+      }
+      this.profilGedaechtnis = g;
+    }
+    this.profilBeitraege = this.profilGedaechtnis.beitraege;
+    // Volle Reel-Angaben (Bild, Video, Text) je Beitrag -- aus denselben
+    // Antworten, die Instagram der Seite ohnehin schickt. Daraus entsteht
+    // beim Speichern dasselbe Reel-Objekt wie im Feed (parseInstagramMedia).
+    this.profilGedaechtnis.medien ??= new Map();
+    this.profilMedien = this.profilGedaechtnis.medien;
     this.profilName = name;
+    this.profilNutzerId = null;
+    this.profilReelsReiterDurch = false;
+    this.profilNachgefragt = this.profilGedaechtnis.nachgefragt;
+    // Vergleichsbasis des Multiplikators: einmal je Konto festgelegt und
+    // fuer sechs Stunden behalten -- wer zwischen Profilen hin und her
+    // wechselt, sieht dieselben Multiplikatoren wie beim ersten Mal.
+    Session.profilBasen ??= new Map();
+    {
+      const gemerkt = Session.profilBasen.get(name);
+      this.profilBasis = gemerkt && Date.now() - gemerkt.festgelegt < 6 * 3600 * 1000 ? gemerkt : null;
+    }
+    this.profilBasisGrund = this.profilBasis ? "aus dem Gedaechtnis" : "noch nicht bestimmt";
+    this.profilBasisEndgueltig = this.profilBasis ? null : this.profilGedaechtnis.basisKeine ?? null;
+    this.profilFolge = this.profilGedaechtnis.folge;
+    this.profilFolgeEnde = this.profilGedaechtnis.folgeEnde;
+    this.profilBasisGefragt = 0;
+    this.profilBasisAufgegeben = new Set();
+    this.profilGeoeffnetUm = Date.now();
     this.aufrufeGemeldet = new Set();
     this.datumGemeldet = false;
     this.reelsAntwortGemeldet = false;
@@ -3755,6 +3919,19 @@ class Session {
     const auswerten = (e) => {
       const code = e.code ?? e.shortcode ?? null;
       if (!code) return null;
+      // Fuer "Save to Collection" in der Profil-Buehne (13.11.2026): die
+      // Angaben merken, aus denen der Feed sein Reel baut. Keine Anfrage
+      // dafuer -- nur, was ohnehin vorbeikommt.
+      if (e.image_versions2 || e.video_versions) {
+        const r = parseInstagramMedia({ ...e, code });
+        if (r) {
+          const alt = this.profilMedien?.get(code);
+          this.profilMedien?.set(
+            code,
+            alt ? { ...alt, ...Object.fromEntries(Object.entries(r).filter(([, v]) => v !== null && v !== 0)) } : r
+          );
+        }
+      }
       // Hat der Creator Likes und Aufrufe ausgeblendet, liefert Instagram
       // trotzdem eine Zahl mit -- aber sie bedeutet nichts. Am 10.10.2026
       // stand deshalb auf fast jeder Kachel eines solchen Profils "3".
@@ -3791,6 +3968,15 @@ class Session {
         dauer: typeof e.video_duration === "number" ? Math.round(e.video_duration) : null,
         // Versteckte Zahlen bleiben versteckt -- nichts schaetzen.
         verborgen,
+        // Wem der Beitrag gehoert (13.11.2026). Auf einer Profilseite kommen
+        // auch fremde Beitraege vorbei (Feed, Vorschlaege). Fuer die
+        // Vergleichsbasis des Multiplikators zaehlen nur die des Profils.
+        besitzer: e.user?.username ?? e.owner?.username ?? null,
+        // Instagrams interne Nummer des Beitrags -- nur fuer die Pruefung.
+        pk: /^\d+(_\d+)?$/.test(String(e.pk ?? e.id ?? "")) ? String(e.pk ?? e.id).split("_")[0] : null,
+        // 1 Foto, 2 Video/Reel, 8 Karussell -- entscheidet, ob Aufrufe
+        // ueberhaupt zu erwarten sind.
+        art: typeof e.media_type === "number" ? e.media_type : null,
       };
     };
 
@@ -3846,6 +4032,13 @@ class Session {
       // obwohl code, play_count, like_count und comment_count alle
       // dastanden. Ergebnis: beim Scrollen im Reels-Reiter vierzehn
       // Antworten und null Ausbeute.
+      // Die Kennung des Profils mitnehmen, wenn sie vorbeikommt (13.11.2026).
+      // Die Profilauskunft per Adresse antwortet inzwischen mit 404 -- ohne
+      // Kennung lief die direkte Abfrage der Reels deshalb ins Leere.
+      if (!this.profilNutzerId && wert.username === name && /^\d+$/.test(String(wert.pk ?? wert.id ?? ""))) {
+        this.profilNutzerId = String(wert.pk ?? wert.id);
+        console.log(`[forschung] ${name}: Kennung ${this.profilNutzerId} aus Instagrams Antwort.`);
+      }
       const selbst = auswerten(wert);
       if (selbst && (selbst.likes !== null || selbst.kommentare !== null || selbst.aufrufe !== null || selbst.verborgen)) {
         const alt = this.profilBeitraege.get(selbst.code);
@@ -3866,7 +4059,12 @@ class Session {
 
     cdp.on("Network.responseReceived", (e) => {
       const adresse = e?.response?.url ?? "";
-      if (!/instagram\.com\/(api\/v1|graphql)/.test(adresse)) return;
+      // /api/graphql gehoert dazu (13.11.2026): Instagram laedt das Profil-
+      // raster und den Reels-Reiter inzwischen ueber diese Adresse
+      // (PolarisProfilePostsTabContentQuery, PolarisProfileReelsTabContentQuery).
+      // Sie wurde nicht mitgelesen -- bei aktuellen Profilen kamen deshalb
+      // nur 3 bis 8 Beitraege mit Zahlen an.
+      if (!/instagram\.com\/(api\/v1|api\/graphql|graphql)/.test(adresse)) return;
       adressen.set(e.requestId, adresse);
     });
 
@@ -3879,10 +4077,20 @@ class Session {
       if (!adresse) return;
       adressen.delete(e.requestId);
       try {
-        const { body } = await cdp.send("Network.getResponseBody", { requestId: e.requestId });
-        const inhalt = JSON.parse(body);
+        const { body, base64Encoded } = await cdp.send("Network.getResponseBody", { requestId: e.requestId });
+        const text = (base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body).replace(/^for \(;;\);/, "").trim();
+        // Manche Antworten kommen in mehreren JSON-Stuecken hintereinander
+        // (eins je Zeile). Dann jedes Stueck einzeln lesen.
+        let teile = [];
+        try {
+          teile = [JSON.parse(text)];
+        } catch {
+          teile = text.split("\n").map((z) => { try { return JSON.parse(z); } catch { return null; } }).filter(Boolean);
+        }
+        if (!teile.length) return;
+        const inhalt = teile[0];
         const vorher = this.profilBeitraege.size;
-        sammeln(inhalt, 0);
+        for (const t of teile) sammeln(t, 0);
         const dazu = this.profilBeitraege.size - vorher;
         console.log(`[antwort] ${adresse.split("?")[0]} -> ${dazu} neue Beitraege (${JSON.stringify(Object.keys(inhalt)).slice(0, 90)})`);
         const jetzt = this.profilBeitraege.size;
@@ -4009,144 +4217,231 @@ class Session {
   async profilNachladen(name, lauf) {
     if (!PROFIL_FORSCHUNG) return;
     let hilfsSeite = null;
+    // Gehoert dieser Lauf noch zum offenen Profil? Nach einem Wechsel oder
+    // dem Schliessen endet er sofort -- und schreibt nichts mehr.
+    const istAktuell = () => this.profilKennung === lauf;
+    const g = this.profilGedaechtnis;
     try {
-      hilfsSeite = await this.context.newPage();
-      this.profilHilfsSeite = hilfsSeite;
-      await hilfsSeite.setViewportSize({ width: 1280, height: 1600 }).catch(() => {});
+      // SPARSAMER (13.11.2026): Der Hintergrund-Tab wird nur geoeffnet,
+      // wenn es fuer dieses Profil noch etwas vorzuladen gibt. Wer ein
+      // Profil binnen 30 Minuten wieder oeffnet, bekommt alles Bekannte aus
+      // dem Gedaechtnis -- ohne einen einzigen weiteren Seitenaufruf.
+      const basisOffen = !this.profilBasis && !this.profilBasisEndgueltig;
+      const brauchtTab = basisOffen || !g?.rasterDurch || !g?.reelsDurch;
+      if (brauchtTab) {
+        hilfsSeite = await this.context.newPage();
+        if (!istAktuell()) return;
+        this.profilHilfsSeite = hilfsSeite;
+        await hilfsSeite.setViewportSize({ width: 1280, height: 1600 }).catch(() => {});
 
-      const cdp = await this.context.newCDPSession(hilfsSeite).catch(() => null);
-      if (cdp) {
-        await cdp.send("Network.enable").catch(() => {});
-        const adressen = new Map();
-        cdp.on("Network.responseReceived", (e) => {
-          const a = e?.response?.url ?? "";
-          if (/instagram\.com\/(api\/v1|graphql)/.test(a)) adressen.set(e.requestId, a);
-        });
-        cdp.on("Network.loadingFinished", async (e) => {
-          if (!adressen.has(e.requestId)) return;
-          adressen.delete(e.requestId);
-          try {
-            const { body } = await cdp.send("Network.getResponseBody", { requestId: e.requestId });
-            const vorher = this.profilBeitraege?.size ?? 0;
-            this.profilSammeln?.(JSON.parse(body));
-            if ((this.profilBeitraege?.size ?? 0) > vorher) void this.profilSchichtFuettern();
-          } catch {
-            /* eine unlesbare Antwort darf den Rest nicht stoppen */
-          }
-        });
+        const cdp = await this.context.newCDPSession(hilfsSeite).catch(() => null);
+        if (cdp) {
+          await cdp.send("Network.enable").catch(() => {});
+          const adressen = new Map();
+          cdp.on("Network.responseReceived", (e) => {
+            const a = e?.response?.url ?? "";
+            if (/instagram\.com\/(api\/v1|api\/graphql|graphql)/.test(a)) adressen.set(e.requestId, a);
+          });
+          cdp.on("Network.loadingFinished", async (e) => {
+            if (!adressen.has(e.requestId)) return;
+            adressen.delete(e.requestId);
+            // Nach einem Profilwechsel gehoert das hier nicht mehr zum
+            // offenen Profil -- nicht in dessen Daten schreiben.
+            if (!istAktuell()) return;
+            try {
+              const { body, base64Encoded } = await cdp.send("Network.getResponseBody", { requestId: e.requestId });
+              if (!istAktuell()) return;
+              const vorher = profilFuellstand(this.profilBeitraege);
+              for (const t of antwortTeile(body, base64Encoded)) this.profilSammeln?.(t);
+              if (profilFuellstand(this.profilBeitraege) > vorher) void this.profilSchichtFuettern();
+            } catch {
+              /* eine unlesbare Antwort darf den Rest nicht stoppen */
+            }
+          });
+        }
+      } else {
+        console.log(`[nachladen] ${name}: alles aus dem Gedaechtnis (${this.profilBeitraege?.size ?? 0} Beitraege) -- kein Hintergrund-Tab noetig.`);
+      }
+      const laeuftNoch = () => istAktuell() && !!hilfsSeite && !hilfsSeite.isClosed();
+
+      // ZUERST DIE VERGLEICHSBASIS (13.11.2026). Unabhaengig davon, wie weit
+      // der Mitarbeiter scrollt: der Hintergrund-Tab laedt den Reels-Reiter
+      // des Kontos von oben, bis die neuesten Reels sicher bekannt sind,
+      // und legt daraus die Basis fest. Ist sie aus den letzten sechs
+      // Stunden bekannt, entfaellt das.
+      if (this.profilBasis && process.env.REELFORGE_SORTFEED_EXT) void this.profilSortFeedVergleich(name);
+      if (basisOffen && hilfsSeite) {
+        const t0 = Date.now();
+        await hilfsSeite
+          .goto(`https://www.instagram.com/${name}/reels/`, { waitUntil: "commit", timeout: 30000 })
+          .catch(() => {});
+        await sleep(1500);
+        // 25 + 3 angeheftete + Luft fuer die Reels der letzten drei Tage.
+        // Reicht das nicht, verlaengert der spaetere volle Durchgang.
+        await this.profilFolgeLaden(hilfsSeite, laeuftNoch, BASIS_ANZAHL + BASIS_ANGEHEFTET + 8, 20);
+        // Noch NICHT einzeln nachfragen: die ersten Runden im Raster liefern
+        // das Datum der meisten Reels ohnehin, gleich danach.
+        if (laeuftNoch()) await this.profilBasisVersuchen(hilfsSeite, name, laeuftNoch, false);
+        if (laeuftNoch()) console.log(`[basis] ${name}: Reels-Liste nach ${((Date.now() - t0) / 1000).toFixed(1)} s -- ${this.profilFolge.length} Reels, ${this.profilBasis ? "festgelegt" : this.profilBasisGrund}.`);
       }
 
-      await hilfsSeite
-        .goto(`https://www.instagram.com/${name}/`, { waitUntil: "commit", timeout: 30000 })
-        .catch(() => {});
-      await sleep(1500);
-
-      const laeuftNoch = () => this.profilKennung === lauf && !hilfsSeite.isClosed();
-      const eineRunde = async () => {
-        const vorher = this.profilBeitraege?.size ?? 0;
+      // DAS RASTER, einmal bis zum Ende. "Zuwachs" heisst: neue Daten ODER
+      // neue Kacheln in diesem Durchgang -- sonst hielte ein Durchgang mit
+      // schon bekannten Beitraegen (Gedaechtnis) oben faelschlich an.
+      if (laeuftNoch() && !g?.rasterDurch) {
         await hilfsSeite
-          .evaluate(async () => {
-            window.scrollTo(0, document.body.scrollHeight);
-            await new Promise((f) => setTimeout(f, 1200));
-          })
+          .goto(`https://www.instagram.com/${name}/`, { waitUntil: "commit", timeout: 30000 })
           .catch(() => {});
-        await sleep(600);
-        return (this.profilBeitraege?.size ?? 0) - vorher;
-      };
-
-      let runden = 0;
-      let leerlauf = 0;
-      let gemeldet = false;
-      const versuche = new Map();
-      const vergeblich = new Set();
-      while (laeuftNoch()) {
-        const dazu = await eineRunde();
-        if (dazu > 0) {
-          runden++;
-          leerlauf = 0;
-          continue;
+        await sleep(1500);
+        const imRaster = new Set();
+        let runden = 0;
+        let leerlauf = 0;
+        while (laeuftNoch() && leerlauf < 3) {
+          const vorher = profilFuellstand(this.profilBeitraege);
+          await hilfsSeite
+            .evaluate(async () => {
+              window.scrollTo(0, document.body.scrollHeight);
+              await new Promise((f) => setTimeout(f, 1200));
+            })
+            .catch(() => {});
+          await sleep(600);
+          let neu = profilFuellstand(this.profilBeitraege) - vorher;
+          const codes = await hilfsSeite
+            .evaluate(() =>
+              [...document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')]
+                .map((a) => (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/)?.[1])
+                .filter(Boolean)
+            )
+            .catch(() => []);
+          for (const c of codes) {
+            if (imRaster.has(c)) continue;
+            imRaster.add(c);
+            neu++;
+          }
+          // Basis: nach jeder Raster-Runde pruefen. Viele Konten stellen
+          // Reels nur in den Reels-Reiter, nicht ins Raster (flobruckert:
+          // 15 Beitraege im Raster, 51 Reels) -- dann bringt Warten auf das
+          // Raster kein Datum, also gleich gezielt nachfragen.
+          if (!this.profilBasis && this.profilFolge.length) await this.profilBasisVersuchen(hilfsSeite, name, laeuftNoch, true);
+          if (neu > 0) {
+            runden++;
+            leerlauf = 0;
+          } else leerlauf++;
         }
-        // Erst nach DREI Runden ohne Zuwachs gilt das Raster als durch.
-        // Einmal nichts heisst bei Instagram oft nur "gleich".
-        if (++leerlauf < 3) continue;
-
-        if (!gemeldet) {
-          gemeldet = true;
+        if (laeuftNoch()) {
+          if (g) g.rasterDurch = true;
           console.log(
             `[nachladen] ${name}: Raster durch nach ${runden} Runden -- ${this.profilBeitraege?.size ?? 0} Beitraege, ` +
-              `davon mit Datum ${[...(this.profilBeitraege?.values() ?? [])].filter((b) => b.zeitpunkt).length}. Wachdienst laeuft.`
+              `davon mit Datum ${[...(this.profilBeitraege?.values() ?? [])].filter((b) => b.zeitpunkt).length}.`
           );
         }
+      }
 
-        // Nicht aufhoeren, nur leise werden.
-        //
-        // "Durch" heisst bei uns nur: Instagram hat dreimal nichts Neues
-        // geschickt. Das kann auch heissen, dass es gerade bremst. Deshalb
-        // bleibt der Tab offen und sieht alle paar Sekunden nach, ob beim
-        // Mitarbeiter Kacheln OHNE Zahlen stehen -- und laedt nur dann
-        // nochmal nach. Kein Scrollen auf Verdacht (Emres Frage,
-        // 10.10.2026: "was ist mit denen dann?").
-        leerlauf = 0;
+      // DANACH DEN REELS-REITER (13.11.2026). Das Raster liefert Datum und
+      // Uhrzeit, aber bei Reels keine Aufrufe; der Reels-Reiter liefert die
+      // Aufrufe, aber kein Datum. Erst beide zusammen ergeben das volle
+      // Schild. EINMAL je Profil bis zum Ende (hoechstens 60 Runden) --
+      // danach wird nicht mehr auf Vorrat weitergeladen.
+      if (laeuftNoch() && !g?.reelsDurch) {
+        await hilfsSeite
+          .goto(`https://www.instagram.com/${name}/reels/`, { waitUntil: "commit", timeout: 30000 })
+          .catch(() => {});
+        await sleep(1500);
+        let r2 = 0;
+        let leer2 = 0;
+        // "Leer" heisst: in DIESEM Durchgang ist keine neue Kachel mehr
+        // aufgetaucht. Nicht "keine neuen Daten" -- die oberen Reels sind
+        // aus der ersten Phase schon bekannt, und der Durchgang hoerte
+        // sonst nach drei Runden auf, bevor er die aelteren erreicht
+        // (13.11.2026 gemessen: 112 Reels ohne Aufrufe bei kiarafunk1).
+        const imDurchgang = new Set();
+        while (laeuftNoch() && r2 < 60 && leer2 < 3) {
+          const vorher = profilFuellstand(this.profilBeitraege);
+          await hilfsSeite
+            .evaluate(async () => {
+              window.scrollTo(0, document.body.scrollHeight);
+              await new Promise((f) => setTimeout(f, 1200));
+            })
+            .catch(() => {});
+          await sleep(600);
+          const dazu2 = profilFuellstand(this.profilBeitraege) - vorher;
+          await this.profilFolgeLesen(hilfsSeite, laeuftNoch);
+          let neuHier = 0;
+          for (const c of await this.profilKachelCodes(hilfsSeite)) {
+            if (imDurchgang.has(c)) continue;
+            imDurchgang.add(c);
+            neuHier++;
+          }
+          r2++;
+          leer2 = dazu2 > 0 || neuHier > 0 ? 0 : leer2 + 1;
+        }
+        if (leer2 >= 3) {
+          this.profilFolgeEnde = true;
+          if (g) g.folgeEnde = true;
+        }
+        if (!this.profilBasis && laeuftNoch()) await this.profilBasisVersuchen(hilfsSeite, name, laeuftNoch);
+        if (laeuftNoch()) {
+          if (g) g.reelsDurch = true;
+          const alle = [...(this.profilBeitraege?.values() ?? [])];
+          console.log(
+            `[nachladen] ${name}: Reels-Reiter durch nach ${r2} Runden -- mit Aufrufen ${alle.filter((x) => x.aufrufe).length}, ` +
+              `mit Datum ${alle.filter((x) => x.zeitpunkt).length}, gesamt ${alle.length}, ` +
+              `Reels voll (Aufrufe+Datum) ${alle.filter((x) => x.aufrufe && x.zeitpunkt).length}.`
+          );
+          void this.profilSchichtFuettern();
+        }
+      }
+
+      // Vorladen fertig: der Hintergrund-Tab wird nicht mehr gebraucht.
+      // Frueher blieb er offen und scrollte weiter, solange Instagram noch
+      // etwas schickte -- bei grossen Konten die GANZE Reel-Geschichte, mit
+      // rund 30 Abfragen pro Minute, so lange das Profil offen war.
+      if (hilfsSeite && !hilfsSeite.isClosed()) {
+        if (this.profilHilfsSeite === hilfsSeite) this.profilHilfsSeite = null;
+        await hilfsSeite.close().catch(() => {});
+      }
+
+      // WACHDIENST: nur noch gezielt nachfragen, was der Mitarbeiter
+      // gerade SIEHT und was noch fehlt (Datum, bei Reels die Aufrufe).
+      // Nichts auf Vorrat, nichts zweimal. Was der Mitarbeiter in der
+      // Buehne weiterscrollt, laedt die Buehne ohnehin selbst nach.
+      while (istAktuell()) {
         await sleep(6000);
-        if (!laeuftNoch()) break;
-
-        // Gesucht wird nach HALBEN Schildern, nicht nur nach leeren.
-        //
-        // Hier lag der Fehler (10.10.2026): gefragt wurde nur "gibt es
-        // Kacheln, zu denen wir gar nichts haben?". Die Antwort war null,
-        // also schlief der Wachdienst -- waehrend bei Emre vier Kacheln
-        // mit halbem Schild standen (Zahlen ja, Datum nein). Genau die
-        // sind der Grund, warum es sich fuer ihn anfuehlte, als wuerde es
-        // aufhoeren.
-        //
-        // Codes, die zweimal erfolglos nachgefasst wurden, zaehlen nicht
-        // mehr mit -- sonst dreht sich der Wachdienst ewig um Beitraege,
-        // zu denen Instagram schlicht nichts mehr hergibt.
-        const fehlen = await this.profilSeite
-          ?.evaluate((schonVersucht) => {
+        const seite = this.profilSeite;
+        if (!istAktuell() || !seite || seite.isClosed()) break;
+        // Basis noch offen (etwa weil Instagram abgewiesen hatte)? Erneut
+        // versuchen -- die Sperrzeit beachtet profilBasisVersuchen selbst.
+        if (!this.profilBasis && this.profilFolge.length) await this.profilBasisVersuchen(seite, name, istAktuell, true);
+        const fehlen = await seite
+          .evaluate(() => {
             const RF = window.__rfForschung;
-            if (!RF) return { offen: 0, codes: [] };
+            if (!RF) return [];
             const codes = [];
+            const hoehe = window.innerHeight;
             for (const a of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
               const r = a.getBoundingClientRect();
               if (r.width < 120 || r.height < 120) continue;
+              // Sichtbar oder gleich sichtbar (eine Bildschirmhoehe darunter).
+              if (r.bottom < 0 || r.top > hoehe * 2) continue;
               const m = (a.getAttribute("href") || "").match(/\/(?:p|reel)\/([^/?#]+)/);
               if (!m) continue;
               const b = RF.daten.get(m[1]);
-              // Leer ODER halb: beides zaehlt als offen.
-              // Nur Datum zaehlt, NICHT die Laenge.
-              //
-              // Gemessen am 10.10.2026: von 26 sichtbaren Kacheln hatten
-              // 25 ein Datum, aber nur 3 eine Laenge. Instagram liefert
-              // video_duration im Raster gar nicht mit -- sie steht nur in
-              // der Einzelauskunft, die kommt, wenn man ein Reel anklickt.
-              // Mit der Laenge im Kriterium fasste der Wachdienst alle
-              // sechs Sekunden fuer 23 Kacheln nach, die er nie fuellen
-              // kann: verschwendete Arbeit und genau die Art Dauerschleife,
-              // die heute schon einmal den Browser ausgebremst hat.
-              if ((!b || !b.zeitpunkt) && !schonVersucht.includes(m[1])) codes.push(m[1]);
+              // Die Laenge zaehlt bewusst NICHT: Instagram liefert sie im
+              // Raster nie mit (10.10.2026 gemessen) -- danach zu fragen
+              // waere eine Dauerschleife.
+              if (!b || !b.zeitpunkt || (b.art === 2 && b.aufrufe == null && !b.verborgen)) codes.push(m[1]);
             }
-            return { offen: codes.length, codes: codes.slice(0, 40) };
-          }, [...vergeblich])
-          .catch(() => ({ offen: 0, codes: [] }));
-
-        if (fehlen.offen > 0) {
-          console.log(`[nachladen] ${name}: ${fehlen.offen} Kachel(n) mit halbem Schild -- wird nachgefasst.`);
-          for (const c of fehlen.codes) versuche.set(c, (versuche.get(c) ?? 0) + 1);
-          for (const [c, n] of versuche) if (n >= 2) vergeblich.add(c);
-          gemeldet = false;
-          // Von vorn durchladen: Instagram gibt nach einem neuen Anlauf
-          // manchmal mehr her als beim blossen Weiterscrollen.
-          await hilfsSeite.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-          await sleep(600);
-        }
+            return [...new Set(codes)];
+          })
+          .catch(() => []);
+        if (fehlen.length) await this.profilLueckenFuellen(seite, name, istAktuell, fehlen);
       }
     } catch (err) {
       console.log(`[nachladen] ${name}: abgebrochen (${err?.message?.split("\n")[0]})`);
     } finally {
-      if (this.profilHilfsSeite === hilfsSeite) this.profilHilfsSeite = null;
+      if (hilfsSeite && this.profilHilfsSeite === hilfsSeite) this.profilHilfsSeite = null;
       await hilfsSeite?.close().catch(() => {});
-      await this.profilSchichtFuettern();
+      if (istAktuell()) await this.profilSchichtFuettern();
     }
   }
 
@@ -4162,7 +4457,7 @@ class Session {
     const t0 = Date.now();
     const erg = await seite
       .evaluate(
-        async ([nutzer, seiten, proSeite]) => {
+        async ([nutzer, seiten, proSeite, bekannteId]) => {
           const kopf = { "X-IG-App-ID": "936619743392459" };
           const kekse = Object.fromEntries(
             document.cookie.split("; ").map((s) => [s.split("=")[0], s.split("=").slice(1).join("=")])
@@ -4171,8 +4466,13 @@ class Session {
           const warte = (ms) => new Promise((f) => setTimeout(f, ms));
 
           // Schritt 1: die Kennung des Creators.
-          let id = null;
-          try {
+          //
+          // Zuerst die, die Instagram uns beim Laden des Profils schon
+          // mitgeschickt hat. Die Profilauskunft per Adresse antwortet seit
+          // Oktober 2026 mit 404 (13.11.2026 im Protokoll gesehen) -- sie
+          // bleibt nur als zweiter Weg.
+          let id = bekannteId || null;
+          if (!id) try {
             const r = await fetch(`/api/v1/users/web_profile_info/?username=${encodeURIComponent(nutzer)}`, {
               headers: kopf,
               credentials: "include",
@@ -4249,7 +4549,7 @@ class Session {
 
           return { stuecke, seiten: seitenGesamt, fehler };
         },
-        [name, 6, 50]
+        [name, 6, 50, this.profilNutzerId]
       )
       .catch((e) => ({ fehler: e?.message }));
 
@@ -4304,6 +4604,30 @@ class Session {
           if (!b.aufrufe || b.aufrufe <= 0) return null;
           if (b.likes === null && b.kommentare === null) return null;
           return `${((((b.likes ?? 0) + (b.kommentare ?? 0)) / b.aufrufe) * 100).toFixed(1)}%`;
+        };
+
+        // MULTIPLIKATOR (13.11.2026): Aufrufe dieses Reels geteilt durch den
+        // MEDIAN der Aufrufe aller bekannten Reels DESSELBEN Profils. Median
+        // statt Durchschnitt, damit ein einzelner Ausreisser die Basis nicht
+        // verzieht. Erst ab 5 Reels mit echten Aufrufen -- darunter ist der
+        // Vergleich nicht belastbar und es steht nichts da. Ausgeblendete
+        // Zahlen und fremde Beitraege zaehlen nie mit.
+        const gehoertZumProfil = (b) => !b.besitzer || !RF.profil || b.besitzer === RF.profil;
+        // Seit 13.11.2026 rechnet die Seite die Basis NICHT mehr aus dem,
+        // was gerade geladen ist -- sie kommt fest vom Connector (Regel wie
+        // Sort Feed, siehe profilBasisRechnen). Solange sie nicht feststeht,
+        // steht kein Multiplikator da: lieber nichts als ein wandernder Wert.
+        const basisBerechnen = () => RF.basisFest ?? null;
+        const faktor = (b) => {
+          const basis = RF.basis;
+          if (!basis || !basis.median || !b.aufrufe || b.verborgen) return null;
+          // Mitarbeiter-Beitraege (Collab) gehoeren dazu, wenn sie im
+          // Reels-Reiter DIESES Kontos stehen.
+          if (!gehoertZumProfil(b) && !RF.folge?.has(b.code)) return null;
+          const f = b.aufrufe / basis.median;
+          // Schreibweise wie Sort Feed: eine Nachkommastelle, ab 100 ganze
+          // Zahlen, ab 1000 gedeckelt.
+          return f >= 1000 ? "1000x+" : f >= 100 ? `${Math.round(f)}x` : `${f.toFixed(1)}x`;
         };
 
         const GOLD = "#EAC088";
@@ -4436,6 +4760,23 @@ class Session {
             return s;
           };
 
+          const fx = faktor(b);
+          if (fx) {
+            const p = pille([textEl(fx)], true);
+            // Eigene Farbe, damit Multiplikator und Rate nicht verwechselt
+            // werden: kraeftiges Orange wie in der Vorlage.
+            p.style.background = "linear-gradient(180deg,rgba(247,146,58,.96),rgba(226,106,30,.96))";
+            p.style.color = "#fff";
+            {
+              const tag = (t) => new Date(t * 1000).toLocaleDateString("de-DE");
+              p.title =
+                `${b.aufrufe.toLocaleString("de-DE")} Aufrufe geteilt durch ${Math.round(RF.basis.median).toLocaleString("de-DE")} -- ` +
+                `den Median der ${RF.basis.anzahl} neuesten Reels dieses Kontos, die mindestens 3 Tage alt sind ` +
+                `(${tag(RF.basis.von)} bis ${tag(RF.basis.bis)})` +
+                (RF.basis.anzahl < 25 ? ". Mehr geeignete Reels hat das Konto nicht." : ".");
+            }
+            stapel.appendChild(p);
+          }
           const r = rate(b);
           if (r) stapel.appendChild(pille([textEl(r)], true));
 
@@ -4534,6 +4875,7 @@ class Session {
         // gebaut. Damit kann Instagrams Wiederverwenden von Kacheln beim
         // Scrollen kein fremdes Schild stehenlassen.
         RF.zeichnen = function () {
+          RF.basis = basisBerechnen();
           let kacheln = 0;
           let beschriftet = 0;
           for (const link of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
@@ -4605,7 +4947,10 @@ class Session {
               vorhanden.remove();
               vorhanden = null;
             }
-            const stand = [code, b.likes, b.kommentare, b.aufrufe, b.reposts, b.zeitpunkt, b.dauer, b.vonDerKachel].join("|");
+            // Die Basis gehoert zum Stand: sie kommt meist erst nach den
+            // Zahlen, und ohne sie hier wuerde die Kachel nicht neu gezeichnet
+            // und bliebe ohne Multiplikator (13.11.2026 gesehen).
+            const stand = [code, b.likes, b.kommentare, b.aufrufe, b.reposts, b.zeitpunkt, b.dauer, b.vonDerKachel, RF.basis?.median ?? ""].join("|");
             if (vorhanden && vorhanden.dataset.stand === stand) {
               beschriftet++;
               continue;
@@ -4637,7 +4982,7 @@ class Session {
             }
             beschriftet++;
           }
-          RF.stand = { kacheln, beschriftet, bekannt: RF.daten.size };
+          RF.stand = { kacheln, beschriftet, bekannt: RF.daten.size, basis: RF.basis ? `${Math.round(RF.basis.median)} aus ${RF.basis.anzahl}` : null };
           RF.zuletztGezeichnet = Date.now();
           try { RF.leisteSetzen(); } catch { /* Darstellung darf nie stoeren */ }
         };
@@ -4922,18 +5267,439 @@ class Session {
   }
 
   // Die gesammelten Zahlen in die Seite geben und zeichnen lassen.
+  // LUECKEN EINZELN FUELLEN (13.11.2026).
+  //
+  // Raster und Reels-Reiter liefern zusammen fast alles -- aber nicht
+  // immer: bei manchen Reels fehlen dort die Aufrufe oder das Datum,
+  // obwohl Instagram sie kennt (gemessen an neuroceline: zwei der neuesten
+  // Reels ohne Aufrufe). Instagrams Einzelauskunft je Beitrag
+  // (/api/v1/media/<nummer>/info/) liefert sie zuverlaessig; in allen
+  // Stichproben stimmte sie mit dem Raster ueberein.
+  //
+  // Hoeflich: nur Beitraege mit echter Luecke, einer nach dem anderen mit
+  // Pause, hoechstens 60 je Profil, jeder nur einmal. Bei einer Abweisung
+  // (429) sofort Schluss und eine Viertelstunde Ruhe.
+  // Reihenfolge der Reels im Reels-Reiter mitschreiben (neueste zuerst,
+  // angeheftete ganz oben). Liefert, wie viele neu dazukamen.
+  async profilKachelCodes(seite) {
+    return seite
+      .evaluate(() =>
+        [...document.querySelectorAll('a[href*="/reel/"]')]
+          .map((a) => (a.getAttribute("href") || "").match(/\/reel\/([^/?#]+)/)?.[1])
+          .filter(Boolean)
+      )
+      .catch(() => []);
+  }
+
+  async profilFolgeLesen(seite, laeuftNoch) {
+    const codes = await this.profilKachelCodes(seite);
+    // Inzwischen ein anderes Profil offen? Dann gehoeren diese Kacheln
+    // nicht in dessen Reihenfolge.
+    if (laeuftNoch && !laeuftNoch()) return 0;
+    const schon = new Set(this.profilFolge);
+    let neu = 0;
+    for (const c of codes) {
+      if (schon.has(c)) continue;
+      schon.add(c);
+      this.profilFolge.push(c);
+      neu++;
+    }
+    return neu;
+  }
+
+  async profilFolgeLaden(seite, laeuftNoch, ziel, maxRunden) {
+    await this.profilFolgeLesen(seite, laeuftNoch);
+    let leer = 0;
+    for (let r = 0; r < maxRunden && laeuftNoch() && this.profilFolge.length < ziel; r++) {
+      await seite
+        .evaluate(async () => {
+          window.scrollTo(0, document.body.scrollHeight);
+          await new Promise((f) => setTimeout(f, 1200));
+        })
+        .catch(() => {});
+      await sleep(600);
+      const neu = await this.profilFolgeLesen(seite, laeuftNoch);
+      if (!laeuftNoch()) return;
+      leer = neu > 0 ? 0 : leer + 1;
+      if (leer >= 3) {
+        this.profilFolgeEnde = true;
+        if (this.profilGedaechtnis) this.profilGedaechtnis.folgeEnde = true;
+        break;
+      }
+    }
+  }
+
+  // Basis festlegen, sobald es sicher geht. Fehlen bei den neuesten Reels
+  // noch Datum oder Aufrufe, werden genau diese einzeln nachgefragt.
+  async profilBasisVersuchen(seite, name, laeuftNoch, nachfragen = true) {
+    // Fest steht auch "keine Basis moeglich" (zu wenige Reels) -- dann
+    // nicht alle paar Sekunden neu rechnen.
+    if (this.profilBasis || this.profilBasisEndgueltig) return;
+    for (let durchgang = 0; durchgang < 3 && laeuftNoch(); durchgang++) {
+      this.profilBasisAufgegeben ??= new Set();
+      const erg = profilBasisRechnen(this.profilBeitraege, this.profilFolge, this.profilFolgeEnde, this.profilBasisAufgegeben);
+      if (erg.basis) {
+        this.profilBasis = erg.basis;
+        this.profilBasisGrund = "festgelegt";
+        Session.profilBasen.set(name, erg.basis);
+        const tag = (t) => new Date(t * 1000).toLocaleDateString("de-DE");
+        console.log(
+          `[basis] ${name}: FEST nach ${((Date.now() - (this.profilGeoeffnetUm ?? Date.now())) / 1000).toFixed(1)} s -- Median ${erg.basis.median} aus den ${erg.basis.anzahl} neuesten Reels aelter als ${BASIS_REIFE_TAGE} Tage ` +
+            `(${tag(erg.basis.von)} bis ${tag(erg.basis.bis)}), uebersprungen: ${erg.basis.juenger} juengere, ${erg.basis.verborgen} mit ausgeblendeten Zahlen | Reels-Liste ${this.profilFolge.length}${this.profilFolgeEnde ? " (Ende erreicht)" : ""}.`
+        );
+        void this.profilSchichtFuettern();
+        if (process.env.REELFORGE_SORTFEED_EXT) void this.profilSortFeedVergleich(name);
+        return;
+      }
+      this.profilBasisGrund = erg.grund;
+      if (erg.fest) {
+        this.profilBasisEndgueltig = erg.grund;
+        if (this.profilGedaechtnis) this.profilGedaechtnis.basisKeine = erg.grund;
+        console.log(`[basis] ${name}: kein Multiplikator -- ${erg.grund}.`);
+        return;
+      }
+      if (!erg.fehlend.length || !nachfragen) return;
+      if (Session.reelsSperreBis && Date.now() < Session.reelsSperreBis) return;
+      // Fuenf Anfragen gleichzeitig, dann kurz Luft. Sort Feed schickt sie
+      // alle auf einmal; fuenf sind der Mittelweg zwischen Tempo und dem
+      // Risiko, dass Instagram bremst.
+      const frage = async (code) => {
+        const pk = this.profilBeitraege?.get(code)?.pk ?? codeZuPk(code);
+        if (!pk) return 0;
+        const info = await seite
+          .evaluate(async (pk) => {
+            const kekse = Object.fromEntries(document.cookie.split("; ").map((x) => [x.split("=")[0], x.split("=").slice(1).join("=")]));
+            const r = await fetch(`/api/v1/media/${pk}/info/`, {
+              headers: { "X-IG-App-ID": "936619743392459", "X-CSRFToken": kekse.csrftoken || "" },
+              credentials: "include",
+            });
+            // Instagram weist manchmal mit einer Umleitung auf eine
+            // HTML-Seite ab statt mit 429 (13.11.2026 nach vielen
+            // Testlaeufen gesehen) -- das ist eine Abweisung, keine Antwort.
+            if (r.redirected || !(r.headers.get("content-type") || "").includes("json")) return { status: 302 };
+            if (!r.ok) return { status: r.status };
+            const m = (await r.json())?.items?.[0];
+            return m ? { status: 200, m } : { status: 204 };
+          }, pk)
+          .catch(() => ({ status: 0 }));
+        if (info.status === 200 && info.m?.code === code) {
+          this.profilSammeln?.(info.m);
+          this.profilNachgefragt?.add(code);
+        }
+        return info.status;
+      };
+      const offen = [...erg.fehlend];
+      while (offen.length && this.profilBasisGefragt < 45 && laeuftNoch() && !seite.isClosed()) {
+        const runde = offen.splice(0, Math.min(5, 45 - this.profilBasisGefragt));
+        this.profilBasisGefragt += runde.length;
+        const antworten = await Promise.all(runde.map(frage));
+        // Nur was Instagram wirklich BEANTWORTET hat, darf ausgelassen
+        // werden (geloescht, nicht mehr da). Eine Abweisung heisst nicht
+        // "gibt es nicht" -- wer dann ausliesse, rechnete mit den falschen
+        // 25 Reels. Also: keine Basis, Pause, spaeter neu versuchen.
+        runde.forEach((c, i) => {
+          if (antworten[i] === 200 || antworten[i] === 204 || antworten[i] === 404) this.profilBasisAufgegeben.add(c);
+        });
+        if (antworten.some((st) => st === 429 || st === 302 || st === 401 || st === 403 || st === 0)) {
+          Session.reelsSperreBis = Date.now() + 15 * 60 * 1000;
+          this.profilBasisGefragt -= runde.length;
+          this.profilBasisGrund = "Instagram weist Einzelabfragen gerade ab";
+          console.log(`[basis] ${name}: Instagram weist Einzelabfragen ab (${[...new Set(antworten)].join(",")}) -- keine Basis, 15 Minuten Ruhe, dann neuer Versuch.`);
+          return;
+        }
+        await sleep(300);
+      }
+      console.log(`[basis] ${name}: ${erg.fehlend.length} Reels fuer die Basis einzeln nachgefragt (gesamt ${this.profilBasisGefragt}).`);
+    }
+  }
+
+  // NUR IM TESTBETRIEB (REELFORGE_SORTFEED_EXT gesetzt): dasselbe Profil
+  // in einem getrennten Testbrowser mit der Sort-Feed-Erweiterung oeffnen
+  // und deren Multiplikatoren Reel fuer Reel neben unsere legen.
+  async profilSortFeedVergleich(name) {
+    let seite = null;
+    try {
+      if (!Session.sortFeedKontext) {
+        const ext = process.env.REELFORGE_SORTFEED_EXT;
+        Session.sortFeedKontext = await chromium.launchPersistentContext(process.env.REELFORGE_SORTFEED_DIR, {
+          executablePath: process.env.REELFORGE_SORTFEED_EXE,
+          headless: false,
+          viewport: { width: 1280, height: 1400 },
+          args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, "--window-position=-3200,0"],
+        });
+      }
+      const ctx = Session.sortFeedKontext;
+      await ctx.addCookies(await this.context.cookies("https://www.instagram.com"));
+      const basis = this.profilBasis;
+      const tiefen = String(process.env.REELFORGE_SORTFEED_TIEFE || "6").split(",").map(Number);
+      for (const [pfad, tiefe] of tiefen.map((t) => [`${name}/reels/`, t])) {
+        seite = await ctx.newPage();
+        // Sort Feeds eigene Einzelnachfragen (Datum je Reel) mitzaehlen.
+        const sfAnfragen = {};
+        seite.on("response", (r) => {
+          if (/\/api\/v1\/media\/\d+\/info\//.test(r.url())) sfAnfragen[r.status()] = (sfAnfragen[r.status()] ?? 0) + 1;
+        });
+        seite.on("requestfailed", (r) => {
+          if (/\/api\/v1\/media\/\d+\/info\//.test(r.url())) sfAnfragen.abgebrochen = (sfAnfragen.abgebrochen ?? 0) + 1;
+        });
+        await seite.goto(`https://www.instagram.com/${pfad}`, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+        await sleep(6000);
+        for (let r = 0; r < tiefe; r++) {
+          await seite.evaluate(() => window.scrollBy(0, 900)).catch(() => {});
+          await sleep(1500);
+        }
+        // Zurueck nach oben: Instagram blendet weit oben liegende Kacheln
+        // beim Scrollen aus; verglichen wird an den neuesten Reels.
+        await seite.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+        await sleep(4000);
+        const sf = await seite
+          .evaluate(() => {
+            const aus = [];
+            for (const ov of document.querySelectorAll("[data-sorter='stats-overlay'][data-sortfeed-id]")) {
+              const el = ov.shadowRoot?.querySelector('[class*="outlier"]');
+              aus.push({ code: ov.getAttribute("data-sortfeed-id"), sf: el ? el.textContent.trim() : null });
+            }
+            const ov = document.querySelector("[data-sorter='stats-overlay']");
+            return { kacheln: aus, overlays: document.querySelectorAll("[data-sorter='stats-overlay']").length, beispiel: ov?.shadowRoot ? ov.shadowRoot.innerHTML.replace(/<style[\s\S]*?<\/style>/g, "").slice(0, 700) : null };
+          })
+          .catch((e) => ({ kacheln: [], fehler: e?.message }));
+        // Was Sort Feed selbst ueber die Reels weiss (sein Zwischenspeicher
+        // liegt im Speicher der Instagram-Seite) -- nur zum Erklaeren.
+        const sfSpeicher = await seite
+          .evaluate(
+            (nutzer) =>
+              new Promise((fertig) => {
+                const r = indexedDB.open("sorter-cache");
+                r.onerror = () => fertig({ fehler: "kein Speicher" });
+                r.onsuccess = () => {
+                  try {
+                    const db = r.result;
+                    if (!db.objectStoreNames.contains("posts")) return fertig({ fehler: "keine posts" });
+                    const a = db.transaction("posts").objectStore("posts").getAll();
+                    a.onsuccess = () =>
+                      fertig({
+                        alle: a.result.length,
+                        eigene: a.result
+                          .filter((p) => p.platform === "instagram" && (p.username === nutzer || (p.sourceUrl || "").includes(`/${nutzer}/`)))
+                          .map((p) => ({ code: p.shortcode ?? p.id, a: p.views ?? null, t: p.createTime ?? null, art: p.mediaType ?? null })),
+                      });
+                    a.onerror = () => fertig({ fehler: "lesen" });
+                  } catch (e) {
+                    fertig({ fehler: String(e) });
+                  }
+                };
+              }),
+            name
+          )
+          .catch((e) => ({ fehler: e?.message }));
+        if (sfSpeicher?.eigene) {
+          const jetztS = Math.floor(Date.now() / 1000);
+          const reif = sfSpeicher.eigene.filter((p) => p.art === "video" && p.a > 0 && p.t && p.t <= jetztS - 3 * 86400).sort((x, y) => y.t - x.t).slice(0, 25);
+          const w = reif.map((p) => p.a).sort((x, y) => x - y);
+          const med = w.length ? (w.length % 2 ? w[w.length >> 1] : (w[(w.length >> 1) - 1] + w[w.length >> 1]) / 2) : null;
+          console.log(`[sortfeed] ${name}: Sort Feeds Speicher -- ${sfSpeicher.eigene.length} Eintraege dieses Kontos (von ${sfSpeicher.alle}), Videos mit Datum ${sfSpeicher.eigene.filter((p) => p.t).length}, daraus Basis nach Sort-Feed-Regel ${med} aus ${w.length}.`);
+        } else console.log(`[sortfeed] ${name}: Sort Feeds Speicher nicht lesbar (${sfSpeicher?.fehler}).`);
+        console.log(`[sortfeed] ${name}: Sort Feeds Einzelnachfragen nach Datum -- ${JSON.stringify(sfAnfragen)}`);
+        let gleich = 0, anders = 0, nurSf = 0, nurWir = 0;
+        const zeilen = [];
+        const implizit = [];
+        const seen = new Set();
+        for (const { code, sf: sfText } of sf.kacheln) {
+          if (seen.has(code)) continue;
+          seen.add(code);
+          const b = this.profilBeitraege?.get(code);
+          const wir = basis && b?.aufrufe && !b.verborgen ? b.aufrufe / basis.median : null;
+          const wirText = wir == null ? null : wir >= 1000 ? "1000x+" : wir >= 100 ? `${Math.round(wir)}x` : `${wir.toFixed(1)}x`;
+          const sfZahl = sfText ? parseFloat(sfText.replace(",", ".")) : null;
+          if (sfZahl && b?.aufrufe) implizit.push(b.aufrufe / sfZahl);
+          const norm = (t) => (t ? t.replace(/[×x+\s]/g, "").replace(",", ".") : null);
+          if (wirText && sfText) norm(wirText) === norm(sfText) ? gleich++ : anders++;
+          else if (sfText) nurSf++;
+          else if (wirText) nurWir++;
+          zeilen.push(`${code}:${sfText ?? "-"}/${wirText ?? "-"}`);
+        }
+        implizit.sort((a, c) => a - c);
+        try {
+          const { writeFileSync } = await import("node:fs");
+          writeFileSync(
+            path.join(path.dirname(process.env.REELFORGE_SORTFEED_DIR), `vergleich-${name}-tiefe${tiefe}.json`),
+            JSON.stringify({
+              name, pfad, jetzt: Math.floor(Date.now() / 1000), basis, folge: this.profilFolge,
+              sf: sf.kacheln, sfSpeicher,
+              daten: [...(this.profilBeitraege?.values() ?? [])].map((b) => ({ code: b.code, a: b.aufrufe, t: b.zeitpunkt, art: b.art, bes: b.besitzer, v: b.verborgen })),
+            })
+          );
+        } catch {}
+        const sfBasis = implizit.length ? Math.round(implizit[implizit.length >> 1]) : null;
+        console.log(
+          `[sortfeed] ${name} (${pfad}, ${tiefe}x gescrollt): Kacheln ${seen.size}, Overlays ${sf.overlays ?? "?"} | gleich ${gleich}, anders ${anders}, nur Sort Feed ${nurSf}, nur wir ${nurWir} | ` +
+            `Basis wir ${basis ? Math.round(basis.median) : "-"} / Sort Feed (zurueckgerechnet) ${sfBasis ?? "-"} | ${zeilen.slice(0, 40).join(" ")}`
+        );
+        if (!sf.overlays && sf.beispiel == null) console.log(`[sortfeed] ${name}: keine Overlays gefunden ${sf.fehler ?? ""}`);
+        if (process.env.REELFORGE_SORTFEED_HTML === "1" && sf.beispiel) console.log(`[sortfeed] Beispiel: ${sf.beispiel}`);
+        await seite.close().catch(() => {});
+        seite = null;
+      }
+    } catch (err) {
+      console.log(`[sortfeed] ${name}: Vergleich ging nicht (${err?.message?.split("\n")[0]})`);
+    } finally {
+      await seite?.close().catch(() => {});
+    }
+  }
+
+  // WELCHES REEL IST IN DER PROFIL-BUEHNE GEOEFFNET? (13.11.2026)
+  // Instagram schreibt das geoeffnete Reel in die Adresse der Seite
+  // (/reel/CODE/ oder /p/CODE/) -- auch beim Weiterblaettern mit den
+  // Pfeilen im Player. Ohne "holen" nur der Code (kostet nichts, keine
+  // Anfrage an Instagram); mit "holen" das fertige Reel-Objekt in genau der
+  // Form, die der Feed liefert -- fuer die bestehende Speicherfunktion.
+  async profilAktuell(holen) {
+    const seite = this.profilSeite;
+    if (!seite || seite.isClosed()) return { ok: true, code: null };
+    const code = seite.url().match(/instagram\.com\/(?:[A-Za-z0-9._]+\/)?(?:reel|p)\/([A-Za-z0-9_-]{5,})/)?.[1] ?? null;
+    if (!code || !holen) return { ok: true, code };
+    let r = this.profilMedien?.get(code) ?? null;
+    if (!r && !(Session.reelsSperreBis && Date.now() < Session.reelsSperreBis)) {
+      // Nur wenn Instagram die Angaben noch nicht mitgeschickt hat: EINE
+      // gezielte Nachfrage zu genau diesem Reel.
+      const pk = this.profilBeitraege?.get(code)?.pk ?? codeZuPk(code);
+      const info = await seite
+        .evaluate(async (pk) => {
+          const kekse = Object.fromEntries(document.cookie.split("; ").map((x) => [x.split("=")[0], x.split("=").slice(1).join("=")]));
+          const a = await fetch(`/api/v1/media/${pk}/info/`, {
+            headers: { "X-IG-App-ID": "936619743392459", "X-CSRFToken": kekse.csrftoken || "" },
+            credentials: "include",
+          });
+          if (a.redirected || !(a.headers.get("content-type") || "").includes("json")) return { status: 302 };
+          if (!a.ok) return { status: a.status };
+          const m = (await a.json())?.items?.[0];
+          return m ? { status: 200, m } : { status: 204 };
+        }, pk)
+        .catch(() => ({ status: 0 }));
+      if (info.status === 429 || info.status === 302) Session.reelsSperreBis = Date.now() + 15 * 60 * 1000;
+      if (info.status === 200 && info.m?.code === code) {
+        this.profilSammeln?.(info.m);
+        r = this.profilMedien?.get(code) ?? null;
+      }
+      console.log(`[profil-reel] ${code}: Angaben fehlten, einzeln nachgefragt -> ${info.status}`);
+    }
+    if (!r) return { ok: false, code, fehler: "Instagram hasn't sent this reel's details yet — try again in a moment." };
+    // Die Zahlen von den Schildern haben Vorrang: sie sind gegen Instagrams
+    // Einzelauskunft geprueft. Ausgeblendete bleiben ausgeblendet.
+    const b = this.profilBeitraege?.get(code);
+    const verborgen = r.likesVerborgen === true || b?.verborgen === true;
+    const takenAt = r.takenAt ?? b?.zeitpunkt ?? null;
+    const reel = {
+      ...r,
+      viewsRaw: verborgen ? null : (b?.aufrufe ?? r.viewsRaw ?? null),
+      likes: verborgen ? null : (b?.likes ?? r.likes ?? null),
+      likesVerborgen: verborgen,
+      comments: b?.kommentare ?? r.comments ?? null,
+      reposts: b?.reposts ?? r.reposts ?? null,
+      durationSec: r.durationSec || b?.dauer || 0,
+      takenAt,
+      postedDaysAgo: takenAt ? Math.max(0, Math.floor((Date.now() / 1000 - takenAt) / 86400)) : null,
+    };
+    console.log(`[profil-reel] ${code}: zum Speichern uebergeben (@${reel.username}, Aufrufe ${reel.viewsRaw}, Bild ${reel.thumbnailUrl ? "ja" : "nein"}, Video ${reel.videoUrl ? "ja" : "nein"}).`);
+    return { ok: true, code, reel };
+  }
+
+  // GEZIELT NACHFRAGEN (13.11.2026): nur die Kacheln, die der Mitarbeiter
+  // gerade sieht und denen etwas fehlt -- jede hoechstens einmal je Profil
+  // (das Gedaechtnis haelt 30 Minuten). Vorher wurden pauschal bis zu 60
+  // Beitraege nachgefragt, ob sie je angesehen wurden oder nicht, und bei
+  // jedem erneuten Oeffnen dieselben noch einmal.
+  async profilLueckenFuellen(seite, name, laeuftNoch, codes) {
+    if (!seite || seite.isClosed() || !codes?.length) return;
+    if (Session.reelsSperreBis && Date.now() < Session.reelsSperreBis) return;
+    this.profilNachgefragt = this.profilNachgefragt instanceof Set ? this.profilNachgefragt : new Set();
+    // Obergrenze je Profil als Schutz: auch wer sehr tief scrollt, loest
+    // nicht mehr als 200 Einzelabfragen aus.
+    const offen = codes.filter((c) => !this.profilNachgefragt.has(c)).slice(0, 12);
+    if (!offen.length || this.profilNachgefragt.size >= 200) return;
+    let gefuellt = 0;
+    let gefragt = 0;
+    for (const code of offen) {
+      if ((laeuftNoch && !laeuftNoch()) || seite.isClosed()) break;
+      const pk = this.profilBeitraege?.get(code)?.pk ?? codeZuPk(code);
+      if (!pk) continue;
+      this.profilNachgefragt.add(code);
+      gefragt++;
+      const info = await seite
+        .evaluate(async (pk) => {
+          const kekse = Object.fromEntries(document.cookie.split("; ").map((x) => [x.split("=")[0], x.split("=").slice(1).join("=")]));
+          const r = await fetch(`/api/v1/media/${pk}/info/`, {
+            headers: { "X-IG-App-ID": "936619743392459", "X-CSRFToken": kekse.csrftoken || "" },
+            credentials: "include",
+          });
+          if (r.redirected || !(r.headers.get("content-type") || "").includes("json")) return { status: 302 };
+          if (!r.ok) return { status: r.status };
+          const m = (await r.json())?.items?.[0];
+          return m ? { status: 200, m } : { status: 204 };
+        }, pk)
+        .catch(() => ({ status: 0 }));
+      if (info.status === 429 || info.status === 302 || info.status === 0) {
+        // Abgewiesen ist nicht beantwortet: spaeter darf es noch einmal
+        // gefragt werden.
+        this.profilNachgefragt.delete(code);
+        if (info.status !== 0) {
+          Session.reelsSperreBis = Date.now() + 15 * 60 * 1000;
+          console.log(`[luecken] ${name}: Instagram weist ab (${info.status}) -- 15 Minuten Ruhe.`);
+        }
+        break;
+      }
+      // Nur uebernehmen, wenn die Auskunft wirklich zu DIESEM Beitrag gehoert.
+      if (info.status === 200 && info.m?.code === code) {
+        const vorher = profilFuellstand(this.profilBeitraege);
+        this.profilSammeln?.(info.m);
+        if (profilFuellstand(this.profilBeitraege) > vorher) gefuellt++;
+      }
+      await sleep(650);
+    }
+    if (!gefragt) return;
+    console.log(`[luecken] ${name}: ${gefragt} sichtbare Kachel(n) einzeln nachgefragt, ${gefuellt} ergaenzt (je Profil bisher ${this.profilNachgefragt.size}).`);
+    if (gefuellt) void this.profilSchichtFuettern();
+    if (process.env.REELFORGE_PRUEFEN === "1") void this.profilWertePruefen(seite, name, true);
+  }
+
+  // Nur im Testbetrieb: Stichprobe gegen Instagrams Einzelauskunft.
+  async profilWertePruefen(seite, name, nurEigene = false) {
+    if (!seite || seite.isClosed()) return;
+    const alle = [...(this.profilBeitraege?.values() ?? [])].filter((b) => b.pk && (b.aufrufe || b.likes) && (!nurEigene || !b.besitzer || b.besitzer === name));
+    const stichprobe = alle.sort(() => Math.random() - 0.5).slice(0, 6);
+    for (const b of stichprobe) {
+      const info = await seite
+        .evaluate(async (pk) => {
+          const kekse = Object.fromEntries(document.cookie.split("; ").map((x) => [x.split("=")[0], x.split("=").slice(1).join("=")]));
+          const r = await fetch(`/api/v1/media/${pk}/info/`, { headers: { "X-IG-App-ID": "936619743392459", "X-CSRFToken": kekse.csrftoken || "" }, credentials: "include" });
+          if (!r.ok) return { fehler: r.status };
+          const m = (await r.json())?.items?.[0];
+          return m ? { code: m.code, aufrufe: m.play_count ?? m.ig_play_count ?? null, likes: m.like_count ?? null, kommentare: m.comment_count ?? null, zeitpunkt: m.taken_at ?? null, verborgen: m.like_and_view_counts_disabled === true } : { fehler: "leer" };
+        }, b.pk)
+        .catch((e) => ({ fehler: e?.message }));
+      const gleich = (x, y) => x == null || y == null || x === y || Math.abs(x - y) / Math.max(x, y) < 0.02;
+      const ok = !info.fehler && info.code === b.code && gleich(b.aufrufe, info.aufrufe) && gleich(b.likes, info.likes) && gleich(b.kommentare, info.kommentare) && (b.zeitpunkt == null || b.zeitpunkt === info.zeitpunkt);
+      const luecke = ok && ((b.aufrufe == null && info.aufrufe != null && !info.verborgen) || (b.zeitpunkt == null && info.zeitpunkt != null));
+      console.log(`[pruefen] ${name}${nurEigene ? " (nach Luecken)" : ""} ${b.code}: ${!ok ? "ABWEICHUNG" : luecke ? "STIMMT, ABER LUECKE" : "STIMMT"} | Schild ${JSON.stringify({ a: b.aufrufe, l: b.likes, k: b.kommentare, t: b.zeitpunkt })} | Instagram ${JSON.stringify(info)}`);
+      await sleep(700);
+    }
+  }
+
   async profilSchichtFuettern() {
     const seite = this.profilSeite;
     if (!PROFIL_FORSCHUNG || !seite || seite.isClosed() || !this.profilBeitraege?.size) return;
     const daten = [...this.profilBeitraege.values()];
     const stand = await seite
-      .evaluate((liste) => {
+      .evaluate(([liste, profil, basis, folge]) => {
         const RF = window.__rfForschung;
         if (!RF) return null;
+        RF.profil = profil;
+        RF.basisFest = basis;
+        RF.folge = new Set(folge);
         for (const b of liste) RF.daten.set(b.code, b);
         (RF.jetztZeichnen ?? RF.zeichnen)();
         return RF.stand;
-      }, daten)
+      }, [daten, this.profilName, this.profilBasis ?? null, this.profilBasis ? this.profilFolge : []])
       .catch(() => null);
     if (stand) this.profilSchichtStand = stand;
     console.log(`[forschung] gefuettert mit ${daten.length} -> ${JSON.stringify(stand)}`);
@@ -6080,7 +6846,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-strom|profil-ton|profil-ton-antwort|profil-bedienen|profil-schliessen|feed-modus|feed-wechseln|feed-auffrischen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
+    const match = req.url?.match(/^\/sessions\/([^/]+)\/(next|prev|like|follow|block|repost|kommentar|antworten|profil-oeffnen|profil-aktuell|profil-strom|profil-ton|profil-ton-antwort|profil-bedienen|profil-schliessen|feed-modus|feed-wechseln|feed-auffrischen|comments|heartbeat|end|buehne|buehne-antwort|eingabe|buehne-zustand|buehne-aktuell|teilen-oeffnen|teilen-suchen|teilen-senden|teilen-schliessen)$/);
     if (req.method === "POST" && match) {
       const [, id, action] = match;
       const { sessionSecret, reelId, sourceUrl, sdp, art, aufbauId, wert, sortierung, breite, hoehe, anzeige, x, y, ziel } = await readBody(req);
@@ -6163,6 +6929,10 @@ const server = http.createServer(async (req, res) => {
         const result = await session.kommentieren(reelId, wert);
         if (!result.posted) console.error(`[kommentar] session ${id} failed: ${result.error ?? "(no error message)"}`);
         return json(res, 200, result);
+      }
+      if (action === "profil-aktuell") {
+        const erg = await session.profilAktuell(wert === "holen");
+        return erg.ok ? json(res, 200, erg) : json(res, 200, { ok: false, code: erg.code ?? null, error: erg.fehler });
       }
       if (action === "profil-oeffnen") {
         const erg = await session.profilOeffnen(wert, breite, hoehe, anzeige);

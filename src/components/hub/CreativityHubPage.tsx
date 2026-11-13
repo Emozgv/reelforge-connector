@@ -145,6 +145,11 @@ export function CreativityHubPage({
   const [shuffleSpinning, setShuffleSpinning] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
+  // Welche Plattform beim Fehler gefragt war. Instagram ueber den Anbieter
+  // (TikHub) faellt immer wieder mal aus, TikTok praktisch nie -- dann soll
+  // dastehen "Instagram ist gerade gestoert", nicht "Research macht Pause"
+  // (Emre, 12.11.2026).
+  const [searchErrorPlatform, setSearchErrorPlatform] = useState<"all" | Platform | null>(null);
   const [platformNotice, setPlatformNotice] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<{ kind: "search" | "profile"; value: string } | null>(null);
   const [profileHandle, setProfileHandle] = useState("");
@@ -290,6 +295,7 @@ export function CreativityHubPage({
     if (res.error) {
       console.error("[search-reels] provider error:", res.error);
       setSearchError(true);
+      setSearchErrorPlatform(profilePlatform);
       setVideos([]);
       setProfile(null);
       setProfileSecUid(null);
@@ -382,6 +388,7 @@ export function CreativityHubPage({
 
     if (hadError && collected.length === 0) {
       setSearchError(true);
+      setSearchErrorPlatform(platform);
       setVideos([]);
       setSearchCursor(null);
     } else {
@@ -824,11 +831,23 @@ export function CreativityHubPage({
         {searchError ? (
           <div className="flex flex-col items-center justify-center text-center rounded-[12px] border border-[#1a130b] py-24" style={HUB_PANEL_STYLE}>
             <CloudOff size={20} className="text-neutral-700 mb-2.5" />
-            <p className="text-[14.5px] font-serif text-neutral-100">Research is taking a short timeout.</p>
-            <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
-              One of our external data providers is currently unavailable. Everything inside ReelForge is running
-              normally.
-            </p>
+            {searchErrorPlatform === "instagram" ? (
+              <>
+                <p className="text-[14.5px] font-serif text-neutral-100">Instagram is currently unavailable.</p>
+                <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
+                  Our Instagram data provider is having a hiccup. TikTok research is working as usual — switch
+                  the platform above, or try Instagram again in a few minutes.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[14.5px] font-serif text-neutral-100">Research is taking a short timeout.</p>
+                <p className="text-[12px] text-neutral-600 mt-1.5 max-w-sm">
+                  One of our external data providers is currently unavailable. Everything inside ReelForge is running
+                  normally.
+                </p>
+              </>
+            )}
             <button
               onClick={retryLastAction}
               disabled={searching || !lastAction}

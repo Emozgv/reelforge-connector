@@ -1,5 +1,6 @@
 import type { CollectionConcept, ConceptStatus, ContentStyle, Difficulty, Language, Platform, ReelVideo, Setting } from "../types";
 import { formatTimestampFromIso } from "./dateFormat";
+import { likesSindVerborgen } from "./formatCount";
 
 // Shape of a row from client_os.concepts (snake_case, as returned by PostgREST).
 // aiScore/creatorFit/talking/aiReady/trending/postedDaysAgo are mock-estimate
@@ -27,6 +28,7 @@ export interface ConceptRow {
   notes: string;
   creator_id: string | null;
   finished_video_url: string | null;
+  preview_video_url?: string | null;
   source_label: string | null;
   created_at: string;
   updated_at: string;
@@ -38,6 +40,12 @@ interface ConceptAiMetadata {
   trending?: boolean;
   postedDaysAgo?: number;
   language?: Language;
+  // Likes und Kommentare zum Zeitpunkt des Speicherns (13.11.2026). Liegen in
+  // ai_metadata, weil es dafuer keine eigene Spalte gibt. Fehlt der Wert,
+  // fuellt der Store ihn beim Laden aus dem Research-Archiv nach.
+  likes?: number | null;
+  comments?: number | null;
+  likesVerborgen?: boolean;
 }
 
 function formatViews(raw: number): string {
@@ -67,6 +75,10 @@ export function conceptFromRow(row: ConceptRow): CollectionConcept {
     sourceUrl: row.source_url ?? "",
     views: formatViews(viewsRaw),
     viewsRaw,
+    previewVideoUrl: row.preview_video_url ?? undefined,
+    likes: typeof meta.likes === "number" && !likesSindVerborgen(meta.likes, viewsRaw) ? meta.likes : undefined,
+    comments: typeof meta.comments === "number" ? meta.comments : undefined,
+    likesVerborgen: meta.likesVerborgen === true || likesSindVerborgen(meta.likes, viewsRaw) ? true : undefined,
     tags: row.tags ?? [],
     saved: true,
     used: row.status === "Used",
@@ -126,11 +138,18 @@ export function conceptToInsertRow(
     notes: notes || "",
     creator_id: creatorId || null,
     source_label: sourceLabel || null,
+    // Eine Kopie des Videos wandert mit, wenn das Konzept aus einem anderen
+    // Konzept entsteht (Duplikat, zweiter Creator). Frisch gespeicherte Reels
+    // haben hier noch nichts; die Kopie legt cache-concept-video danach an.
+    preview_video_url: video.previewVideoUrl || null,
     ai_metadata: {
       talking: video.talking,
       aiReady: video.aiReady,
       trending: video.trending,
       postedDaysAgo: video.postedDaysAgo,
+      likes: typeof video.likes === "number" ? video.likes : null,
+      comments: typeof video.comments === "number" ? video.comments : null,
+      likesVerborgen: video.likesVerborgen === true ? true : undefined,
     },
   };
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { likesSindVerborgen } from "../lib/formatCount";
 import { collectionMetaFromRow, type CollectionRow } from "../lib/collectionMapping";
 import { conceptFromRow, conceptToInsertRow, type ConceptRow } from "../lib/conceptMapping";
 import { submissionFromRow, type SubmissionConceptRow, type SubmissionRow } from "../lib/submissionMapping";
@@ -11,7 +12,7 @@ import {
 } from "../lib/regenerationMapping";
 import { formatTimestamp } from "../lib/dateFormat";
 import { collectionBaseName, collectionFamily, nextCollectionName } from "../lib/collectionNaming";
-import type { Collection, CollectionStatus, ConceptStatus, ReelVideo, RegenerationReason } from "../types";
+import type { CollectionPriority, Collection, CollectionStatus, ConceptStatus, ReelVideo, RegenerationReason } from "../types";
 
 function isUniqueViolation(error: { code?: string } | null): boolean {
   return error?.code === "23505";
@@ -39,6 +40,37 @@ function cacheThumbnailInBackground(conceptId: string, thumbnailUrl: string | nu
       else if (data?.error) console.warn(`[thumbnail cache] concept ${conceptId} failed:`, data.error);
     })
     .catch((e) => console.warn(`[thumbnail cache] concept ${conceptId} failed:`, e));
+}
+
+// Dasselbe fuer das VIDEO (12.11.2026): die Lieferadresse von Instagram/
+// TikTok laeuft nach rund anderthalb Tagen ab. Beim Speichern ist sie frisch,
+// also legt cache-concept-video jetzt eine dauerhafte Kopie an (bevorzugt
+// Instagrams kleine Fassung). Nicht abgewartet, Fehler nur in der Konsole --
+// das Speichern selbst darf daran nie haengen.
+function cacheVideoInBackground(
+  conceptId: string,
+  sourceUrl: string | undefined,
+  onDone?: (previewVideoUrl: string) => void
+) {
+  void supabase.functions
+    .invoke("cache-concept-video", { body: { concept_id: conceptId, source_url: sourceUrl ?? "" } })
+    .then(({ data, error }) => {
+      if (error) console.warn("[cache-concept-video] failed:", error.message);
+      else if (data && data.ok === false) console.warn("[cache-concept-video] skipped:", data.reason);
+      else if (data?.preview_video_url && onDone) onDone(String(data.preview_video_url));
+    });
+}
+
+// Beim Loeschen eines Konzepts die Kopie mit entfernen -- ebenfalls im
+// Hintergrund; bleibt eine Datei doch liegen, kostet sie nur Speicher.
+// Eine Datei je Reel: geloescht wird sie serverseitig nur, wenn kein anderes
+// Konzept (auch in anderen Workspaces) mehr darauf zeigt.
+function deleteCachedVideoInBackground(previewVideoUrl: string, workspaceId: string) {
+  void supabase.functions
+    .invoke("cache-concept-video", { body: { mode: "delete", preview_video_url: previewVideoUrl, workspace_id: workspaceId } })
+    .then(({ error }) => {
+      if (error) console.warn("[cache-concept-video delete] failed:", error.message);
+    });
 }
 
 /**
@@ -137,10 +169,40 @@ export function useCollectionsStore(workspaceId: string | undefined) {
         return;
       }
 
+      // LIKES NACHZIEHEN (13.11.2026). Aeltere Konzepte haben ihre Likes beim
+      // Speichern nicht mitbekommen. Das Research-Archiv kennt sie -- also
+      // hier einmal lesend nachschlagen, ueber die Reel-Adresse. Nur lesen,
+      // nichts wird zurueckgeschrieben. Schlaegt es fehl, bleibt der Strich.
+      const archivLikes = new Map<string, { likes: number | null; comments: number | null }>();
+      const ohneLikes = (conceptsResult.data as ConceptRow[])
+        .filter((r) => r.source_url && typeof (r.ai_metadata as { likes?: unknown } | null)?.likes !== "number")
+        .map((r) => r.source_url as string);
+      for (let i = 0; i < ohneLikes.length; i += 100) {
+        const stueck = ohneLikes.slice(i, i + 100);
+        const { data: archiv } = await supabase
+          .schema("client_os")
+          .from("research_feed_items")
+          .select("source_url, likes, comments, last_seen_at")
+          .eq("workspace_id", workspaceId)
+          .in("source_url", stueck)
+          .order("last_seen_at", { ascending: true });
+        for (const a of (archiv ?? []) as { source_url: string; likes: number | null; comments: number | null }[]) {
+          archivLikes.set(a.source_url, { likes: a.likes, comments: a.comments });
+        }
+      }
+
       const conceptsByCollectionId = new Map<string, Collection["concepts"]>();
       for (const row of conceptsResult.data as ConceptRow[]) {
         const list = conceptsByCollectionId.get(row.collection_id) ?? [];
-        list.push(conceptFromRow(row));
+        const concept = conceptFromRow(row);
+        const ausArchiv = concept.video.likes === undefined ? archivLikes.get(concept.video.sourceUrl) : undefined;
+        if (ausArchiv) {
+          const verborgen = likesSindVerborgen(ausArchiv.likes, concept.video.viewsRaw);
+          concept.video.likes = !verborgen && typeof ausArchiv.likes === "number" ? ausArchiv.likes : undefined;
+          if (verborgen) concept.video.likesVerborgen = true;
+          concept.video.comments = typeof ausArchiv.comments === "number" ? ausArchiv.comments : undefined;
+        }
+        list.push(concept);
         conceptsByCollectionId.set(row.collection_id, list);
       }
 
@@ -300,6 +362,17 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     );
     void logActivity(collectionId, "concept_added", "1 concept added");
     cacheThumbnailInBackground(concept.video.id, concept.video.thumbnailUrl);
+    if (!concept.video.previewVideoUrl) {
+      cacheVideoInBackground(concept.video.id, video.videoUrlKlein ?? video.videoUrl, (url) =>
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === collectionId
+              ? { ...c, concepts: c.concepts.map((k) => (k.video.id === concept.video.id ? { ...k, video: { ...k.video, previewVideoUrl: url } } : k)) }
+              : c
+          )
+        )
+      );
+    }
   }
 
   async function createCollection(
@@ -337,6 +410,18 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       if (conceptRow) {
         concepts = [conceptFromRow(conceptRow as ConceptRow)];
         cacheThumbnailInBackground(concepts[0].video.id, concepts[0].video.thumbnailUrl);
+        if (!concepts[0].video.previewVideoUrl) {
+          const neuId = concepts[0].video.id;
+          cacheVideoInBackground(neuId, initialVideo.videoUrlKlein ?? initialVideo.videoUrl, (url) =>
+            setCollections((prev) =>
+              prev.map((c) =>
+                c.id === meta.id
+                  ? { ...c, concepts: c.concepts.map((k) => (k.video.id === neuId ? { ...k, video: { ...k.video, previewVideoUrl: url } } : k)) }
+                  : c
+              )
+            )
+          );
+        }
       }
     }
 
@@ -406,6 +491,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
   // that as a clear, subtle message instead of a generic failure.
   async function removeVideoFromCollection(collectionId: string, videoId: string) {
     const previous = collectionsRef.current;
+    const kopieUrl = previous.find((c) => c.id === collectionId)?.concepts.find((k) => k.video.id === videoId)?.video.previewVideoUrl;
     setCollections((prev) =>
       prev.map((c) =>
         c.id === collectionId ? { ...c, concepts: c.concepts.filter((k) => k.video.id !== videoId) } : c
@@ -424,6 +510,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
       return;
     }
     void logActivity(collectionId, "concept_removed", "1 concept removed");
+    if (kopieUrl && workspaceId) deleteCachedVideoInBackground(kopieUrl, workspaceId);
   }
 
   async function setConceptStatus(collectionId: string, videoId: string, status: ConceptStatus) {
@@ -683,6 +770,25 @@ export function useCollectionsStore(workspaceId: string | undefined) {
   function updateNotes(collectionId: string, notes: string) {
     // Autosaves as the user types — intentionally not logged to Activity.
     void applyMetaUpdate(collectionId, { notes }, { notes });
+  }
+
+  // Deadline und Prioritaet (13.11.2026). Gleicher Weg wie Notizen und Name:
+  // sofort im Bild, bei einem Fehler zurueck und eine Meldung.
+  async function setPlanning(
+    collectionId: string,
+    patch: { deadline?: string | null; priority?: CollectionPriority | null }
+  ) {
+    const lokal: Partial<Collection> = {};
+    const db: Record<string, unknown> = {};
+    if ("deadline" in patch) {
+      lokal.deadline = patch.deadline ?? undefined;
+      db.deadline = patch.deadline ?? null;
+    }
+    if ("priority" in patch) {
+      lokal.priority = patch.priority ?? undefined;
+      db.priority = patch.priority ?? null;
+    }
+    return applyMetaUpdate(collectionId, lokal, db);
   }
 
   async function updateStatus(collectionId: string, status: CollectionStatus) {
@@ -1030,6 +1136,7 @@ export function useCollectionsStore(workspaceId: string | undefined) {
     uploadFinishedVideo,
     sendSubmission,
     updateNotes,
+    setPlanning,
     updateStatus,
     renameCollection,
     duplicateCollection,

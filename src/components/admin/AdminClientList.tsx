@@ -1,5 +1,5 @@
 import { Search, ShieldCheck, ChevronRight, ImageOff } from "lucide-react";
-import type { AdminWorkspaceRow, ThumbnailBackfillResult } from "../../state/useAdminDashboard";
+import type { AdminWorkspaceRow, ThumbnailBackfillResult, VideoBackfillResult } from "../../state/useAdminDashboard";
 
 const STATUS_STYLE: Record<AdminWorkspaceRow["status"], string> = {
   active: "text-emerald-300/85 bg-emerald-400/10",
@@ -16,6 +16,10 @@ export function AdminClientList({
   onOpen,
   backfillRunning,
   backfillResult,
+  videoBackfillRunning,
+  videoBackfillResult,
+  videoBackfillError,
+  onRunVideoBackfill,
   backfillError,
   onRunThumbnailBackfill,
 }: {
@@ -27,6 +31,10 @@ export function AdminClientList({
   onOpen: (workspaceId: string) => void;
   backfillRunning: boolean;
   backfillResult: ThumbnailBackfillResult | null;
+  videoBackfillRunning: boolean;
+  videoBackfillResult: VideoBackfillResult | null;
+  videoBackfillError: string | null;
+  onRunVideoBackfill: () => void;
   backfillError: string | null;
   onRunThumbnailBackfill: () => void;
 }) {
@@ -77,6 +85,33 @@ export function AdminClientList({
             className="shrink-0 h-8 px-3 rounded-lg surface-field text-[12px] text-neutral-200 hover:text-neutral-50 transition-colors duration-150 disabled:opacity-60"
           >
             {backfillRunning ? "Running…" : "Run backfill"}
+          </button>
+        </div>
+
+        <div className="mt-3 rounded-xl surface-panel px-4 py-3.5 flex items-center gap-3">
+          <ImageOff size={15} className="text-neutral-500 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] text-neutral-200">Backfill saved videos</p>
+            <p className="mt-0.5 text-[11.5px] text-neutral-500">
+              Copies the video of existing concepts into permanent storage where the archive still holds a live
+              address (roughly the last day and a half). Older ones stay on the provider fallback.
+            </p>
+            {videoBackfillResult && (
+              <p className="mt-1 text-[11.5px] text-neutral-400">
+                Scanned {videoBackfillResult.scanned}, copied {videoBackfillResult.succeeded}, reused an existing file{" "}
+                {videoBackfillResult.shared}, expired{" "}
+                {videoBackfillResult.expired}, no archive source {videoBackfillResult.noSource}, failed {videoBackfillResult.failed}.
+                {videoBackfillResult.more && " More remain — run again to continue."}
+              </p>
+            )}
+            {videoBackfillError && <p className="mt-1 text-[11.5px] text-rose-400">{videoBackfillError}</p>}
+          </div>
+          <button
+            onClick={onRunVideoBackfill}
+            disabled={videoBackfillRunning}
+            className="shrink-0 h-8 px-3 rounded-lg surface-field text-[12px] text-neutral-200 hover:text-neutral-50 transition-colors duration-150 disabled:opacity-60"
+          >
+            {videoBackfillRunning ? "Running…" : "Run backfill"}
           </button>
         </div>
 

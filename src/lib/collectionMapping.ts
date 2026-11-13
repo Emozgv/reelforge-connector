@@ -1,4 +1,4 @@
-import type { Collection, CollectionStatus } from "../types";
+import type { Collection, CollectionPriority, CollectionStatus } from "../types";
 
 // Shape of a row from client_os.collections (snake_case, as returned by PostgREST).
 // Nested concepts/submissions/history are separate real tables (client_os.concepts,
@@ -14,11 +14,13 @@ export interface CollectionRow {
   updated_at: string;
   archived_at: string | null;
   deleted_at?: string | null;
+  deadline?: string | null;
+  priority?: string | null;
 }
 
 export function collectionMetaFromRow(
   row: CollectionRow
-): Pick<Collection, "id" | "creatorId" | "name" | "notes" | "status" | "updatedAt" | "archivedAt" | "deletedAt"> {
+): Pick<Collection, "id" | "creatorId" | "name" | "notes" | "status" | "updatedAt" | "archivedAt" | "deletedAt" | "deadline" | "priority"> {
   return {
     id: row.id,
     creatorId: row.creator_id,
@@ -28,5 +30,7 @@ export function collectionMetaFromRow(
     updatedAt: row.updated_at,
     archivedAt: row.archived_at ?? undefined,
     deletedAt: row.deleted_at ?? undefined,
+    deadline: row.deadline ?? undefined,
+    priority: row.priority === "Low" || row.priority === "Medium" || row.priority === "High" ? (row.priority as CollectionPriority) : undefined,
   };
 }

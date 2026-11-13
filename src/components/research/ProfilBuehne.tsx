@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, ArrowLeft, ArrowRight, AlertTriangle, Volume2, VolumeX } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, AlertTriangle, Volume1, Volume2, VolumeX, Bookmark } from "lucide-react";
+import type { ReelVideo } from "../../types";
+
+// Gewaehlte Lautstaerke der Profil-Buehne -- je Geraet gemerkt, damit sie
+// beim naechsten Profil wieder gilt. Nur Bequemlichkeit: fehlt der
+// Speicher, gilt 100 %.
+const LAUTSTAERKE_SCHLUESSEL = "rf-profil-lautstaerke";
+function lautstaerkeLesen(): number {
+  try {
+    const v = Number(window.localStorage.getItem(LAUTSTAERKE_SCHLUESSEL));
+    return Number.isFinite(v) && v >= 0 && v <= 1 && window.localStorage.getItem(LAUTSTAERKE_SCHLUESSEL) !== null ? v : 1;
+  } catch {
+    return 1;
+  }
+}
 
 // Die zweite Buehne: Instagrams echte Profilseite, ohne den Feed anzufassen.
 //
@@ -29,6 +43,9 @@ export function ProfilBuehne({
   tonAntwort,
   bedienen,
   schliessen,
+  aktuell,
+  onSpeichern,
+  istGespeichert,
 }: {
   username: string;
   onSchliessen: () => void;
@@ -38,6 +55,11 @@ export function ProfilBuehne({
   tonAntwort: (sdp: string) => Promise<void>;
   bedienen: (art: "scrollen" | "klick" | "zurueck" | "schweben", x?: number, y?: number) => Promise<{ ok: boolean; bild?: string; error?: string }>;
   schliessen: (lauf?: string | null) => Promise<void>;
+  // Welches Reel ist drueben geoeffnet -- und auf Wunsch das fertige Reel
+  // fuer die bestehende Speicherfunktion.
+  aktuell: (holen: boolean) => Promise<{ code: string | null; video?: ReelVideo; error?: string }>;
+  onSpeichern: (video: ReelVideo) => void;
+  istGespeichert: (id: string) => boolean;
 }) {
   const [bild, setBild] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -56,6 +78,16 @@ export function ProfilBuehne({
   const audioRef = useRef<HTMLAudioElement>(null);
   const tonPcRef = useRef<RTCPeerConnection | null>(null);
   const [stumm, setStumm] = useState(true);
+  // Lautstaerke 0..1. Wirkt auf genau das Element, das den Ton des Profils
+  // abspielt -- also hoerbar, nicht nur als Anzeige.
+  const [lautstaerke, setLautstaerke] = useState<number>(() => lautstaerkeLesen());
+  const [reglerOffen, setReglerOffen] = useState(false);
+  const reglerZuRef = useRef<number | null>(null);
+  // Das drueben geoeffnete Reel (Code aus Instagrams Adresse) und der
+  // Zustand des Speicherns.
+  const [offenesReel, setOffenesReel] = useState<string | null>(null);
+  const [holtReel, setHoltReel] = useState(false);
+  const [speicherFehler, setSpeicherFehler] = useState<string | null>(null);
   // Verhindert, dass sich Bedienungen ueberholen: waehrend eine laeuft,
   // wird keine zweite abgeschickt. Sonst kaeme ein aelteres Bild nach einem
   // neueren an und die Seite spraenge zurueck.
@@ -170,6 +202,75 @@ export function ProfilBuehne({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
+
+  // Lautstaerke auf das Ton-Element anwenden und merken.
+  useEffect(() => {
+    const el = audioRef.current;
+    if (el) el.volume = lautstaerke;
+    try {
+      window.localStorage.setItem(LAUTSTAERKE_SCHLUESSEL, String(lautstaerke));
+    } catch {
+      /* ohne Speicher gilt die Lautstaerke eben nur bis zum Schliessen */
+    }
+  }, [lautstaerke]);
+
+  // Welches Reel ist drueben offen? Der Connector liest das aus Instagrams
+  // Adresse -- eine Rueckfrage an den eigenen Rechner, keine an Instagram.
+  // Darum darf es oft geschehen: so zeigt der Knopf auch nach dem
+  // Weiterblaettern im Instagram-Player immer auf das gerade offene Reel.
+  useEffect(() => {
+    if (!bild) return;
+    let weg = false;
+    let laeuft = false;
+    const t = window.setInterval(async () => {
+      if (laeuft) return;
+      laeuft = true;
+      const a = await aktuell(false).catch(() => null);
+      laeuft = false;
+      if (weg || !a) return;
+      setOffenesReel((alt) => {
+        if (alt !== a.code) setSpeicherFehler(null);
+        return a.code;
+      });
+    }, 700);
+    return () => {
+      weg = true;
+      window.clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!bild]);
+
+  async function speichern() {
+    if (!offenesReel || holtReel) return;
+    setSpeicherFehler(null);
+    setHoltReel(true);
+    const gemeint = offenesReel;
+    const a = await aktuell(true).catch(() => null);
+    setHoltReel(false);
+    // Nur speichern, was WIRKLICH noch offen ist -- hat der Mitarbeiter
+    // waehrenddessen weitergeblaettert, nicht das falsche Reel nehmen.
+    if (!a?.video || a.code !== gemeint) {
+      setSpeicherFehler(a?.code && a.code !== gemeint ? "The reel changed — click again to save the open one." : a?.error ?? "Couldn't read this reel.");
+      return;
+    }
+    onSpeichern(a.video);
+  }
+
+  function reglerZeigen() {
+    if (reglerZuRef.current !== null) window.clearTimeout(reglerZuRef.current);
+    reglerZuRef.current = null;
+    setReglerOffen(true);
+  }
+  function reglerVerbergen() {
+    if (reglerZuRef.current !== null) window.clearTimeout(reglerZuRef.current);
+    reglerZuRef.current = window.setTimeout(() => setReglerOffen(false), 220);
+  }
+
+  // Ein Zustand fuer Knopf und Regler: stumm ODER Lautstaerke null heisst
+  // "nichts zu hoeren" -- genau das zeigt das Zeichen.
+  const hoerbar = !stumm && lautstaerke > 0;
+  const reelId = offenesReel ? `instagram:${offenesReel}` : null;
+  const schonGespeichert = reelId ? istGespeichert(reelId) : false;
 
   // Scrollen und Klicken gehen nach drueben; das Ergebnis sieht man im
   // laufenden Bild, es muss also keins zurueckkommen.
@@ -291,6 +392,26 @@ export function ProfilBuehne({
           Back to the reel
         </button>
 
+        {/* Save to Collection fuer das drueben geoeffnete Reel. Erscheint nur,
+            wenn Instagram gerade ein Reel zeigt (Adresse /reel/... oder
+            /p/...), und geht durch dieselbe Speicherfunktion wie ueberall. */}
+        {offenesReel && (
+          <div className="ml-3 flex items-center gap-2.5">
+            <button
+              type="button"
+              disabled={holtReel || schonGespeichert}
+              onClick={() => void speichern()}
+              title={schonGespeichert ? "Already saved in this session" : "Save the open reel to a collection"}
+              className="h-9 px-3.5 rounded-lg flex items-center gap-1.5 text-[12.5px] font-medium text-[#2a1c0e] hover:brightness-110 transition-[filter] duration-150 disabled:opacity-50 disabled:cursor-default press-feedback"
+              style={{ background: "linear-gradient(90deg, #D39448, #EAC088)", boxShadow: "0 6px 20px -6px rgba(211,148,72,0.55)" }}
+            >
+              {holtReel ? <Loader2 size={14} className="animate-spin" /> : <Bookmark size={14} fill={schonGespeichert ? "currentColor" : "none"} />}
+              {schonGespeichert ? "Saved" : "Save to Collection"}
+            </button>
+            {speicherFehler && <span className="text-[11.5px] text-amber-300/90 max-w-[260px] leading-tight">{speicherFehler}</span>}
+          </div>
+        )}
+
         <div className="ml-auto flex items-center gap-2.5">
           {/* Zwei Zeilen wie urspruenglich -- aber um 7 Punkte nach unten
               geschoben, damit die ERSTE Zeile auf derselben Hoehe steht wie
@@ -305,19 +426,56 @@ export function ProfilBuehne({
             </span>
           </p>
           <ArrowRight size={16} className="text-[#D39448] shrink-0" />
-          <button
-            type="button"
-            onClick={() => setStumm((v) => !v)}
-            title={stumm ? "Turn sound on" : "Turn sound off"}
-            className={[
-              "h-10 w-10 rounded-full flex items-center justify-center shrink-0 transition-colors",
-              stumm
-                ? "bg-[#D39448] text-[#020508] hover:brightness-110"
-                : "bg-white/[0.12] text-white hover:bg-white/[0.18]",
-            ].join(" ")}
-          >
-            {stumm ? <VolumeX size={18} /> : <Volume2 size={18} />}
-          </button>
+          {/* Ton: Klick schaltet stumm/laut, beim Drueberfahren erscheint der
+              Lautstaerkeregler darunter (13.11.2026). */}
+          <div className="relative" onMouseEnter={reglerZeigen} onMouseLeave={reglerVerbergen}>
+            <button
+              type="button"
+              onClick={() => {
+                if (hoerbar) setStumm(true);
+                else {
+                  // Laut schalten bei Lautstaerke null waere wieder still --
+                  // dann auf die Haelfte.
+                  if (lautstaerke === 0) setLautstaerke(0.5);
+                  setStumm(false);
+                }
+              }}
+              title={hoerbar ? "Turn sound off" : "Turn sound on"}
+              className={[
+                "h-10 w-10 rounded-full flex items-center justify-center shrink-0 transition-colors",
+                !hoerbar
+                  ? "bg-[#D39448] text-[#020508] hover:brightness-110"
+                  : "bg-white/[0.12] text-white hover:bg-white/[0.18]",
+              ].join(" ")}
+            >
+              {!hoerbar ? <VolumeX size={18} /> : lautstaerke < 0.5 ? <Volume1 size={18} /> : <Volume2 size={18} />}
+            </button>
+            {reglerOffen && (
+              <div className="absolute right-0 top-full pt-2 z-30">
+                <div className="w-[188px] rounded-xl surface-panel-strong px-3 py-2.5 flex items-center gap-2.5 animate-fade-in">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={stumm ? 0 : Math.round(lautstaerke * 100)}
+                    onChange={(e) => {
+                      const v = Number(e.target.value) / 100;
+                      setLautstaerke(v);
+                      // Wer den Regler bewegt, will hoeren -- ausser er zieht
+                      // ihn ganz nach links.
+                      setStumm(v === 0);
+                    }}
+                    aria-label="Volume"
+                    className="flex-1 accent-[#D39448] cursor-pointer"
+                  />
+                  <span className="w-9 text-right text-[11.5px] tabular-nums text-neutral-300">
+                    {stumm ? 0 : Math.round(lautstaerke * 100)}%
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

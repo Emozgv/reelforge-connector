@@ -1,4 +1,5 @@
 import type { Platform, ReelVideo } from "../types";
+import { likesSindVerborgen } from "./formatCount";
 
 export interface ResearchFeedItemRow {
   id: string;
@@ -16,6 +17,7 @@ export interface ResearchFeedItemRow {
   source_url: string;
   thumbnail_url: string | null;
   video_url: string | null;
+  video_url_klein?: string | null;
   caption: string | null;
   views_raw: number;
   likes: number | null;
@@ -54,6 +56,7 @@ export function researchFeedItemToVideo(row: ResearchFeedItemRow): ReelVideo {
     sourceUrl: row.source_url,
     thumbnailUrl: row.thumbnail_url ?? undefined,
     videoUrl: row.video_url ?? undefined,
+    videoUrlKlein: row.video_url_klein ?? undefined,
     caption: row.caption ?? undefined,
     // views_raw/duration_sec are NOT NULL default 0 on this table, so a
     // stored 0 can't be told apart from "a real zero" at the column level
@@ -64,7 +67,8 @@ export function researchFeedItemToVideo(row: ResearchFeedItemRow): ReelVideo {
     // honest choice: never show a fabricated number.
     views: row.views_raw > 0 ? formatViews(row.views_raw) : "",
     viewsRaw: row.views_raw,
-    likes: row.likes ?? undefined,
+    likes: likesSindVerborgen(row.likes, row.views_raw) ? undefined : (row.likes ?? undefined),
+    likesVerborgen: likesSindVerborgen(row.likes, row.views_raw) ? true : undefined,
     comments: row.comments ?? undefined,
     shares: row.shares ?? undefined,
     tags: row.tags,
